@@ -285,8 +285,10 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(50));
         }
 
-        assert!(received.load(Ordering::SeqCst), "Did not receive PTY output!");
+        assert!(
+            received.load(Ordering::SeqCst),
+            "Did not receive PTY output!"
+        );
         let _ = mgr.kill(&id);
     }
 }
-

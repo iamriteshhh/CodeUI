@@ -196,7 +196,9 @@ pub async fn pick_folder(default_path: Option<String>) -> Result<Option<String>,
                 dialog = dialog.set_directory(p);
             }
         }
-        dialog.pick_folder().map(|p| p.to_string_lossy().to_string())
+        dialog
+            .pick_folder()
+            .map(|p| p.to_string_lossy().to_string())
     })
     .await
     .map_err(|e| e.to_string())?;
@@ -426,8 +428,6 @@ pub async fn find_files(
     Ok(results)
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -596,12 +596,17 @@ mod tests {
             std::fs::write(nested.join("helper.py"), "print(1)").unwrap();
             std::fs::write(dir.path().join("main.py"), "print(2)").unwrap();
 
-            let found = find_files(dir.path().to_string_lossy().into_owned(), "help".to_string(), None).await.unwrap();
+            let found = find_files(
+                dir.path().to_string_lossy().into_owned(),
+                "help".to_string(),
+                None,
+            )
+            .await
+            .unwrap();
             assert_eq!(found.len(), 1);
             assert_eq!(found[0].name, "helper.py");
         });
     }
-
 
     #[cfg(unix)]
     #[test]
