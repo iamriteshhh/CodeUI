@@ -2,8 +2,6 @@
 
 A lightweight, lab-safe desktop Integrated Development Environment (IDE) built for college computer laboratories and practical programming examinations.
 
-[![Project Lead](https://img.shields.io/badge/Project%20Lead%20%26%20Frontend-iamriteshhh-blue?style=flat&logo=github)](https://github.com/iamriteshhh)
-[![Backend Developer](https://img.shields.io/badge/Backend%20Developer-Serion89-black?style=flat&logo=github)](https://github.com/Serion89)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
 ---
@@ -98,12 +96,48 @@ npm run build
 
 ---
 
-## Authors & Roles
+## Founders & Core Contributors
 
-- **Ritesh** ([@iamriteshhh](https://github.com/iamriteshhh)) — Project Concept, Repository Owner, and Frontend Development.
-- **Sahil Bhatt** ([@Serion89](https://github.com/Serion89)) — Backend Development.
+CodeUI was conceived, architected, and engineered by:
 
-The concept and repository were originated by Ritesh to provide a controlled coding environment tailored for academic evaluations. Frontend engineering is led by Ritesh, with backend development by Sahil.
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <br />
+      <a href="https://github.com/iamriteshhh">
+        <img src="https://github.com/iamriteshhh.png" width="110" style="border-radius: 4px;" alt="Ritesh" />
+        <br /><br />
+        <b>Ritesh</b>
+      </a>
+      <br />
+      <sub>Founder & Lead Developer</sub>
+      <br /><br />
+      <a href="https://github.com/iamriteshhh">
+        <img src="https://img.shields.io/badge/GitHub-iamriteshhh-181717?style=flat&logo=github" alt="GitHub" />
+      </a>
+      <br /><br />
+      <sub>Conceived the project idea, created the repository, and designed and developed the frontend editor interface and workspace.</sub>
+      <br /><br />
+    </td>
+    <td align="center" width="50%">
+      <br />
+      <a href="https://github.com/Serion89">
+        <img src="https://github.com/Serion89.png" width="110" style="border-radius: 4px;" alt="Sahil Bhatt" />
+        <br /><br />
+        <b>Sahil Bhatt</b>
+      </a>
+      <br />
+      <sub>Co-Founder & Backend Developer</sub>
+      <br /><br />
+      <a href="https://github.com/Serion89">
+        <img src="https://img.shields.io/badge/GitHub-Serion89-181717?style=flat&logo=github" alt="GitHub" />
+      </a>
+      <br /><br />
+      <sub>Architected and engineered the desktop backend core; leading Tauri IPC services, process-group isolation, PTY terminal lifecycle, and execution pipelines.</sub>
+      <br /><br />
+    </td>
+  </tr>
+</table>
 
 ---
 
