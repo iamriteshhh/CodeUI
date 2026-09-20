@@ -24,6 +24,7 @@ interface MockSession {
   lineBuffer: string;
   history: string[];
   historyIndex: number;
+  lastSource?: string;
 }
 
 // In-memory fallback sessions for testing outside Tauri webview
@@ -302,23 +303,105 @@ export const ptyService = {
       }
 
       // Salivo toolchain
-      if (cmd.startsWith("sf ") || cmd.startsWith("sf.exe ")) {
-        const arg = cmd.replace(/^sf(\.exe)?\s+/, "").trim();
+      if (cmd === "sf" || cmd.startsWith("sf ") || cmd === "sf.exe" || cmd.startsWith("sf.exe ")) {
+        const arg = cmd.replace(/^sf(\.exe)?/, "").trim();
+        if (!arg || arg === "--help" || arg === "-h" || arg === "help") {
+          this.triggerMockData(
+            session.id,
+            `Salivo Compiler Driver\r\n\r\nUsage: sf.exe <COMMAND>\r\n\r\nCommands:\r\n  build      Build a Salivo source file into a native executable\r\n  run        Build and immediately run the resulting executable\r\n  check      Check syntax and semantics without codegen\r\n  version    Print compiler version\r\n`
+          );
+          continue;
+        }
+
+        if (arg === "-V" || arg === "--version" || arg === "version") {
+          this.triggerMockData(session.id, "salivo 0.1.0\r\n");
+          continue;
+        }
+
+        if (arg.startsWith("run ") || arg.startsWith("build ")) {
+          const filePart = arg.replace(/^(run|build)\s+/, "").trim().replace(/^["']|["']$/g, "");
+          const filePath = filePart.includes(":") || filePart.startsWith("/") ? filePart : `${session.cwd}\\${filePart}`;
+          try {
+            const content = await fsService.readFile(filePath);
+            const outlnMatches = content.match(/outln\(\s*(\$?"(?:[^"\\]|\\.)*")\s*\)/g);
+            if (outlnMatches && outlnMatches.length > 0) {
+              for (const m of outlnMatches) {
+                const str = m.replace(/^outln\(\s*\$?"/, "").replace(/"\s*\)$/, "").replace(/\\n/g, "");
+                this.triggerMockData(session.id, str + "\r\n");
+              }
+            } else {
+              this.triggerMockData(session.id, "Hello from Salivo! Stream pipeline >< active.\r\n");
+            }
+          } catch {
+            this.triggerMockData(session.id, "Hello from Salivo! Stream pipeline >< active.\r\n");
+          }
+          continue;
+        }
+
         this.triggerMockData(
           session.id,
-          `\x1b[36m[salivo]\x1b[0m compiling and executing ${arg}...\r\n[salivo] stream pipeline executed with 0 errors.\r\n`
+          `\x1b[36m[salivo]\x1b[0m compiling and executing ${arg}...\r\nHello from Salivo! Stream pipeline >< active.\r\n`
         );
         continue;
       }
 
-      // C / C++ runners
-      if (cmd.startsWith("gcc ") || cmd.startsWith("g++ ") || cmd.startsWith("clang ")) {
-        this.triggerMockData(session.id, "[gcc] Binary compiled to executable.\r\n");
+      // C compiler (gcc / clang)
+      if (cmd.startsWith("gcc ") || cmd === "gcc" || cmd.startsWith("clang ") || cmd === "clang") {
+        const arg = cmd.replace(/^(gcc|clang)\s*/, "").trim();
+        if (arg === "--version" || arg === "-v") {
+          this.triggerMockData(session.id, "gcc.exe (MinGW.org GCC-6.3.0-1) 6.3.0\r\n");
+          continue;
+        }
+        const srcMatch = cmd.match(/["']?([^"'\s]+\.c)["']?/);
+        if (srcMatch) {
+          session.lastSource = srcMatch[1];
+        }
         continue;
       }
 
+      // C++ compiler (g++ / clang++)
+      if (cmd.startsWith("g++ ") || cmd === "g++" || cmd.startsWith("clang++ ") || cmd === "clang++") {
+        const arg = cmd.replace(/^(g\+\+|clang\+\+)\s*/, "").trim();
+        if (arg === "--version" || arg === "-v") {
+          this.triggerMockData(session.id, "g++.exe (MinGW.org GCC-6.3.0-1) 6.3.0\r\n");
+          continue;
+        }
+        const srcMatch = cmd.match(/["']?([^"'\s]+\.cpp)["']?/);
+        if (srcMatch) {
+          session.lastSource = srcMatch[1];
+        }
+        continue;
+      }
+
+      // Execution of compiled native binary
       if (cmd.startsWith(".\\") || cmd.startsWith("./") || cmd.endsWith(".exe")) {
-        this.triggerMockData(session.id, "Hello from C/C++ native binary!\r\n");
+        const sourceFile = session.lastSource;
+        let outputPrinted = false;
+        if (sourceFile) {
+          const filePath = sourceFile.includes(":") || sourceFile.startsWith("/") ? sourceFile : `${session.cwd}\\${sourceFile}`;
+          try {
+            const content = await fsService.readFile(filePath);
+            const printfs = content.match(/(?:printf|puts)\(\s*"([^"]*)"\s*\)/g);
+            if (printfs && printfs.length > 0) {
+              for (const p of printfs) {
+                const text = p.replace(/^(?:printf|puts)\(\s*"/, "").replace(/"\s*\)$/, "").replace(/\\n/g, "");
+                this.triggerMockData(session.id, text + "\r\n");
+                outputPrinted = true;
+              }
+            }
+            const couts = content.match(/(?:std::)?cout\s*<<\s*"([^"]*)"/g);
+            if (couts && couts.length > 0) {
+              for (const c of couts) {
+                const text = c.replace(/^(?:std::)?cout\s*<<\s*"/, "").replace(/"$/, "").replace(/\\n/g, "");
+                this.triggerMockData(session.id, text + "\r\n");
+                outputPrinted = true;
+              }
+            }
+          } catch {}
+        }
+        if (!outputPrinted) {
+          this.triggerMockData(session.id, "Program executed successfully with exit code 0.\r\n");
+        }
         continue;
       }
 
