@@ -3,8 +3,38 @@
 A lightweight, lab-safe desktop Integrated Development Environment (IDE) built for college computer laboratories and practical programming examinations.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
+[![Release](https://img.shields.io/github/v/release/iamriteshhh/CodeUI?color=blue)](https://github.com/iamriteshhh/CodeUI/releases)
 
 ---
+
+## Download & Installation
+
+Download standalone installers and ready-to-run packages — no terminal or dev tools required:
+
+| Platform | Format | Direct Download | Description |
+| :--- | :--- | :--- | :--- |
+| **Windows** | `.exe` | [**Download Windows Setup (64-bit)**](https://github.com/iamriteshhh/CodeUI/releases/latest) | Complete Setup Wizard with Start Menu & Desktop shortcuts, clean uninstaller |
+| **Windows** | `.msi` | [**Download Windows MSI**](https://github.com/iamriteshhh/CodeUI/releases/latest) | Windows Installer package for enterprise / system-wide deployments |
+| **Linux** | `.AppImage` | [**Download Linux AppImage**](https://github.com/iamriteshhh/CodeUI/releases/latest) | Single-file executable, runs directly on Ubuntu, Debian, Fedora, Arch |
+| **Linux** | `.deb` | [**Download Debian Package**](https://github.com/iamriteshhh/CodeUI/releases/latest) | Standard `.deb` package for Ubuntu, Debian, Linux Mint |
+| **macOS** | `.dmg` | [**Download macOS DMG**](https://github.com/iamriteshhh/CodeUI/releases/latest) | macOS disk image for Intel and Apple Silicon Macs |
+
+### Building Production Installers Locally
+You can generate the native installers on your machine at any time:
+```bash
+npm run tauri build
+```
+The output installer will be located at:
+- **Windows**: `target/release/bundle/nsis/CodeUI_0.1.0_x64-setup.exe` (only **~1.5 MB**)
+- **Linux**: `target/release/bundle/appimage/` and `bundle/deb/`
+- **macOS**: `target/release/bundle/dmg/`
+
+---
+
+### App Store & Microsoft Store Publishing
+- **Microsoft Store**: CodeUI can be submitted directly through the [Microsoft Partner Center](https://partner.microsoft.com/dashboard). Microsoft Store natively accepts Win32 installers (`.exe` or `.msi`) with zero code modifications.
+- **Mac App Store / Notarization**: Tauri apps can be signed with an Apple Developer ID certificate and notarized using standard Xcode CLI tools (`xcrun notarytool`).
+
 
 ## Overview
 

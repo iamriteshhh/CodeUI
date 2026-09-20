@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "CodeUI",
   "version": "0.1.0",
-  "identifier": "dev.codeui.app",
+  "identifier": "dev.codeui.editor",
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
@@ -28,15 +28,24 @@
   },
   "bundle": {
     "active": true,
-    "targets": [
-      "appimage",
-      "deb"
-    ],
+    "targets": "all",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
-      "icons/icon.png"
+      "icons/128x128@2x.png",
+      "icons/icon.png",
+      "icons/icon.ico"
     ],
+    "publisher": "CodeUI",
+    "copyright": "Copyright © 2026 CodeUI Contributors",
+    "category": "DeveloperTool",
+    "shortDescription": "Modern lightweight code editor & IDE",
+    "longDescription": "A fast, lightweight code editor with integrated terminal, Monaco editor, and multi-language toolchain support.",
+    "windows": {
+      "nsis": {
+        "installMode": "both"
+      }
+    },
     "linux": {
       "deb": {
         "depends": []
