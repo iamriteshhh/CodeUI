@@ -1,8 +1,22 @@
-import React from "react";
-import { MonacoEditorGroup } from "./MonacoEditorGroup";
+import React, { Suspense } from "react";
 import { WelcomeView } from "../welcome/WelcomeView";
-import { ExtensionDetailView } from "../extensions/ExtensionDetailView";
 import { OpenFile, ExtensionItem } from "../../types";
+
+const MonacoEditorGroup = React.lazy(() =>
+  import("./MonacoEditorGroup").then((m) => ({ default: m.MonacoEditorGroup }))
+);
+
+const ExtensionDetailView = React.lazy(() =>
+  import("../extensions/ExtensionDetailView").then((m) => ({
+    default: m.ExtensionDetailView,
+  }))
+);
+
+const EditorFallback = () => (
+  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", width: "100%", color: "#666", fontSize: 13 }}>
+    Loading editor...
+  </div>
+);
 
 interface SplitEditorContainerProps {
   isSplit: boolean;
@@ -67,11 +81,13 @@ export const SplitEditorContainer: React.FC<SplitEditorContainerProps> = ({
   if (isExtensionActive && !isSplit) {
     return (
       <div className="editor-workspace">
-        <ExtensionDetailView
-          extension={activeExtension}
-          onToggleEnabled={onToggleExtensionEnabled}
-          onToggleInstalled={onToggleExtensionInstalled}
-        />
+        <Suspense fallback={<EditorFallback />}>
+          <ExtensionDetailView
+            extension={activeExtension}
+            onToggleEnabled={onToggleExtensionEnabled}
+            onToggleInstalled={onToggleExtensionInstalled}
+          />
+        </Suspense>
       </div>
     );
   }
@@ -100,11 +116,13 @@ export const SplitEditorContainer: React.FC<SplitEditorContainerProps> = ({
       {/* Editor Group 1 */}
       <div className="editor-group">
         {isExtensionActive ? (
-          <ExtensionDetailView
-            extension={activeExtension}
-            onToggleEnabled={onToggleExtensionEnabled}
-            onToggleInstalled={onToggleExtensionInstalled}
-          />
+          <Suspense fallback={<EditorFallback />}>
+            <ExtensionDetailView
+              extension={activeExtension}
+              onToggleEnabled={onToggleExtensionEnabled}
+              onToggleInstalled={onToggleExtensionInstalled}
+            />
+          </Suspense>
         ) : showWelcome ? (
           <WelcomeView
             recentFolders={recentFolders}
@@ -119,26 +137,30 @@ export const SplitEditorContainer: React.FC<SplitEditorContainerProps> = ({
             onSelectWalkthrough={onSelectWalkthrough}
           />
         ) : (
-          <MonacoEditorGroup
-            file={activeFile}
-            onChangeContent={onChangeContent}
-            onSave={onSave}
-            onCursorChange={onCursorChange}
-            onMarkersChange={onMarkersChange}
-          />
+          <Suspense fallback={<EditorFallback />}>
+            <MonacoEditorGroup
+              file={activeFile}
+              onChangeContent={onChangeContent}
+              onSave={onSave}
+              onCursorChange={onCursorChange}
+              onMarkersChange={onMarkersChange}
+            />
+          </Suspense>
         )}
       </div>
 
       {/* Editor Group 2 (Split) */}
       {isSplit && (
         <div className="editor-group split-border">
-          <MonacoEditorGroup
-            file={splitFile}
-            onChangeContent={onChangeContent}
-            onSave={onSave}
-            onCursorChange={onCursorChange}
-            onMarkersChange={onMarkersChange}
-          />
+          <Suspense fallback={<EditorFallback />}>
+            <MonacoEditorGroup
+              file={splitFile}
+              onChangeContent={onChangeContent}
+              onSave={onSave}
+              onCursorChange={onCursorChange}
+              onMarkersChange={onMarkersChange}
+            />
+          </Suspense>
         </div>
       )}
     </div>

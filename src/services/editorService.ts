@@ -133,4 +133,17 @@ export const editorService = {
     activeEditorInstance.setPosition({ lineNumber, column: 1 });
     activeEditorInstance.focus();
   },
+
+  disposeModel(path: string) {
+    if (!monacoInstance) return;
+    try {
+      const uri = monacoInstance.Uri.parse(path);
+      const model = monacoInstance.editor.getModel(uri);
+      if (model) {
+        model.dispose();
+      }
+    } catch {
+      // ignore URI parsing errors
+    }
+  },
 };

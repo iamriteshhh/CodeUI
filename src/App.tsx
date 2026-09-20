@@ -1,17 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, Suspense, lazy } from "react";
 import { TitleBar } from "./components/shell/TitleBar";
 import { ActivityBar } from "./components/shell/ActivityBar";
 import { Sidebar } from "./components/shell/Sidebar";
 import { RunDebugBar } from "./components/editor/RunDebugBar";
 import { SplitEditorContainer } from "./components/editor/SplitEditorContainer";
-import { TerminalPanel } from "./components/terminal/TerminalPanel";
-import { PreviewPanel } from "./components/preview/PreviewPanel";
 import { StatusBar } from "./components/shell/StatusBar";
-import { SettingsModal } from "./components/settings/SettingsModal";
-import { QuickOpenModal } from "./components/palette/QuickOpenModal";
 import { useWorkspace } from "./store/useWorkspaceStore";
 import { fsService } from "./services/fsService";
 import { editorService } from "./services/editorService";
+import { ptyService } from "./services/ptyService";
 import { X, Maximize2, Minimize2 } from "lucide-react";
 import { EXTENSIONS_DATA } from "./data/extensionsData";
 import { ExtensionItem } from "./types";
@@ -20,6 +17,27 @@ import {
   syncAllExtensionsLive,
   fetchLiveExtensionDetails,
 } from "./services/extensionService";
+
+const TerminalPanel = lazy(() =>
+  import("./components/terminal/TerminalPanel").then((m) => ({
+    default: m.TerminalPanel,
+  }))
+);
+const PreviewPanel = lazy(() =>
+  import("./components/preview/PreviewPanel").then((m) => ({
+    default: m.PreviewPanel,
+  }))
+);
+const SettingsModal = lazy(() =>
+  import("./components/settings/SettingsModal").then((m) => ({
+    default: m.SettingsModal,
+  }))
+);
+const QuickOpenModal = lazy(() =>
+  import("./components/palette/QuickOpenModal").then((m) => ({
+    default: m.QuickOpenModal,
+  }))
+);
 
 export function App() {
   const [quickOpenVisible, setQuickOpenVisible] = useState(false);
@@ -94,15 +112,28 @@ export function App() {
 
   const activeExtension = extensionsList.find((e) => e.id === selectedExtensionId) || null;
 
-  // Initial background sync with live Open VSX registry
+  const hasSyncedExtensionsRef = useRef(false);
+
+  // Sync with Open VSX only on-demand when the user views the extensions tab
   useEffect(() => {
-    setIsSyncingExtensions(true);
-    syncAllExtensionsLive(extensionsList, (updated) => {
-      setExtensionsList(updated);
-      setIsSyncingExtensions(false);
-    }).catch(() => {
-      setIsSyncingExtensions(false);
-    });
+    if (sidebarTab === "extensions" && !hasSyncedExtensionsRef.current) {
+      hasSyncedExtensionsRef.current = true;
+      setIsSyncingExtensions(true);
+      syncAllExtensionsLive(extensionsList, (updated) => {
+        setExtensionsList(updated);
+        setIsSyncingExtensions(false);
+      }).catch(() => {
+        setIsSyncingExtensions(false);
+      });
+    }
+  }, [sidebarTab]);
+
+  // Silently pre-cache Monaco bundle in background after initial paint
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      import("./components/editor/MonacoEditorGroup");
+    }, 1200);
+    return () => clearTimeout(timer);
   }, []);
 
   const handleRefreshExtensions = async () => {
@@ -173,7 +204,6 @@ export function App() {
     setActivePanelTab("terminal");
     const sessionId = await ensurePtySession();
     if (sessionId) {
-      const { ptyService } = await import("./services/ptyService");
       await ptyService.writePty(sessionId, cmd);
     }
   };
@@ -582,18 +612,26 @@ export function App() {
                 </div>
 
                 <div className="panel-content">
-                  {activePanelTab === "terminal" ? (
-                    <TerminalPanel
-                      sessionId={ptySessionId}
-                      workspacePath={workspacePath}
-                      onEnsureSession={ensurePtySession}
-                    />
-                  ) : (
-                    <PreviewPanel
-                      openFiles={openFiles}
-                      activeFilePath={activeFilePath}
-                    />
-                  )}
+                  <Suspense
+                    fallback={
+                      <div style={{ padding: "12px", color: "#888", fontSize: "12px" }}>
+                        Loading panel...
+                      </div>
+                    }
+                  >
+                    {activePanelTab === "terminal" ? (
+                      <TerminalPanel
+                        sessionId={ptySessionId}
+                        workspacePath={workspacePath}
+                        onEnsureSession={ensurePtySession}
+                      />
+                    ) : (
+                      <PreviewPanel
+                        openFiles={openFiles}
+                        activeFilePath={activeFilePath}
+                      />
+                    )}
+                  </Suspense>
                 </div>
               </div>
             </>
@@ -621,21 +659,29 @@ export function App() {
         }}
       />
 
-      {/* 4. Settings Modal */}
-      <SettingsModal
-        isOpen={settingsOpen}
-        settings={settings}
-        onClose={() => setSettingsOpen(false)}
-        onSave={updateSettings}
-      />
+      {/* 4. Settings Modal (lazy mounted on demand) */}
+      {settingsOpen && (
+        <Suspense fallback={null}>
+          <SettingsModal
+            isOpen={settingsOpen}
+            settings={settings}
+            onClose={() => setSettingsOpen(false)}
+            onSave={updateSettings}
+          />
+        </Suspense>
+      )}
 
-      {/* 5. Quick Open File Palette */}
-      <QuickOpenModal
-        isOpen={quickOpenVisible}
-        workspacePath={workspacePath}
-        onClose={() => setQuickOpenVisible(false)}
-        onSelectFile={(path, name) => openFileByPath(path, name)}
-      />
+      {/* 5. Quick Open File Palette (lazy mounted on demand) */}
+      {quickOpenVisible && (
+        <Suspense fallback={null}>
+          <QuickOpenModal
+            isOpen={quickOpenVisible}
+            workspacePath={workspacePath}
+            onClose={() => setQuickOpenVisible(false)}
+            onSelectFile={(path, name) => openFileByPath(path, name)}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

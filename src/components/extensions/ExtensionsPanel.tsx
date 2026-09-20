@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   RotateCw,
   MoreHorizontal,
@@ -41,8 +41,14 @@ export const ExtensionsPanel: React.FC<ExtensionsPanelProps> = ({
   const [marketplaceResults, setMarketplaceResults] = useState<ExtensionItem[]>([]);
   const [isSearchingMarketplace, setIsSearchingMarketplace] = useState(false);
 
-  const installedExtensions = extensions.filter((e) => e.installed);
-  const recommendedExtensions = extensions.filter((e) => !e.installed);
+  const installedExtensions = useMemo(
+    () => extensions.filter((e) => e.installed),
+    [extensions]
+  );
+  const recommendedExtensions = useMemo(
+    () => extensions.filter((e) => !e.installed),
+    [extensions]
+  );
 
   // Live marketplace search debounced
   useEffect(() => {
@@ -57,9 +63,7 @@ export const ExtensionsPanel: React.FC<ExtensionsPanelProps> = ({
     const timeout = setTimeout(() => {
       searchOpenVsxMarketplace(trimmed)
         .then((results) => {
-          const installedIds = new Set(installedExtensions.map((e) => e.id));
-          const filtered = results.filter((r) => !installedIds.has(r.id));
-          setMarketplaceResults(filtered);
+          setMarketplaceResults(results);
         })
         .catch(() => {
           setMarketplaceResults([]);
@@ -70,7 +74,7 @@ export const ExtensionsPanel: React.FC<ExtensionsPanelProps> = ({
     }, 350);
 
     return () => clearTimeout(timeout);
-  }, [query, installedExtensions]);
+  }, [query]);
 
   const filterExts = (list: ExtensionItem[]) => {
     if (!query.trim()) return list;

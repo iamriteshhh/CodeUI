@@ -415,3 +415,5 @@ export const ExtensionDetailView: React.FC<ExtensionDetailViewProps> = ({
     </div>
   );
 };
+
+export default ExtensionDetailView;

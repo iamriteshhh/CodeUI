@@ -4,6 +4,7 @@ import { fsService } from "../services/fsService";
 import { envService } from "../services/envService";
 import { settingsService } from "../services/settingsService";
 import { ptyService } from "../services/ptyService";
+import { editorService } from "../services/editorService";
 
 function detectLanguage(fileName: string): string {
   const lower = fileName.toLowerCase();
@@ -212,6 +213,7 @@ export function useWorkspace() {
   // Close file tab
   const closeFile = useCallback(
     (path: string) => {
+      editorService.disposeModel(path);
       setOpenFiles((prev) => {
         const next = prev.filter((f) => f.path !== path);
         if (activeFilePath === path) {
