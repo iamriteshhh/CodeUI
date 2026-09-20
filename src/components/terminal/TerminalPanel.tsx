@@ -1,33 +1,51 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import { ptyService } from "../../services/ptyService";
-import { Trash2 } from "lucide-react";
+import { Trash2, RotateCw, Terminal as TerminalIcon, Plus } from "lucide-react";
 
 interface TerminalPanelProps {
   sessionId: string | null;
-  onEnsureSession: () => Promise<string>;
+  workspacePath?: string;
+  onEnsureSession?: () => Promise<string>;
 }
 
 export const TerminalPanel: React.FC<TerminalPanelProps> = ({
   sessionId,
+  workspacePath,
   onEnsureSession,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
+  const sessionRef = useRef<string | null>(sessionId);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(sessionId);
+  const [shellName, setShellName] = useState<string>("powershell");
+
+  sessionRef.current = activeSessionId;
+
+  useEffect(() => {
+    if (sessionId && sessionId !== activeSessionId) {
+      setActiveSessionId(sessionId);
+    }
+  }, [sessionId, activeSessionId]);
 
   useEffect(() => {
     if (!containerRef.current) return;
 
-    // Initialize xterm instance
+    let isDisposed = false;
+    let unlistenData: (() => void) | null = null;
+    let unlistenExit: (() => void) | null = null;
+
+    // 1. Initialize xterm instance
     const term = new Terminal({
       theme: {
-        background: "#1e1e1e",
+        background: "#181818",
         foreground: "#cccccc",
-        cursor: "#007acc",
-        selectionBackground: "rgba(0, 122, 204, 0.4)",
+        cursor: "#528bff",
+        cursorAccent: "#181818",
+        selectionBackground: "rgba(0, 122, 204, 0.35)",
         black: "#000000",
         red: "#cd3131",
         green: "#0dbc79",
@@ -36,53 +54,123 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
         magenta: "#bc3fbc",
         cyan: "#11a8cd",
         white: "#e5e5e5",
+        brightBlack: "#666666",
+        brightRed: "#f14c4c",
+        brightGreen: "#23d18b",
+        brightYellow: "#f5f543",
+        brightBlue: "#3b8eea",
+        brightMagenta: "#d670d6",
+        brightCyan: "#29b8db",
+        brightWhite: "#ffffff",
       },
-      fontFamily: "'JetBrains Mono', Consolas, monospace",
+      fontFamily: "'JetBrains Mono', Consolas, 'Courier New', monospace",
       fontSize: 13,
-      lineHeight: 1.2,
+      lineHeight: 1.25,
       cursorBlink: true,
       cursorStyle: "block",
+      convertEol: true,
+      scrollback: 5000,
+      allowTransparency: false,
     });
 
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
     term.open(containerRef.current);
-    fitAddon.fit();
 
     termRef.current = term;
     fitAddonRef.current = fitAddon;
 
-    let activeSession = sessionId;
-    let unlistenData: (() => void) | null = null;
-    let unlistenExit: (() => void) | null = null;
-
-    const setupSession = async () => {
-      if (!activeSession) {
-        activeSession = await onEnsureSession();
+    // Detect default shell name
+    ptyService.getDefaultShell().then((sh) => {
+      if (sh.toLowerCase().includes("powershell")) {
+        setShellName("powershell");
+      } else if (sh.toLowerCase().includes("cmd")) {
+        setShellName("cmd");
+      } else if (sh.toLowerCase().includes("bash")) {
+        setShellName("bash");
+      } else {
+        setShellName("terminal");
       }
-      if (!activeSession) return;
+    });
 
-      // Handle user keyboard input -> PTY
-      term.onData((data) => {
-        if (activeSession) {
-          ptyService.writePty(activeSession, data);
+    // 2. Keyboard typing -> Send to current active PTY session
+    term.onData((input) => {
+      const current = sessionRef.current;
+      if (current) {
+        ptyService.writePty(current, input).catch((err) => {
+          console.error("[TerminalPanel] writePty error:", err);
+        });
+      }
+    });
+
+    // 3. Start or bind to PTY session
+    const setupSession = async () => {
+      try {
+        // Pre-generate session ID if not existing so we can listen BEFORE spawning
+        let sid = sessionRef.current;
+        let needSpawn = false;
+
+        if (!sid) {
+          if (onEnsureSession) {
+            sid = await onEnsureSession();
+          } else {
+            sid = "pty-" + Math.random().toString(36).substring(2, 10);
+            needSpawn = true;
+          }
         }
-      });
 
-      // Handle PTY data stream -> xterm output
-      unlistenData = await ptyService.onPtyData(activeSession, (data) => {
-        term.write(data);
-      });
+        if (!sid || isDisposed) return;
+        sessionRef.current = sid;
+        setActiveSessionId(sid);
 
-      // Handle PTY exit event
-      unlistenExit = await ptyService.onPtyExit(activeSession, () => {
-        term.write("\r\n\x1b[33m[Process exited]\x1b[0m\r\n");
-      });
+        // Subscribe to output first
+        unlistenData = await ptyService.onPtyData(sid, (chunk) => {
+          if (!isDisposed) {
+            term.write(chunk);
+          }
+        });
 
-      // Initial resize sync
-      if (fitAddon) {
-        fitAddon.fit();
-        ptyService.resizePty(activeSession, term.cols, term.rows);
+        unlistenExit = await ptyService.onPtyExit(sid, () => {
+          if (!isDisposed) {
+            term.writeln("\r\n\x1b[33m[Process exited]\x1b[0m");
+          }
+        });
+
+        // If we generated the session ID directly, spawn now
+        if (needSpawn) {
+          const cols = Math.max(term.cols || 80, 20);
+          const rows = Math.max(term.rows || 24, 4);
+          await ptyService.spawnPty({
+            sessionId: sid,
+            cols,
+            rows,
+            cwd: workspacePath,
+          });
+        }
+
+        // Fit & initial size sync
+        setTimeout(() => {
+          if (isDisposed || !containerRef.current) return;
+          try {
+            fitAddon.fit();
+            const cols = Math.max(term.cols || 80, 20);
+            const rows = Math.max(term.rows || 24, 4);
+            ptyService.resizePty(sid, cols, rows);
+            term.focus();
+          } catch {}
+        }, 60);
+
+        // Send newline after small delay to ensure initial prompt is visible
+        setTimeout(() => {
+          if (!isDisposed && sessionRef.current === sid) {
+            ptyService.writePty(sid, "\r");
+          }
+        }, 200);
+      } catch (err) {
+        console.error("[TerminalPanel] Failed to setup session:", err);
+        if (!isDisposed) {
+          term.writeln(`\r\n\x1b[31m[Failed to open terminal: ${err}]\x1b[0m\r\n`);
+        }
       }
     };
 
@@ -90,64 +178,125 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
 
     // Resize observer
     const resizeObserver = new ResizeObserver(() => {
+      if (isDisposed || !containerRef.current) return;
       try {
         fitAddon.fit();
-        if (activeSession) {
-          ptyService.resizePty(activeSession, term.cols, term.rows);
+        const sid = sessionRef.current;
+        if (sid && term.cols > 0 && term.rows > 0) {
+          ptyService.resizePty(sid, Math.max(term.cols, 20), Math.max(term.rows, 4));
         }
-      } catch {
-        // ignore resize errors during unmount
-      }
+      } catch {}
     });
+
     resizeObserver.observe(containerRef.current);
 
     return () => {
+      isDisposed = true;
       resizeObserver.disconnect();
       if (unlistenData) unlistenData();
       if (unlistenExit) unlistenExit();
       term.dispose();
     };
-  }, [sessionId, onEnsureSession]);
+  }, []);
 
   const handleClear = () => {
     if (termRef.current) {
       termRef.current.clear();
+      const sid = sessionRef.current;
+      if (sid) {
+        ptyService.writePty(sid, "\r");
+      }
+    }
+  };
+
+  const handleRestart = async () => {
+    const oldId = sessionRef.current;
+    if (oldId) {
+      await ptyService.killPty(oldId);
+    }
+
+    if (termRef.current && fitAddonRef.current) {
+      termRef.current.clear();
+      termRef.current.writeln("\x1b[90m[Spawning new terminal shell...]\x1b[0m\r\n");
+
+      const newId = "pty-" + Math.random().toString(36).substring(2, 10);
+      sessionRef.current = newId;
+      setActiveSessionId(newId);
+
+      // Listen first
+      await ptyService.onPtyData(newId, (chunk) => {
+        termRef.current?.write(chunk);
+      });
+      await ptyService.onPtyExit(newId, () => {
+        termRef.current?.writeln("\r\n\x1b[33m[Process exited]\x1b[0m");
+      });
+
+      // Spawn
+      const cols = Math.max(termRef.current.cols || 80, 20);
+      const rows = Math.max(termRef.current.rows || 24, 4);
+      await ptyService.spawnPty({
+        sessionId: newId,
+        cols,
+        rows,
+        cwd: workspacePath,
+      });
+
+      setTimeout(() => {
+        try {
+          fitAddonRef.current?.fit();
+          ptyService.resizePty(
+            newId,
+            Math.max(termRef.current?.cols || 80, 20),
+            Math.max(termRef.current?.rows || 24, 4)
+          );
+          termRef.current?.focus();
+          ptyService.writePty(newId, "\r");
+        } catch {}
+      }, 150);
     }
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", width: "100%" }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "flex-end",
-          alignItems: "center",
-          gap: 6,
-          padding: "2px 8px",
-          background: "#1e1e1e",
-          borderBottom: "1px solid #2b2b2b",
-        }}
-      >
-        <button
-          className="icon-btn"
-          title="Clear Terminal"
-          onClick={handleClear}
-          style={{ fontSize: 11, display: "flex", gap: 4 }}
-        >
-          <Trash2 size={12} />
-          <span>Clear</span>
-        </button>
+    <div className="terminal-panel-wrapper">
+      {/* Terminal Toolbar */}
+      <div className="terminal-panel-toolbar">
+        <div className="terminal-toolbar-left">
+          <div className="terminal-tab-pill">
+            <TerminalIcon size={12} color="#007acc" />
+            <span>1: {shellName}</span>
+          </div>
+        </div>
+
+        <div className="terminal-toolbar-right">
+          <button
+            className="icon-btn"
+            title="New Terminal"
+            onClick={handleRestart}
+          >
+            <Plus size={13} />
+          </button>
+          <button
+            className="icon-btn"
+            title="Clear Terminal"
+            onClick={handleClear}
+          >
+            <Trash2 size={13} />
+          </button>
+          <button
+            className="icon-btn"
+            title="Restart Terminal"
+            onClick={handleRestart}
+          >
+            <RotateCw size={13} />
+          </button>
+        </div>
       </div>
 
+      {/* Xterm Render Target */}
       <div
+        className="terminal-xterm-viewport"
         ref={containerRef}
-        style={{
-          flex: 1,
-          width: "100%",
-          height: "100%",
-          padding: "4px 8px",
-          overflow: "hidden",
-        }}
+        onClick={() => termRef.current?.focus()}
       />
     </div>
   );

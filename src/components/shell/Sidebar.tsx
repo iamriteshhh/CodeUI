@@ -1,16 +1,20 @@
 import React from "react";
 import { FileTree } from "../explorer/FileTree";
 import { ExtensionsPanel } from "../extensions/ExtensionsPanel";
-import { FileEntry, ToolStatus } from "../../types";
+import { SearchPanel } from "../explorer/SearchPanel";
+import { RunPanel } from "../explorer/RunPanel";
+import { FileEntry, ToolStatus, OpenFile, ExtensionItem } from "../../types";
 
 interface SidebarProps {
-  activeTab: "explorer" | "extensions" | "search";
+  activeTab: "explorer" | "extensions" | "search" | "run";
   width: number;
   workspacePath: string;
   fileTree: FileEntry[];
   activeFilePath: string | null;
+  activeFile?: OpenFile;
   tools: ToolStatus[];
   onOpenFile: (path: string, name?: string) => void;
+  onOpenToSide?: (path: string) => void;
   onCreateFile: (name: string) => void;
   onCreateFolder: (name: string) => void;
   onRefreshExplorer: () => void;
@@ -19,6 +23,16 @@ interface SidebarProps {
   onRefreshTools: () => void;
   onSendToTerminal: (command: string) => void;
   onOpenFolderDialog: () => void;
+  onOpenInFileManager?: () => void;
+  onRunFile?: () => void;
+  onSearchSelectResult?: (filePath: string, lineNumber: number) => void;
+  selectedExtensionId?: string | null;
+  extensionsList?: ExtensionItem[];
+  isSyncingExtensions?: boolean;
+  onSelectExtension?: (id: string, extItem?: ExtensionItem) => void;
+  onToggleExtensionInstalled?: (id: string, extItem?: ExtensionItem) => void;
+  onRefreshExtensions?: () => void;
+  onOpenSettings?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -27,8 +41,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   workspacePath,
   fileTree,
   activeFilePath,
+  activeFile,
   tools,
   onOpenFile,
+  onOpenToSide,
   onCreateFile,
   onCreateFolder,
   onRefreshExplorer,
@@ -37,11 +53,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onRefreshTools,
   onSendToTerminal,
   onOpenFolderDialog,
+  onOpenInFileManager,
+  onRunFile,
+  onSearchSelectResult,
+  selectedExtensionId,
+  extensionsList,
+  isSyncingExtensions,
+  onSelectExtension,
+  onToggleExtensionInstalled,
+  onRefreshExtensions,
+  onOpenSettings,
 }) => {
+  const getHeaderTitle = () => {
+    switch (activeTab) {
+      case "explorer":
+        return "Explorer";
+      case "search":
+        return "Search";
+      case "run":
+        return "Run & Debug";
+      case "extensions":
+        return "Extensions";
+    }
+  };
+
   return (
     <div className="sidebar" style={{ width }}>
       <div className="sidebar-header">
-        <span>{activeTab === "explorer" ? "Explorer" : activeTab === "extensions" ? "Extensions" : "Search"}</span>
+        <span>{getHeaderTitle()}</span>
       </div>
 
       <div className="sidebar-content">
@@ -50,41 +89,47 @@ export const Sidebar: React.FC<SidebarProps> = ({
             workspacePath={workspacePath}
             entries={fileTree}
             activeFilePath={activeFilePath}
+            activeFile={activeFile}
             onOpenFile={onOpenFile}
+            onOpenToSide={onOpenToSide}
             onCreateFile={onCreateFile}
             onCreateFolder={onCreateFolder}
             onRefresh={onRefreshExplorer}
             onDeletePath={onDeletePath}
             onRenamePath={onRenamePath}
             onOpenFolderDialog={onOpenFolderDialog}
+            onOpenInFileManager={onOpenInFileManager}
+          />
+        )}
+
+        {activeTab === "search" && (
+          <SearchPanel
+            workspacePath={workspacePath}
+            onSelectResult={(filePath, line) => onSearchSelectResult?.(filePath, line)}
+          />
+        )}
+
+        {activeTab === "run" && (
+          <RunPanel
+            activeFile={activeFile}
+            tools={tools}
+            onRunFile={() => onRunFile?.()}
+            onRefreshTools={onRefreshTools}
+            onOpenTerminal={() => onSendToTerminal("")}
           />
         )}
 
         {activeTab === "extensions" && (
           <ExtensionsPanel
+            extensions={extensionsList || []}
             tools={tools}
-            onRefresh={onRefreshTools}
-            onSendToTerminal={onSendToTerminal}
+            isSyncing={isSyncingExtensions}
+            selectedExtensionId={selectedExtensionId}
+            onSelectExtension={(id, ext) => onSelectExtension?.(id, ext)}
+            onToggleInstall={(id, ext) => onToggleExtensionInstalled?.(id, ext)}
+            onOpenSettings={onOpenSettings}
+            onRefresh={onRefreshExtensions || onRefreshTools}
           />
-        )}
-
-        {activeTab === "search" && (
-          <div style={{ padding: "16px 20px", color: "#8c8c8c" }}>
-            <p style={{ marginBottom: 8, fontWeight: 500, color: "#ccc" }}>Search in Files</p>
-            <input
-              type="text"
-              placeholder="Search text..."
-              style={{
-                width: "100%",
-                background: "#3c3c3c",
-                border: "1px solid #444",
-                color: "#fff",
-                padding: "4px 8px",
-                borderRadius: 3,
-                fontSize: 12,
-              }}
-            />
-          </div>
         )}
       </div>
     </div>

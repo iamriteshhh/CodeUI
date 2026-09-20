@@ -1,13 +1,19 @@
 import React from "react";
 import { Play, SplitSquareVertical, Globe } from "lucide-react";
-import { OpenFile } from "../../types";
+import { OpenFile, ExtensionItem } from "../../types";
 import { TabStrip } from "./TabStrip";
 
 interface RunDebugBarProps {
   openFiles: OpenFile[];
   activeFilePath: string | null;
+  isWelcomeOpen?: boolean;
+  activeExtension?: ExtensionItem | null;
   onSelectTab: (path: string) => void;
   onCloseTab: (path: string) => void;
+  onSelectWelcome?: () => void;
+  onCloseWelcome?: () => void;
+  onSelectExtension?: () => void;
+  onCloseExtension?: () => void;
   onRunFile: () => void;
   isSplit: boolean;
   onToggleSplit: () => void;
@@ -18,8 +24,14 @@ interface RunDebugBarProps {
 export const RunDebugBar: React.FC<RunDebugBarProps> = ({
   openFiles,
   activeFilePath,
+  isWelcomeOpen,
+  activeExtension,
   onSelectTab,
   onCloseTab,
+  onSelectWelcome,
+  onCloseWelcome,
+  onSelectExtension,
+  onCloseExtension,
   onRunFile,
   isSplit,
   onToggleSplit,
@@ -31,6 +43,9 @@ export const RunDebugBar: React.FC<RunDebugBarProps> = ({
   let runLabel = "Run";
   if (activeFile) {
     switch (activeFile.language) {
+      case "salivo":
+        runLabel = "Run Salivo";
+        break;
       case "java":
         runLabel = "Run Java";
         break;
@@ -42,6 +57,19 @@ export const RunDebugBar: React.FC<RunDebugBarProps> = ({
         break;
       case "cpp":
         runLabel = "Run C++";
+        break;
+      case "rust":
+        runLabel = "Run Rust";
+        break;
+      case "zig":
+        runLabel = "Run Zig";
+        break;
+      case "go":
+        runLabel = "Run Go";
+        break;
+      case "javascript":
+      case "typescript":
+        runLabel = "Run JS/TS";
         break;
       case "html":
         runLabel = "Live Preview";
@@ -56,8 +84,14 @@ export const RunDebugBar: React.FC<RunDebugBarProps> = ({
       <TabStrip
         openFiles={openFiles}
         activeFilePath={activeFilePath}
+        isWelcomeOpen={isWelcomeOpen}
+        activeExtension={activeExtension}
         onSelectTab={onSelectTab}
         onCloseTab={onCloseTab}
+        onSelectWelcome={onSelectWelcome}
+        onCloseWelcome={onCloseWelcome}
+        onSelectExtension={onSelectExtension}
+        onCloseExtension={onCloseExtension}
       />
 
       {activeFile && (

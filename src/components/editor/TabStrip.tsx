@@ -1,42 +1,78 @@
 import React from "react";
-import { X, Coffee, FileCode, Globe, FileType } from "lucide-react";
-import { OpenFile } from "../../types";
+import { X, Code2, Blocks } from "lucide-react";
+import { OpenFile, ExtensionItem } from "../../types";
+import { FileIcon } from "../icons/FileIcon";
 
 interface TabStripProps {
   openFiles: OpenFile[];
   activeFilePath: string | null;
+  isWelcomeOpen?: boolean;
+  activeExtension?: ExtensionItem | null;
   onSelectTab: (path: string) => void;
   onCloseTab: (path: string) => void;
-}
-
-function getTabIcon(name: string) {
-  const ext = name.split(".").pop()?.toLowerCase();
-  switch (ext) {
-    case "java":
-      return <Coffee size={13} color="#e76f51" />;
-    case "py":
-      return <FileCode size={13} color="#ffd166" />;
-    case "c":
-    case "cpp":
-    case "h":
-      return <FileCode size={13} color="#457b9d" />;
-    case "html":
-      return <Globe size={13} color="#f77f00" />;
-    case "css":
-      return <FileType size={13} color="#4ea8de" />;
-    default:
-      return <FileCode size={13} color="#a8dadc" />;
-  }
+  onSelectWelcome?: () => void;
+  onCloseWelcome?: () => void;
+  onSelectExtension?: () => void;
+  onCloseExtension?: () => void;
 }
 
 export const TabStrip: React.FC<TabStripProps> = ({
   openFiles,
   activeFilePath,
+  isWelcomeOpen,
+  activeExtension,
   onSelectTab,
   onCloseTab,
+  onSelectWelcome,
+  onCloseWelcome,
+  onSelectExtension,
+  onCloseExtension,
 }) => {
+  const isWelcomeActive = activeFilePath === "codeui://welcome" || (isWelcomeOpen && !activeFilePath);
+  const isExtensionActive = activeFilePath === "codeui://extension";
+
   return (
     <div className="tabs-container">
+      {isWelcomeOpen && (
+        <div
+          className={`tab ${isWelcomeActive && !isExtensionActive ? "active" : ""}`}
+          onClick={onSelectWelcome}
+        >
+          <Code2 size={13} color="#007acc" />
+          <span>Welcome</span>
+          <div
+            className="tab-close"
+            title="Close Welcome"
+            onClick={(e) => {
+              e.stopPropagation();
+              onCloseWelcome?.();
+            }}
+          >
+            <X size={12} />
+          </div>
+        </div>
+      )}
+
+      {activeExtension && (
+        <div
+          className={`tab ${isExtensionActive ? "active" : ""}`}
+          onClick={onSelectExtension}
+        >
+          <Blocks size={13} color="#3794ff" />
+          <span>Extension: {activeExtension.displayName}</span>
+          <div
+            className="tab-close"
+            title="Close Extension"
+            onClick={(e) => {
+              e.stopPropagation();
+              onCloseExtension?.();
+            }}
+          >
+            <X size={12} />
+          </div>
+        </div>
+      )}
+
       {openFiles.map((file) => {
         const isActive = activeFilePath === file.path;
 
@@ -46,7 +82,7 @@ export const TabStrip: React.FC<TabStripProps> = ({
             className={`tab ${isActive ? "active" : ""}`}
             onClick={() => onSelectTab(file.path)}
           >
-            {getTabIcon(file.name)}
+            <FileIcon fileName={file.name} size={14} />
             <span
               style={{
                 fontStyle: file.isDirty ? "italic" : "normal",

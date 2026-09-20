@@ -16,6 +16,7 @@ pub struct PtyDataEvent {
 pub fn spawn_pty(
     app: AppHandle,
     manager: State<'_, PtyManager>,
+    session_id: Option<String>,
     cols: Option<u16>,
     rows: Option<u16>,
     shell: Option<String>,
@@ -24,9 +25,10 @@ pub fn spawn_pty(
     let app_data = app.clone();
     let app_exit = app.clone();
 
-    // The event name carries the id so each terminal panel subscribes to its own
-    // stream instead of filtering a shared firehose.
-    let id = uuid::Uuid::new_v4().to_string();
+    // Use caller-provided ID if available so frontend can subscribe before spawning
+    let id = session_id
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     let id_for_data = id.clone();
     let id_for_exit = id.clone();
 

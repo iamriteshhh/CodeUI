@@ -186,6 +186,248 @@ pub fn path_exists(path: String) -> bool {
     !path.trim().is_empty() && Path::new(&path).exists()
 }
 
+#[tauri::command]
+pub async fn pick_folder(default_path: Option<String>) -> Result<Option<String>, String> {
+    let res = tauri::async_runtime::spawn_blocking(move || {
+        let mut dialog = rfd::FileDialog::new().set_title("Select Folder");
+        if let Some(ref path) = default_path {
+            let p = Path::new(path);
+            if p.exists() {
+                dialog = dialog.set_directory(p);
+            }
+        }
+        dialog.pick_folder().map(|p| p.to_string_lossy().to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(res)
+}
+
+#[tauri::command]
+pub async fn pick_file(default_path: Option<String>) -> Result<Option<String>, String> {
+    let res = tauri::async_runtime::spawn_blocking(move || {
+        let mut dialog = rfd::FileDialog::new().set_title("Open File");
+        if let Some(ref path) = default_path {
+            let p = Path::new(path);
+            if p.exists() {
+                if p.is_dir() {
+                    dialog = dialog.set_directory(p);
+                } else if let Some(parent) = p.parent() {
+                    dialog = dialog.set_directory(parent);
+                }
+            }
+        }
+        dialog.pick_file().map(|p| p.to_string_lossy().to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(res)
+}
+
+#[tauri::command]
+pub fn open_in_file_manager(path: String) -> Result<(), String> {
+    let p = Path::new(&path);
+    if !p.exists() {
+        return Err("Path does not exist".into());
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg(p)
+            .spawn()
+            .map_err(|e| format!("Failed to open explorer: {e}"))?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(p)
+            .spawn()
+            .map_err(|e| format!("Failed to open Finder: {e}"))?;
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(p)
+            .spawn()
+            .map_err(|e| format!("Failed to open file manager: {e}"))?;
+    }
+
+    Ok(())
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchResult {
+    pub file_path: String,
+    pub file_name: String,
+    pub line_number: usize,
+    pub line_content: String,
+}
+
+#[tauri::command]
+pub async fn search_files(
+    workspace_path: String,
+    query: String,
+    case_sensitive: Option<bool>,
+    max_results: Option<usize>,
+) -> Result<Vec<SearchResult>, String> {
+    let q = query.trim().to_string();
+    if q.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let root = PathBuf::from(workspace_path);
+    if !root.exists() || !root.is_dir() {
+        return Ok(Vec::new());
+    }
+
+    let is_case_sensitive = case_sensitive.unwrap_or(false);
+    let limit = max_results.unwrap_or(100);
+
+    let results = tauri::async_runtime::spawn_blocking(move || {
+        let mut matches = Vec::new();
+        let walker = walkdir::WalkDir::new(&root)
+            .follow_links(false)
+            .into_iter()
+            .filter_entry(|entry| {
+                let name = entry.file_name().to_string_lossy();
+                !name.starts_with(".git")
+                    && name != "node_modules"
+                    && name != "target"
+                    && name != "dist"
+                    && name != ".next"
+                    && name != "__pycache__"
+                    && name != ".venv"
+            });
+
+        for entry in walker.filter_map(|e| e.ok()) {
+            if matches.len() >= limit {
+                break;
+            }
+
+            if !entry.file_type().is_file() {
+                continue;
+            }
+
+            let path = entry.path();
+            if let Ok(metadata) = entry.metadata() {
+                if metadata.len() > 2 * 1024 * 1024 {
+                    continue;
+                }
+            }
+
+            if let Ok(content) = std::fs::read_to_string(path) {
+                let file_path = path.to_string_lossy().to_string();
+                let file_name = entry.file_name().to_string_lossy().to_string();
+
+                for (idx, line) in content.lines().enumerate() {
+                    let is_match = if is_case_sensitive {
+                        line.contains(&q)
+                    } else {
+                        line.to_lowercase().contains(&q.to_lowercase())
+                    };
+
+                    if is_match {
+                        matches.push(SearchResult {
+                            file_path: file_path.clone(),
+                            file_name: file_name.clone(),
+                            line_number: idx + 1,
+                            line_content: line.trim().to_string(),
+                        });
+
+                        if matches.len() >= limit {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        matches
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(results)
+}
+
+#[tauri::command]
+pub async fn find_files(
+    workspace_path: String,
+    query: String,
+    max_results: Option<usize>,
+) -> Result<Vec<FileEntry>, String> {
+    let root = PathBuf::from(workspace_path);
+    if !root.exists() || !root.is_dir() {
+        return Ok(Vec::new());
+    }
+
+    let q = query.trim().to_lowercase();
+    let limit = max_results.unwrap_or(50);
+
+    let results = tauri::async_runtime::spawn_blocking(move || {
+        let mut matches = Vec::new();
+        let walker = walkdir::WalkDir::new(&root)
+            .follow_links(false)
+            .into_iter()
+            .filter_entry(|entry| {
+                let name = entry.file_name().to_string_lossy();
+                !name.starts_with(".git")
+                    && name != "node_modules"
+                    && name != "target"
+                    && name != "dist"
+                    && name != ".next"
+                    && name != "__pycache__"
+                    && name != ".venv"
+            });
+
+        for entry_res in walker.filter_map(Result::ok) {
+            if entry_res.file_type().is_file() {
+                let file_name = entry_res.file_name().to_string_lossy().to_string();
+                let full_path = entry_res.path().to_string_lossy().to_string();
+
+                if q.is_empty()
+                    || file_name.to_lowercase().contains(&q)
+                    || full_path.to_lowercase().contains(&q)
+                {
+                    let metadata = entry_res.metadata().ok();
+                    let size = metadata.as_ref().map(|m| m.len()).unwrap_or(0);
+                    let modified = metadata.and_then(|m| {
+                        m.modified().ok().and_then(|t| {
+                            t.duration_since(std::time::UNIX_EPOCH)
+                                .ok()
+                                .map(|d| d.as_secs())
+                        })
+                    });
+
+                    matches.push(FileEntry {
+                        name: file_name,
+                        path: full_path,
+                        is_dir: false,
+                        size,
+                        modified,
+                    });
+
+                    if matches.len() >= limit {
+                        break;
+                    }
+                }
+            }
+        }
+        matches
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(results)
+}
+
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -344,6 +586,22 @@ mod tests {
         delete_file(target.to_string_lossy().into_owned()).unwrap();
         assert!(!target.exists());
     }
+
+    #[test]
+    fn find_files_locates_by_name() {
+        tauri::async_runtime::block_on(async {
+            let dir = tmp();
+            let nested = dir.path().join("src/utils");
+            std::fs::create_dir_all(&nested).unwrap();
+            std::fs::write(nested.join("helper.py"), "print(1)").unwrap();
+            std::fs::write(dir.path().join("main.py"), "print(2)").unwrap();
+
+            let found = find_files(dir.path().to_string_lossy().into_owned(), "help".to_string(), None).await.unwrap();
+            assert_eq!(found.len(), 1);
+            assert_eq!(found[0].name, "helper.py");
+        });
+    }
+
 
     #[cfg(unix)]
     #[test]

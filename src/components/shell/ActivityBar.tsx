@@ -2,15 +2,17 @@ import React from "react";
 import { Files, Search, Play, Blocks, Settings } from "lucide-react";
 
 interface ActivityBarProps {
-  activeTab: "explorer" | "extensions" | "search";
-  onSelectTab: (tab: "explorer" | "extensions" | "search") => void;
+  activeTab: "explorer" | "extensions" | "search" | "run";
+  onSelectTab: (tab: "explorer" | "extensions" | "search" | "run") => void;
   sidebarVisible: boolean;
+  onOpenSettings?: () => void;
 }
 
 export const ActivityBar: React.FC<ActivityBarProps> = ({
   activeTab,
   onSelectTab,
   sidebarVisible,
+  onOpenSettings,
 }) => {
   return (
     <div className="activity-bar">
@@ -30,9 +32,9 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
           <Search size={22} />
         </button>
         <button
-          className="activity-btn"
+          className={`activity-btn ${sidebarVisible && activeTab === "run" ? "active" : ""}`}
           title="Run & Debug (Ctrl+Shift+D)"
-          onClick={() => onSelectTab("explorer")}
+          onClick={() => onSelectTab("run")}
         >
           <Play size={22} />
         </button>
@@ -46,7 +48,11 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({
       </div>
 
       <div className="activity-bar-group">
-        <button className="activity-btn" title="Settings (Ctrl+,)">
+        <button
+          className="activity-btn"
+          title="Settings (Ctrl+,)"
+          onClick={onOpenSettings}
+        >
           <Settings size={22} />
         </button>
       </div>

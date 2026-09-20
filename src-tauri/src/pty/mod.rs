@@ -99,7 +99,9 @@ impl PtyManager {
             .unwrap_or_else(default_shell);
         let mut builder = CommandBuilder::new(&shell);
         if let Some(dir) = cwd.filter(|d| !d.trim().is_empty()) {
-            builder.cwd(dir);
+            if std::path::Path::new(&dir).is_dir() {
+                builder.cwd(dir);
+            }
         }
         // Tells the shell and its children that a capable terminal is attached.
         builder.env("TERM", "xterm-256color");
@@ -232,6 +234,59 @@ pub fn default_shell() -> String {
     }
     #[cfg(windows)]
     {
-        std::env::var("COMSPEC").unwrap_or_else(|_| "powershell.exe".to_string())
+        if which::which("powershell.exe").is_ok() {
+            "powershell.exe".to_string()
+        } else {
+            std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string())
+        }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    #[test]
+    fn test_pty_spawn_and_write() {
+        let mgr = PtyManager::default();
+        let received = Arc::new(AtomicBool::new(false));
+        let r_clone = Arc::clone(&received);
+
+        let id = mgr.spawn(
+            PtySpawnOptions {
+                id: "test-session".to_string(),
+                shell: None,
+                cwd: None,
+                cols: 80,
+                rows: 24,
+            },
+            move |data| {
+                println!("PTY DATA: {:?}", data);
+                r_clone.store(true, Ordering::SeqCst);
+            },
+            || {
+                println!("PTY EXITED");
+            },
+        );
+
+        assert!(id.is_ok(), "Failed to spawn PTY: {:?}", id.err());
+        let id = id.unwrap();
+
+        let write_res = mgr.write(&id, "Write-Host 'hello_pty'\r\n");
+        assert!(write_res.is_ok(), "Failed to write: {:?}", write_res.err());
+
+        // Wait a bit for output
+        let start = std::time::Instant::now();
+        while start.elapsed() < std::time::Duration::from_millis(1500) {
+            if received.load(Ordering::SeqCst) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+
+        assert!(received.load(Ordering::SeqCst), "Did not receive PTY output!");
+        let _ = mgr.kill(&id);
+    }
+}
+

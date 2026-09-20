@@ -23,6 +23,7 @@ const mockExitListeners = new Map<string, (() => void)[]>();
 
 export const ptyService = {
   async spawnPty(options?: {
+    sessionId?: string;
     cols?: number;
     rows?: number;
     shell?: string;
@@ -31,6 +32,7 @@ export const ptyService = {
     const invoke = await getInvoke();
     if (invoke) {
       return await invoke<string>("spawn_pty", {
+        sessionId: options?.sessionId,
         cols: options?.cols,
         rows: options?.rows,
         shell: options?.shell,
@@ -68,7 +70,9 @@ export const ptyService = {
   async resizePty(sessionId: string, cols: number, rows: number): Promise<void> {
     const invoke = await getInvoke();
     if (invoke) {
-      return await invoke<void>("resize_pty", { sessionId, cols, rows });
+      const safeCols = Math.max(cols || 80, 10);
+      const safeRows = Math.max(rows || 24, 4);
+      return await invoke<void>("resize_pty", { sessionId, cols: safeCols, rows: safeRows });
     }
   },
 
@@ -103,13 +107,25 @@ export const ptyService = {
   ): Promise<() => void> {
     const event = await getEvent();
     if (event) {
-      const unlisten = await event.listen<{ sessionId: string; data: string }>(
-        `pty-data-${sessionId}`,
-        (e) => {
-          callback(e.payload.data);
-        }
-      );
-      return unlisten;
+      try {
+        const unlisten = await event.listen<any>(
+          `pty-data-${sessionId}`,
+          (e) => {
+            let text = "";
+            if (typeof e.payload === "string") {
+              text = e.payload;
+            } else if (e.payload && typeof e.payload.data === "string") {
+              text = e.payload.data;
+            }
+            if (text) {
+              callback(text);
+            }
+          }
+        );
+        return unlisten;
+      } catch (err) {
+        console.error(`[ptyService] Failed to listen on pty-data-${sessionId}:`, err);
+      }
     }
 
     // Mock listener
@@ -127,10 +143,14 @@ export const ptyService = {
   async onPtyExit(sessionId: string, callback: () => void): Promise<() => void> {
     const event = await getEvent();
     if (event) {
-      const unlisten = await event.listen<string>(`pty-exit-${sessionId}`, () => {
-        callback();
-      });
-      return unlisten;
+      try {
+        const unlisten = await event.listen<any>(`pty-exit-${sessionId}`, () => {
+          callback();
+        });
+        return unlisten;
+      } catch (err) {
+        console.error(`[ptyService] Failed to listen on pty-exit-${sessionId}:`, err);
+      }
     }
 
     if (!mockExitListeners.has(sessionId)) {

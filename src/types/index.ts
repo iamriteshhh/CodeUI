@@ -32,6 +32,8 @@ export interface UserSettings {
   shellPath?: string | null;
   runTimeoutSecs: number;
   lastFolder?: string | null;
+  recentFolders?: string[];
+  showWelcomeOnStartup?: boolean;
 }
 
 export interface OpenFile {
@@ -61,3 +63,37 @@ export type RunStatus =
       hint?: string | null;
     }
   | { phase: "failed"; message: string };
+
+export interface SearchResult {
+  filePath: string;
+  fileName: string;
+  lineNumber: number;
+  lineContent: string;
+}
+
+export interface ExtensionItem {
+  id: string;
+  name: string;
+  displayName: string;
+  publisher: string;
+  version: string;
+  description: string;
+  downloads: string;
+  rating: number;
+  ratingCount: number;
+  iconBg?: string;
+  iconType?: string;
+  iconUrl?: string;
+  repositoryUrl?: string;
+  license?: string;
+  installed: boolean;
+  enabled: boolean;
+  size?: string;
+  lastUpdated: string;
+  published?: string;
+  categories: string[];
+  overviewHtml?: string;
+  overviewMarkdown: string;
+  features?: string[];
+  changelog?: { version: string; date: string; changes: string[] }[];
+}

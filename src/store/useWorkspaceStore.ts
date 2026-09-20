@@ -6,33 +6,97 @@ import { settingsService } from "../services/settingsService";
 import { ptyService } from "../services/ptyService";
 
 function detectLanguage(fileName: string): string {
-  const ext = fileName.split(".").pop()?.toLowerCase();
+  const lower = fileName.toLowerCase();
+  if (lower === "cargo.toml" || lower === "cargo.lock") return "toml";
+  if (lower === "package.json") return "json";
+  if (lower.startsWith(".git")) return "git";
+  if (lower === "dockerfile") return "dockerfile";
+
+  const ext = lower.split(".").pop() || "";
   switch (ext) {
     case "java":
       return "java";
     case "py":
+    case "pyw":
       return "python";
     case "c":
+    case "h":
       return "c";
     case "cpp":
     case "cc":
     case "cxx":
-    case "h":
     case "hpp":
+    case "hxx":
+    case "hh":
       return "cpp";
+    case "rs":
+      return "rust";
+    case "sal":
+    case "salivo":
+    case "sf":
+    case "slv":
+      return "salivo";
+    case "zig":
+      return "zig";
     case "html":
     case "htm":
       return "html";
     case "css":
+    case "scss":
+    case "sass":
+    case "less":
       return "css";
     case "js":
+    case "mjs":
+    case "cjs":
+    case "jsx":
       return "javascript";
     case "ts":
+    case "mts":
+    case "cts":
+    case "tsx":
       return "typescript";
     case "json":
+    case "jsonc":
+    case "json5":
       return "json";
     case "md":
+    case "markdown":
       return "markdown";
+    case "toml":
+      return "toml";
+    case "yaml":
+    case "yml":
+      return "yaml";
+    case "xml":
+    case "svg":
+      return "xml";
+    case "sql":
+      return "sql";
+    case "sh":
+    case "bash":
+    case "zsh":
+      return "shell";
+    case "bat":
+    case "cmd":
+      return "bat";
+    case "ps1":
+      return "powershell";
+    case "php":
+      return "php";
+    case "go":
+      return "go";
+    case "rb":
+      return "ruby";
+    case "lua":
+      return "lua";
+    case "cs":
+      return "csharp";
+    case "kt":
+    case "kts":
+      return "kotlin";
+    case "swift":
+      return "swift";
     default:
       return "plaintext";
   }
@@ -47,13 +111,22 @@ export function useWorkspace() {
   const [isSplit, setIsSplit] = useState<boolean>(false);
 
   // Layout states
-  const [sidebarTab, setSidebarTab] = useState<"explorer" | "extensions" | "search">("explorer");
+  const [sidebarTab, setSidebarTab] = useState<"explorer" | "extensions" | "search" | "run">("explorer");
   const [sidebarVisible, setSidebarVisible] = useState<boolean>(true);
   const [sidebarWidth, setSidebarWidth] = useState<number>(260);
+  const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
 
   const [panelVisible, setPanelVisible] = useState<boolean>(false);
   const [panelHeight, setPanelHeight] = useState<number>(240);
   const [activePanelTab, setActivePanelTab] = useState<"terminal" | "preview">("terminal");
+
+  // Welcome tab state
+  const [isWelcomeOpen, setIsWelcomeOpen] = useState<boolean>(true);
+  const [recentFolders, setRecentFolders] = useState<string[]>([
+    "D:\\JAVA",
+    "C:\\Users\\sahil\\CodeUI",
+  ]);
+  const [showWelcomeOnStartup, setShowWelcomeOnStartup] = useState<boolean>(true);
 
   // Tools & Settings
   const [tools, setTools] = useState<ToolStatus[]>([]);
@@ -62,6 +135,8 @@ export function useWorkspace() {
     fontSize: 14,
     tabWidth: 4,
     runTimeoutSecs: 12,
+    recentFolders: ["D:\\JAVA", "C:\\Users\\sahil\\CodeUI"],
+    showWelcomeOnStartup: true,
   });
 
   // PTY Session
@@ -73,6 +148,13 @@ export function useWorkspace() {
       setSettings(s);
       if (s.lastFolder) {
         setWorkspacePath(s.lastFolder);
+      }
+      if (s.recentFolders && s.recentFolders.length > 0) {
+        setRecentFolders(s.recentFolders);
+      }
+      if (s.showWelcomeOnStartup !== undefined) {
+        setShowWelcomeOnStartup(s.showWelcomeOnStartup);
+        setIsWelcomeOpen(s.showWelcomeOnStartup);
       }
     });
 
@@ -171,8 +253,9 @@ export function useWorkspace() {
       if (!target) return;
       try {
         await fsService.writeFile(path, target.content);
+        const language = detectLanguage(target.name);
         setOpenFiles((prev) =>
-          prev.map((f) => (f.path === path ? { ...f, isDirty: false } : f))
+          prev.map((f) => (f.path === path ? { ...f, isDirty: false, language } : f))
         );
       } catch (err) {
         console.error("Failed to save file:", err);
@@ -195,10 +278,53 @@ export function useWorkspace() {
       setOpenFiles([]);
       setActiveFilePath(null);
       setSplitActiveFilePath(null);
-      settingsService.saveSettings({ ...settings, lastFolder: newPath });
+      setIsWelcomeOpen(false);
+
+      setRecentFolders((prev) => {
+        const next = [newPath, ...prev.filter((p) => p !== newPath)].slice(0, 10);
+        settingsService.saveSettings({ ...settings, lastFolder: newPath, recentFolders: next });
+        return next;
+      });
     },
     [settings]
   );
+
+  const toggleShowWelcomeOnStartup = useCallback(
+    (show: boolean) => {
+      setShowWelcomeOnStartup(show);
+      settingsService.saveSettings({ ...settings, showWelcomeOnStartup: show });
+    },
+    [settings]
+  );
+
+  const updateSettings = useCallback(
+    async (newSettings: UserSettings) => {
+      setSettings(newSettings);
+      await settingsService.saveSettings(newSettings);
+    },
+    []
+  );
+
+  const closeAllFiles = useCallback(() => {
+    setOpenFiles([]);
+    setActiveFilePath(null);
+    setSplitActiveFilePath(null);
+    setIsWelcomeOpen(true);
+  }, []);
+
+  const switchToNextTab = useCallback(() => {
+    if (openFiles.length === 0) return;
+    const currentIdx = openFiles.findIndex((f) => f.path === activeFilePath);
+    const nextIdx = (currentIdx + 1) % openFiles.length;
+    setActiveFilePath(openFiles[nextIdx].path);
+  }, [openFiles, activeFilePath]);
+
+  const switchToPrevTab = useCallback(() => {
+    if (openFiles.length === 0) return;
+    const currentIdx = openFiles.findIndex((f) => f.path === activeFilePath);
+    const prevIdx = (currentIdx - 1 + openFiles.length) % openFiles.length;
+    setActiveFilePath(openFiles[prevIdx].path);
+  }, [openFiles, activeFilePath]);
 
   // Create new file in workspace
   const createNewFile = useCallback(
@@ -264,9 +390,11 @@ export function useWorkspace() {
   const ensurePtySession = useCallback(async (): Promise<string> => {
     if (ptySessionId) return ptySessionId;
     try {
-      const id = await ptyService.spawnPty({ cwd: workspacePath });
-      setPtySessionId(id);
-      return id;
+      const id = "pty-" + Math.random().toString(36).substring(2, 10);
+      const spawnedId = await ptyService.spawnPty({ sessionId: id, cwd: workspacePath });
+      const finalId = spawnedId || id;
+      setPtySessionId(finalId);
+      return finalId;
     } catch (err) {
       console.error("Failed to spawn PTY:", err);
       return "";
@@ -333,6 +461,102 @@ export function useWorkspace() {
         }
         break;
       }
+      case "rust": {
+        if (isWin) {
+          cmd = `cd "${dir}"; rustc "${fileName}" -o "${baseName}.exe"; if ($?) { .\\"${baseName}.exe" }\r`;
+        } else {
+          cmd = `cd "${dir}" && rustc "${fileName}" -o "${baseName}" && ./"${baseName}"\n`;
+        }
+        break;
+      }
+      case "salivo": {
+        if (isWin) {
+          cmd = `cd "${dir}"; sf run "${fileName}"\r`;
+        } else {
+          cmd = `cd "${dir}" && sf run "${fileName}"\n`;
+        }
+        break;
+      }
+      case "zig": {
+        if (isWin) {
+          cmd = `cd "${dir}"; zig run "${fileName}"\r`;
+        } else {
+          cmd = `cd "${dir}" && zig run "${fileName}"\n`;
+        }
+        break;
+      }
+      case "javascript": {
+        if (isWin) {
+          cmd = `cd "${dir}"; node "${fileName}"\r`;
+        } else {
+          cmd = `cd "${dir}" && node "${fileName}"\n`;
+        }
+        break;
+      }
+      case "typescript": {
+        if (isWin) {
+          cmd = `cd "${dir}"; npx ts-node "${fileName}"\r`;
+        } else {
+          cmd = `cd "${dir}" && npx ts-node "${fileName}"\n`;
+        }
+        break;
+      }
+      case "go": {
+        if (isWin) {
+          cmd = `cd "${dir}"; go run "${fileName}"\r`;
+        } else {
+          cmd = `cd "${dir}" && go run "${fileName}"\n`;
+        }
+        break;
+      }
+      case "ruby": {
+        if (isWin) {
+          cmd = `cd "${dir}"; ruby "${fileName}"\r`;
+        } else {
+          cmd = `cd "${dir}" && ruby "${fileName}"\n`;
+        }
+        break;
+      }
+      case "php": {
+        if (isWin) {
+          cmd = `cd "${dir}"; php "${fileName}"\r`;
+        } else {
+          cmd = `cd "${dir}" && php "${fileName}"\n`;
+        }
+        break;
+      }
+      case "lua": {
+        if (isWin) {
+          cmd = `cd "${dir}"; lua "${fileName}"\r`;
+        } else {
+          cmd = `cd "${dir}" && lua "${fileName}"\n`;
+        }
+        break;
+      }
+      case "csharp": {
+        if (isWin) {
+          cmd = `cd "${dir}"; dotnet run\r`;
+        } else {
+          cmd = `cd "${dir}" && dotnet run\n`;
+        }
+        break;
+      }
+      case "shell": {
+        if (isWin) {
+          cmd = `cd "${dir}"; bash "${fileName}"\r`;
+        } else {
+          cmd = `cd "${dir}" && bash "${fileName}"\n`;
+        }
+        break;
+      }
+      case "powershell": {
+        cmd = `cd "${dir}"; & ".\\${fileName}"\r`;
+        break;
+      }
+      case "bat": {
+        cmd = `cd "${dir}"; .\\"${fileName}"\r`;
+        break;
+      }
       case "html": {
         // Switch to preview panel
         setActivePanelTab("preview");
@@ -362,6 +586,17 @@ export function useWorkspace() {
     activePanelTab,
     tools,
     settings,
+    settingsOpen,
+    setSettingsOpen,
+    updateSettings,
+    isWelcomeOpen,
+    setIsWelcomeOpen,
+    recentFolders,
+    showWelcomeOnStartup,
+    toggleShowWelcomeOnStartup,
+    closeAllFiles,
+    switchToNextTab,
+    switchToPrevTab,
     ptySessionId,
     setSidebarTab,
     setSidebarVisible,

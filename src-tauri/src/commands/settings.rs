@@ -30,6 +30,8 @@ pub struct Settings {
     pub shell_path: Option<String>,
     pub run_timeout_secs: u64,
     pub last_folder: Option<String>,
+    pub recent_folders: Vec<String>,
+    pub show_welcome_on_startup: bool,
 }
 
 impl Default for Settings {
@@ -41,6 +43,8 @@ impl Default for Settings {
             shell_path: None,
             run_timeout_secs: crate::proc::DEFAULT_TIMEOUT_SECS,
             last_folder: None,
+            recent_folders: Vec::new(),
+            show_welcome_on_startup: true,
         }
     }
 }

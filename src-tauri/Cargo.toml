@@ -21,6 +21,8 @@ portable-pty = "0.8"
 uuid = { version = "1", features = ["v4"] }
 which = "6"
 dirs = "5"
+rfd = "0.17.2"
+walkdir = "2"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
