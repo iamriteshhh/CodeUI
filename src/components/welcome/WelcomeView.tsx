@@ -7,10 +7,10 @@ import {
   ExternalLink,
   Star,
   Coffee,
-  Code2,
   Sparkles,
   ArrowRight,
 } from "lucide-react";
+import codeuiLogo from "../../assets/codeui-logo.png";
 
 interface WelcomeViewProps {
   recentFolders: string[];
@@ -55,7 +55,16 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
         {/* Header */}
         <div className="welcome-header">
           <div className="welcome-title-row">
-            <Code2 size={36} color="#007acc" />
+            <img
+              src={codeuiLogo}
+              alt="CodeUI"
+              style={{
+                width: 44,
+                height: 44,
+                objectFit: "contain",
+                filter: "drop-shadow(0 4px 16px rgba(0, 122, 204, 0.4))",
+              }}
+            />
             <h1 className="welcome-title">CodeUI</h1>
           </div>
           <p className="welcome-subtitle">Editing evolved • A lab-safe IDE for students & developers</p>

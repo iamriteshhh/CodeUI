@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
 import {
-  Code2,
   Search,
   PanelLeft,
   Maximize2,
@@ -25,6 +24,7 @@ import {
   Layers,
 } from "lucide-react";
 import { editorService } from "../../services/editorService";
+import codeuiLogo from "../../assets/codeui-logo.png";
 
 interface MenuItemDef {
   label: string;
@@ -238,7 +238,11 @@ export const TitleBar: React.FC<TitleBarProps> = ({
       { label: "Toggle Terminal Panel", shortcut: "Ctrl+`", action: onTogglePanel },
     ],
     Help: [
-      { label: "Welcome", icon: <Code2 size={14} color="#007acc" />, action: onOpenWelcome },
+      {
+        label: "Welcome",
+        icon: <img src={codeuiLogo} alt="CodeUI" style={{ width: 14, height: 14, objectFit: "contain" }} />,
+        action: onOpenWelcome,
+      },
       { divider: true, label: "" },
       {
         label: "About CodeUI",
@@ -253,11 +257,11 @@ export const TitleBar: React.FC<TitleBarProps> = ({
   const menuNames = Object.keys(menus);
 
   return (
-    <div className="titlebar">
+    <div className="titlebar" data-tauri-drag-region onDoubleClick={handleToggleMaximize}>
       {/* Logo & Menus */}
       <div className="titlebar-left" ref={menuContainerRef}>
         <div className="titlebar-logo" onClick={onOpenWelcome} style={{ cursor: "pointer" }}>
-          <Code2 size={16} color="#007acc" />
+          <img src={codeuiLogo} alt="CodeUI" style={{ width: 16, height: 16, objectFit: "contain", flexShrink: 0 }} />
           <span>CodeUI</span>
         </div>
 
@@ -329,45 +333,51 @@ export const TitleBar: React.FC<TitleBarProps> = ({
         </div>
       </div>
 
-      {/* Right Action Icons */}
+      {/* Right Action Icons & Window Controls */}
       <div className="titlebar-right">
-        <button
-          className="titlebar-action-btn"
-          title="Toggle Primary Sidebar (Ctrl+B)"
-          onClick={onToggleSidebar}
-          style={{ color: sidebarVisible ? "#007acc" : undefined }}
-        >
-          <PanelLeft size={15} />
-        </button>
-        <button
-          className="titlebar-action-btn"
-          title="Toggle Bottom Panel (Ctrl+`)"
-          onClick={onTogglePanel}
-          style={{ color: panelVisible ? "#007acc" : undefined }}
-        >
-          <Sliders size={15} />
-        </button>
-        <button
-          className="titlebar-action-btn"
-          title="Minimize"
-          onClick={handleMinimize}
-        >
-          <Minus size={14} />
-        </button>
-        <button
-          className="titlebar-action-btn"
-          title="Maximize"
-          onClick={handleToggleMaximize}
-        >
-          <Maximize2 size={12} />
-        </button>
-        <button
-          className="titlebar-action-btn titlebar-close-btn"
-          title="Close"
-          onClick={handleClose}
-        >
-          <X size={14} />
-        </button>
+        <div className="titlebar-actions">
+          <button
+            className="titlebar-action-btn"
+            title="Toggle Primary Sidebar (Ctrl+B)"
+            onClick={onToggleSidebar}
+            style={{ color: sidebarVisible ? "#007acc" : undefined }}
+          >
+            <PanelLeft size={15} />
+          </button>
+          <button
+            className="titlebar-action-btn"
+            title="Toggle Bottom Panel (Ctrl+`)"
+            onClick={onTogglePanel}
+            style={{ color: panelVisible ? "#007acc" : undefined }}
+          >
+            <Sliders size={15} />
+          </button>
+        </div>
+
+        {/* Flush Windows / VS Code style window controls */}
+        <div className="titlebar-window-controls">
+          <button
+            className="titlebar-window-btn"
+            title="Minimize"
+            onClick={handleMinimize}
+          >
+            <Minus size={14} />
+          </button>
+          <button
+            className="titlebar-window-btn"
+            title="Maximize"
+            onClick={handleToggleMaximize}
+          >
+            <Maximize2 size={12} />
+          </button>
+          <button
+            className="titlebar-window-btn close"
+            title="Close"
+            onClick={handleClose}
+          >
+            <X size={14} />
+          </button>
+        </div>
       </div>
     </div>
   );
