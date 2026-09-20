@@ -98,6 +98,9 @@ impl PtyManager {
             .filter(|s| !s.trim().is_empty())
             .unwrap_or_else(default_shell);
         let mut builder = CommandBuilder::new(&shell);
+        if shell.to_lowercase().contains("powershell") {
+            builder.arg("-NoLogo");
+        }
         if let Some(dir) = cwd.filter(|d| !d.trim().is_empty()) {
             if std::path::Path::new(&dir).is_dir() {
                 builder.cwd(dir);
@@ -245,13 +248,12 @@ pub fn default_shell() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicBool, Ordering};
 
     #[test]
     fn test_pty_spawn_and_write() {
         let mgr = PtyManager::default();
-        let received = Arc::new(AtomicBool::new(false));
-        let r_clone = Arc::clone(&received);
+        let received_output = Arc::new(Mutex::new(String::new()));
+        let r_clone = Arc::clone(&received_output);
 
         let id = mgr.spawn(
             PtySpawnOptions {
@@ -263,7 +265,7 @@ mod tests {
             },
             move |data| {
                 println!("PTY DATA: {:?}", data);
-                r_clone.store(true, Ordering::SeqCst);
+                r_clone.lock().unwrap().push_str(&data);
             },
             || {
                 println!("PTY EXITED");
@@ -273,21 +275,16 @@ mod tests {
         assert!(id.is_ok(), "Failed to spawn PTY: {:?}", id.err());
         let id = id.unwrap();
 
-        let write_res = mgr.write(&id, "Write-Host 'hello_pty'\r\n");
+        std::thread::sleep(std::time::Duration::from_millis(1000));
+        let write_res = mgr.write(&id, "Get-Date\r");
         assert!(write_res.is_ok(), "Failed to write: {:?}", write_res.err());
 
-        // Wait a bit for output
-        let start = std::time::Instant::now();
-        while start.elapsed() < std::time::Duration::from_millis(1500) {
-            if received.load(Ordering::SeqCst) {
-                break;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(50));
-        }
-
+        std::thread::sleep(std::time::Duration::from_millis(1500));
+        let output = received_output.lock().unwrap().clone();
+        println!("TOTAL PTY OUTPUT WITH CARRIAGE RETURN: {:?}", output);
         assert!(
-            received.load(Ordering::SeqCst),
-            "Did not receive PTY output!"
+            output.contains("Get-Date"),
+            "Did not receive expected output with \\r"
         );
         let _ = mgr.kill(&id);
     }

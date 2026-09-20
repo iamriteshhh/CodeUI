@@ -8,7 +8,7 @@ import { Trash2, RotateCw, Terminal as TerminalIcon, Plus } from "lucide-react";
 interface TerminalPanelProps {
   sessionId: string | null;
   workspacePath?: string;
-  onEnsureSession?: () => Promise<string>;
+  onEnsureSession?: (preferredId?: string) => Promise<string>;
 }
 
 export const TerminalPanel: React.FC<TerminalPanelProps> = ({
@@ -106,24 +106,16 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
     // 3. Start or bind to PTY session
     const setupSession = async () => {
       try {
-        // Pre-generate session ID if not existing so we can listen BEFORE spawning
-        let sid = sessionRef.current;
-        let needSpawn = false;
-
+        let sid = sessionRef.current || sessionId;
         if (!sid) {
-          if (onEnsureSession) {
-            sid = await onEnsureSession();
-          } else {
-            sid = "pty-" + Math.random().toString(36).substring(2, 10);
-            needSpawn = true;
-          }
+          sid = "pty-" + Math.random().toString(36).substring(2, 10);
         }
 
-        if (!sid || isDisposed) return;
+        if (isDisposed) return;
         sessionRef.current = sid;
         setActiveSessionId(sid);
 
-        // Subscribe to output first
+        // Subscribe to output first BEFORE spawning so zero output is dropped
         unlistenData = await ptyService.onPtyData(sid, (chunk) => {
           if (!isDisposed) {
             term.write(chunk);
@@ -136,10 +128,12 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
           }
         });
 
-        // If we generated the session ID directly, spawn now
-        if (needSpawn) {
-          const cols = Math.max(term.cols || 80, 20);
-          const rows = Math.max(term.rows || 24, 4);
+        // Spawn PTY session with pre-registered sid
+        const cols = Math.max(term.cols || 80, 20);
+        const rows = Math.max(term.rows || 24, 4);
+        if (onEnsureSession) {
+          await onEnsureSession(sid);
+        } else {
           await ptyService.spawnPty({
             sessionId: sid,
             cols,
@@ -153,19 +147,12 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
           if (isDisposed || !containerRef.current) return;
           try {
             fitAddon.fit();
-            const cols = Math.max(term.cols || 80, 20);
-            const rows = Math.max(term.rows || 24, 4);
-            ptyService.resizePty(sid, cols, rows);
+            const safeCols = Math.max(term.cols || 80, 20);
+            const safeRows = Math.max(term.rows || 24, 4);
+            ptyService.resizePty(sid, safeCols, safeRows);
             term.focus();
           } catch {}
         }, 60);
-
-        // Send newline after small delay to ensure initial prompt is visible
-        setTimeout(() => {
-          if (!isDisposed && sessionRef.current === sid) {
-            ptyService.writePty(sid, "\r");
-          }
-        }, 200);
       } catch (err) {
         console.error("[TerminalPanel] Failed to setup session:", err);
         if (!isDisposed) {

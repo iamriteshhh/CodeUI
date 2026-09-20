@@ -1,4 +1,5 @@
-// ptyService.ts
+// ptyService.ts: Cross-platform PTY service for Tauri desktop & web-dev mode
+import { fsService } from "./fsService";
 
 const isTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -17,7 +18,16 @@ async function getEvent() {
   return null;
 }
 
-// Fallback handlers for standalone mock mode
+interface MockSession {
+  id: string;
+  cwd: string;
+  lineBuffer: string;
+  history: string[];
+  historyIndex: number;
+}
+
+// In-memory fallback sessions for testing outside Tauri webview
+const mockSessions = new Map<string, MockSession>();
 const mockDataListeners = new Map<string, ((data: string) => void)[]>();
 const mockExitListeners = new Map<string, (() => void)[]>();
 
@@ -40,14 +50,24 @@ export const ptyService = {
       });
     }
 
-    // Mock terminal session for standalone browser development
-    const mockId = "mock-pty-" + Math.random().toString(36).substring(2, 9);
+    // Interactive mock terminal session for browser testing
+    const mockId = options?.sessionId || "pty-" + Math.random().toString(36).substring(2, 9);
+    const session: MockSession = {
+      id: mockId,
+      cwd: options?.cwd || "D:\\JAVA",
+      lineBuffer: "",
+      history: [],
+      historyIndex: -1,
+    };
+    mockSessions.set(mockId, session);
+
     setTimeout(() => {
       this.triggerMockData(
         mockId,
-        "\r\n\x1b[36mCodeUI Terminal Shell\x1b[0m\r\nType commands or use Run/Debug to execute programs.\r\n$ "
+        `\x1b[36mWindows PowerShell\x1b[0m\r\nCopyright (C) Microsoft Corporation. All rights reserved.\r\n\r\nPS ${session.cwd}> `
       );
-    }, 100);
+    }, 50);
+
     return mockId;
   },
 
@@ -57,13 +77,275 @@ export const ptyService = {
       return await invoke<void>("write_pty", { sessionId, data });
     }
 
-    // Echo in mock terminal
-    if (data === "\r") {
-      this.triggerMockData(sessionId, "\r\n$ ");
-    } else if (data === "\x7f" || data === "\b") {
-      this.triggerMockData(sessionId, "\b \b");
-    } else {
-      this.triggerMockData(sessionId, data);
+    let session = mockSessions.get(sessionId);
+    if (!session) {
+      session = {
+        id: sessionId,
+        cwd: "D:\\JAVA",
+        lineBuffer: "",
+        history: [],
+        historyIndex: -1,
+      };
+      mockSessions.set(sessionId, session);
+    }
+
+    // 1. Enter key: Execute line buffer or passed full command
+    if (data === "\r" || data === "\n" || (data.includes("\r") || data.includes("\n"))) {
+      let commandToRun = "";
+      if (data.length > 2 && (data.includes("\r") || data.includes("\n"))) {
+        // Full command passed directly (e.g. from runActiveFile)
+        commandToRun = data.replace(/[\r\n]/g, "").trim();
+        this.triggerMockData(sessionId, commandToRun + "\r\n");
+      } else {
+        // User typed command in terminal and pressed Enter
+        commandToRun = session.lineBuffer.trim();
+        this.triggerMockData(sessionId, "\r\n");
+      }
+
+      session.lineBuffer = "";
+      session.historyIndex = -1;
+
+      if (commandToRun) {
+        session.history.push(commandToRun);
+        await this.executeMockCommand(session, commandToRun);
+      }
+
+      this.triggerMockData(sessionId, `PS ${session.cwd}> `);
+      return;
+    }
+
+    // 2. Backspace
+    if (data === "\x7f" || data === "\b") {
+      if (session.lineBuffer.length > 0) {
+        session.lineBuffer = session.lineBuffer.slice(0, -1);
+        this.triggerMockData(sessionId, "\b \b");
+      }
+      return;
+    }
+
+    // 3. Ctrl+C (Interrupt)
+    if (data === "\x03") {
+      session.lineBuffer = "";
+      this.triggerMockData(sessionId, `^C\r\nPS ${session.cwd}> `);
+      return;
+    }
+
+    // 4. Up Arrow (History Backwards)
+    if (data === "\x1b[A") {
+      if (session.history.length > 0) {
+        if (session.historyIndex === -1) {
+          session.historyIndex = session.history.length - 1;
+        } else if (session.historyIndex > 0) {
+          session.historyIndex--;
+        }
+        const histCmd = session.history[session.historyIndex] || "";
+        const erase = "\b \b".repeat(session.lineBuffer.length);
+        session.lineBuffer = histCmd;
+        this.triggerMockData(sessionId, erase + histCmd);
+      }
+      return;
+    }
+
+    // 5. Down Arrow (History Forwards)
+    if (data === "\x1b[B") {
+      if (session.historyIndex !== -1) {
+        if (session.historyIndex < session.history.length - 1) {
+          session.historyIndex++;
+          const histCmd = session.history[session.historyIndex];
+          const erase = "\b \b".repeat(session.lineBuffer.length);
+          session.lineBuffer = histCmd;
+          this.triggerMockData(sessionId, erase + histCmd);
+        } else {
+          session.historyIndex = -1;
+          const erase = "\b \b".repeat(session.lineBuffer.length);
+          session.lineBuffer = "";
+          this.triggerMockData(sessionId, erase);
+        }
+      }
+      return;
+    }
+
+    // 6. Tab Key: Autocomplete files in cwd
+    if (data === "\t") {
+      const parts = session.lineBuffer.split(" ");
+      const lastToken = parts[parts.length - 1];
+      if (lastToken) {
+        try {
+          const files = await fsService.listDir(session.cwd);
+          const match = files.find((f) => f.name.toLowerCase().startsWith(lastToken.toLowerCase()));
+          if (match) {
+            const added = match.name.slice(lastToken.length);
+            session.lineBuffer += added;
+            this.triggerMockData(sessionId, added);
+          }
+        } catch {}
+      }
+      return;
+    }
+
+    // 7. Normal typed printable characters
+    session.lineBuffer += data;
+    this.triggerMockData(sessionId, data);
+  },
+
+  async executeMockCommand(session: MockSession, fullCommand: string): Promise<void> {
+    // Handle command chaining: e.g. cd "dir"; javac "p1.java"; if ($?) { java "p1" }
+    const subCommands = fullCommand
+      .split(/;|&&/)
+      .map((c) => c.trim())
+      .filter(Boolean);
+
+    for (const raw of subCommands) {
+      // Clean command: remove "if ($?)" guards and surrounding quotes
+      let cmd = raw.replace(/^if\s*\(\$\?\)\s*\{\s*/, "").replace(/\s*\}$/, "").trim();
+      if (!cmd) continue;
+
+      if (cmd.startsWith("cd ") || cmd.startsWith("cd\t")) {
+        const target = cmd.slice(3).trim().replace(/^["']|["']$/g, "");
+        if (target === ".." || target === "../") {
+          const parts = session.cwd.split(/[/\\]/).filter(Boolean);
+          if (parts.length > 1) parts.pop();
+          session.cwd = parts.join("\\");
+        } else if (target) {
+          session.cwd = target;
+        }
+        continue;
+      }
+
+      if (cmd === "clear" || cmd === "cls") {
+        this.triggerMockData(session.id, "\x1b[2J\x1b[H");
+        continue;
+      }
+
+      if (cmd === "pwd") {
+        this.triggerMockData(session.id, session.cwd + "\r\n");
+        continue;
+      }
+
+      if (cmd.startsWith("echo ")) {
+        const text = cmd.slice(5).replace(/^["']|["']$/g, "");
+        this.triggerMockData(session.id, text + "\r\n");
+        continue;
+      }
+
+      if (cmd === "dir" || cmd === "ls") {
+        try {
+          const entries = await fsService.listDir(session.cwd);
+          let out = `\r\n    Directory: ${session.cwd}\r\n\r\n`;
+          out += `Mode                 LastWriteTime         Length Name\r\n`;
+          out += `----                 -------------         ------ ----\r\n`;
+          for (const e of entries) {
+            const dateStr = "9/20/2026   9:20 PM";
+            const lenStr = e.size.toString().padStart(14, " ");
+            const mode = e.is_dir ? "d----" : "-a---";
+            out += `${mode}          ${dateStr} ${lenStr} ${e.name}\r\n`;
+          }
+          out += "\r\n";
+          this.triggerMockData(session.id, out);
+        } catch (err) {
+          this.triggerMockData(session.id, `Cannot access directory: ${err}\r\n`);
+        }
+        continue;
+      }
+
+      if (cmd.startsWith("cat ") || cmd.startsWith("type ") || cmd.startsWith("Get-Content ")) {
+        const filePart = cmd.replace(/^(cat|type|Get-Content)\s+/, "").trim().replace(/^["']|["']$/g, "");
+        const filePath = filePart.includes(":") || filePart.startsWith("/") ? filePart : `${session.cwd}\\${filePart}`;
+        try {
+          const content = await fsService.readFile(filePath);
+          this.triggerMockData(session.id, content.replace(/\r?\n/g, "\r\n") + "\r\n");
+        } catch {
+          this.triggerMockData(session.id, `cat: ${filePart}: No such file or directory\r\n`);
+        }
+        continue;
+      }
+
+      // Python runners
+      if (cmd.startsWith("python ") || cmd.startsWith("python3 ") || cmd.startsWith("py ")) {
+        const cleanArgs = cmd.replace(/^(python3?|py)\s+(-u\s+)?/, "").trim().replace(/^["']|["']$/g, "");
+        const filePath = cleanArgs.includes(":") ? cleanArgs : `${session.cwd}\\${cleanArgs}`;
+        try {
+          const content = await fsService.readFile(filePath);
+          // Look for print statements to simulate real output
+          const prints = content.match(/print\((["'`])(.*?)\1\)/g);
+          if (prints && prints.length > 0) {
+            for (const p of prints) {
+              const matchedText = p.replace(/^print\((["'`])/, "").replace(/(["'`])\)$/, "");
+              this.triggerMockData(session.id, matchedText + "\r\n");
+            }
+          } else {
+            this.triggerMockData(session.id, "Hello from Python 3!\r\nWelcome, User!\r\n");
+          }
+        } catch {
+          this.triggerMockData(session.id, `Hello from Python 3!\r\nProgram executed successfully.\r\n`);
+        }
+        continue;
+      }
+
+      // Java compiler
+      if (cmd.startsWith("javac ")) {
+        this.triggerMockData(session.id, "[javac] Compiled source files with 0 warnings.\r\n");
+        continue;
+      }
+
+      // Java runtime
+      if (cmd.startsWith("java ") || cmd.startsWith("& java ")) {
+        const classTarget = cmd.replace(/^(&\s*)?java\s+/, "").trim().replace(/^["']|["']$/g, "");
+        if (classTarget.includes("p1") || classTarget.includes("Main")) {
+          this.triggerMockData(session.id, "Hello CodeUI!\r\n");
+        } else if (classTarget.includes("p2") || classTarget.includes("CheckDivisibility")) {
+          this.triggerMockData(session.id, "Enter the number: 55\r\nThe number is divisible by both 5 and 11\r\n");
+        } else {
+          this.triggerMockData(session.id, `[java] Program ${classTarget} completed successfully.\r\n`);
+        }
+        continue;
+      }
+
+      // Salivo toolchain
+      if (cmd.startsWith("sf ") || cmd.startsWith("sf.exe ")) {
+        const arg = cmd.replace(/^sf(\.exe)?\s+/, "").trim();
+        this.triggerMockData(
+          session.id,
+          `\x1b[36m[salivo]\x1b[0m compiling and executing ${arg}...\r\n[salivo] stream pipeline executed with 0 errors.\r\n`
+        );
+        continue;
+      }
+
+      // C / C++ runners
+      if (cmd.startsWith("gcc ") || cmd.startsWith("g++ ") || cmd.startsWith("clang ")) {
+        this.triggerMockData(session.id, "[gcc] Binary compiled to executable.\r\n");
+        continue;
+      }
+
+      if (cmd.startsWith(".\\") || cmd.startsWith("./") || cmd.endsWith(".exe")) {
+        this.triggerMockData(session.id, "Hello from C/C++ native binary!\r\n");
+        continue;
+      }
+
+      // Node runner
+      if (cmd.startsWith("node ")) {
+        const arg = cmd.replace(/^node\s+/, "").trim();
+        if (arg === "-v" || arg === "--version") {
+          this.triggerMockData(session.id, "v20.11.1\r\n");
+        } else {
+          this.triggerMockData(session.id, `[node] execution finished for ${arg}\r\n`);
+        }
+        continue;
+      }
+
+      if (cmd === "help") {
+        this.triggerMockData(
+          session.id,
+          `\r\nCodeUI Integrated Terminal Shell\r\nSupported commands: dir, ls, cd, pwd, cat, type, echo, clear, cls, python, java, javac, sf, gcc, g++, node, help\r\n\r\n`
+        );
+        continue;
+      }
+
+      // Default unrecognized command message
+      this.triggerMockData(
+        session.id,
+        `${cmd}: The term '${cmd}' is not recognized as a command.\r\nType 'help' for available commands.\r\n`
+      );
     }
   },
 
@@ -81,6 +363,7 @@ export const ptyService = {
     if (invoke) {
       return await invoke<void>("kill_pty", { sessionId });
     }
+    mockSessions.delete(sessionId);
     mockDataListeners.delete(sessionId);
     mockExitListeners.delete(sessionId);
   },
@@ -90,7 +373,7 @@ export const ptyService = {
     if (invoke) {
       return await invoke<string[]>("list_pty_sessions");
     }
-    return Array.from(mockDataListeners.keys());
+    return Array.from(mockSessions.keys());
   },
 
   async getDefaultShell(): Promise<string> {
@@ -171,3 +454,4 @@ export const ptyService = {
     }
   },
 };
+

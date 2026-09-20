@@ -389,10 +389,10 @@ export function useWorkspace() {
   );
 
   // Ensure PTY session exists or spawn one
-  const ensurePtySession = useCallback(async (): Promise<string> => {
+  const ensurePtySession = useCallback(async (preferredId?: string): Promise<string> => {
     if (ptySessionId) return ptySessionId;
     try {
-      const id = "pty-" + Math.random().toString(36).substring(2, 10);
+      const id = preferredId || "pty-" + Math.random().toString(36).substring(2, 10);
       const spawnedId = await ptyService.spawnPty({ sessionId: id, cwd: workspacePath });
       const finalId = spawnedId || id;
       setPtySessionId(finalId);
