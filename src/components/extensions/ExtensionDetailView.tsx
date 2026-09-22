@@ -8,11 +8,12 @@ import {
   Loader2,
   FileText,
   History,
+  Shield,
 } from "lucide-react";
 import { marked } from "marked";
 import { ExtensionItem } from "../../types";
 import { ExtensionIcon } from "./ExtensionIcon";
-import { fetchLiveExtensionDetails } from "../../services/extensionService";
+import { fetchLiveExtensionDetails, isAiExtension } from "../../services/extensionService";
 
 marked.setOptions({
   gfm: true,
@@ -143,9 +144,76 @@ export const ExtensionDetailView: React.FC<ExtensionDetailViewProps> = ({
 
           <p className="extension-detail-short-desc">{extension.description}</p>
 
+          {/* System Detected Toolchain Info (Compact & Native, Non-intrusive) */}
+          {extension.systemDetected && !isBuiltin && extension.systemToolPath && (
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                margin: "4px 0 10px 0",
+                padding: "3px 8px",
+                background: "#1e1e1e",
+                border: "1px solid #2d2d2d",
+                borderRadius: 2,
+                fontSize: 11,
+                color: "#858585",
+              }}
+            >
+              <span>System binary:</span>
+              <code style={{ color: "#cccccc", fontFamily: "Consolas, monospace" }}>
+                {extension.systemToolPath}
+              </code>
+            </div>
+          )}
+
+          {/* Security Rule: Professional AI Restriction Notice */}
+          {(extension.blockedByPolicy || isAiExtension(extension)) && (
+            <div
+              style={{
+                margin: "8px 0 12px 0",
+                padding: "8px 12px",
+                background: "#1e1e1e",
+                border: "1px solid #2d2d2d",
+                borderLeft: "3px solid #6e7681",
+                borderRadius: 2,
+                fontSize: 11,
+                lineHeight: 1.4,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#cccccc", fontWeight: 600 }}>
+                <Shield size={13} style={{ color: "#6e7681", flexShrink: 0 }} />
+                <span>Restricted by Policy</span>
+              </div>
+              <div style={{ color: "#858585", marginTop: 2 }}>
+                {extension.blockReason ||
+                  "Installation and execution of AI code extensions are restricted by workspace policy."}
+              </div>
+            </div>
+          )}
+
           {/* Action buttons row */}
           <div className="extension-detail-actions">
-            {isBuiltin ? (
+            {extension.blockedByPolicy || isAiExtension(extension) ? (
+              <button
+                className="extension-btn"
+                disabled
+                style={{
+                  background: "#252526",
+                  color: "#858585",
+                  border: "1px solid #3c3c3c",
+                  cursor: "not-allowed",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "4px 12px",
+                  fontSize: 11,
+                }}
+              >
+                <Shield size={12} />
+                Restricted by Policy
+              </button>
+            ) : isBuiltin ? (
               <div className="btn-group">
                 <button
                   className="extension-btn primary"

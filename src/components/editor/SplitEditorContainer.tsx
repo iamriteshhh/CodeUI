@@ -139,6 +139,7 @@ export const SplitEditorContainer: React.FC<SplitEditorContainerProps> = ({
         ) : (
           <Suspense fallback={<EditorFallback />}>
             <MonacoEditorGroup
+              key="primary-editor-group"
               file={activeFile}
               onChangeContent={onChangeContent}
               onSave={onSave}
@@ -154,6 +155,7 @@ export const SplitEditorContainer: React.FC<SplitEditorContainerProps> = ({
         <div className="editor-group split-border">
           <Suspense fallback={<EditorFallback />}>
             <MonacoEditorGroup
+              key="split-editor-group"
               file={splitFile}
               onChangeContent={onChangeContent}
               onSave={onSave}

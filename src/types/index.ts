@@ -96,4 +96,8 @@ export interface ExtensionItem {
   overviewMarkdown: string;
   features?: string[];
   changelog?: { version: string; date: string; changes: string[] }[];
+  systemDetected?: boolean;
+  systemToolPath?: string;
+  blockedByPolicy?: boolean;
+  blockReason?: string;
 }

@@ -9,10 +9,11 @@ import {
   Loader2,
   Globe,
   Check,
+  Shield,
 } from "lucide-react";
 import { ExtensionItem, ToolStatus } from "../../types";
 import { ExtensionIcon } from "./ExtensionIcon";
-import { searchOpenVsxMarketplace } from "../../services/extensionService";
+import { searchOpenVsxMarketplace, isAiExtension } from "../../services/extensionService";
 
 interface ExtensionsPanelProps {
   extensions: ExtensionItem[];
@@ -127,6 +128,27 @@ export const ExtensionsPanel: React.FC<ExtensionsPanelProps> = ({
           </button>
         </div>
 
+        {/* Professional Security Policy Notice */}
+        <div
+          style={{
+            margin: "6px 0 6px 0",
+            padding: "6px 8px",
+            background: "#1e1e1e",
+            border: "1px solid #2d2d2d",
+            borderLeft: "3px solid #007acc",
+            borderRadius: 2,
+            lineHeight: 1.35,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#cccccc", fontWeight: 600, fontSize: 11 }}>
+            <Shield size={12} style={{ color: "#007acc", flexShrink: 0 }} />
+            <span>Security Policy</span>
+          </div>
+          <div style={{ color: "#858585", fontSize: 10.5, marginTop: 2 }}>
+            AI code extensions are restricted by workspace policy.
+          </div>
+        </div>
+
         <div className="extensions-marketplace-note">
           By default, CodeUI uses Open VSX as a live marketplace. This can be changed in{" "}
           <span className="settings-link" onClick={onOpenSettings}>
@@ -168,16 +190,30 @@ export const ExtensionsPanel: React.FC<ExtensionsPanelProps> = ({
 
                     <div className="extension-list-info">
                       <div className="extension-list-name-row">
-                        <span className="extension-list-name">{ext.displayName}</span>
+                        <span className="extension-list-name" title={ext.displayName}>{ext.displayName}</span>
                       </div>
 
                       <div className="extension-list-desc">{ext.description}</div>
 
                       <div className="extension-list-publisher-row">
-                        <span className="extension-list-publisher">{ext.publisher}</span>
-                        <span style={{ fontSize: 11, color: "#777777", marginLeft: 4 }}>
-                          v{ext.version}
-                        </span>
+                        <div style={{ display: "flex", alignItems: "center", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          <span className="extension-list-publisher">{ext.publisher}</span>
+                          <span style={{ fontSize: 10.5, color: "#777777", marginLeft: 4 }}>
+                            v{ext.version}
+                          </span>
+                          {ext.id === "salivo.salivo-tools" ? (
+                            <span style={{ fontSize: 10, color: "#4ec9b0", marginLeft: 6 }}>
+                              • Built-in
+                            </span>
+                          ) : ext.systemDetected ? (
+                            <span
+                              style={{ fontSize: 10, color: "#858585", marginLeft: 6 }}
+                              title={ext.systemToolPath ? `System binary: ${ext.systemToolPath}` : "Installed on system"}
+                            >
+                              • System
+                            </span>
+                          ) : null}
+                        </div>
                         <button
                           className="icon-btn extension-row-gear"
                           title="Manage Extension"
@@ -234,20 +270,41 @@ export const ExtensionsPanel: React.FC<ExtensionsPanelProps> = ({
 
                       <div className="extension-list-info">
                         <div className="extension-list-name-row">
-                          <span className="extension-list-name">{ext.displayName}</span>
+                          <span className="extension-list-name" title={ext.displayName}>{ext.displayName}</span>
                         </div>
                         <div className="extension-list-desc">{ext.description}</div>
                         <div className="extension-list-publisher-row">
                           <span className="extension-list-publisher">{ext.publisher}</span>
-                          <button
-                            className="extension-install-badge-btn"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onToggleInstall?.(ext.id, ext);
-                            }}
-                          >
-                            Install
-                          </button>
+                          {ext.blockedByPolicy || isAiExtension(ext) ? (
+                            <span
+                              style={{
+                                fontSize: 10.5,
+                                color: "#858585",
+                                background: "#252526",
+                                border: "1px solid #333333",
+                                padding: "1px 6px",
+                                borderRadius: 2,
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 4,
+                                cursor: "not-allowed",
+                              }}
+                              title={ext.blockReason || "Restricted by security policy: AI assistants disabled"}
+                            >
+                              <Shield size={10} style={{ color: "#6e7681" }} />
+                              Restricted
+                            </span>
+                          ) : (
+                            <button
+                              className="extension-install-badge-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onToggleInstall?.(ext.id, ext);
+                              }}
+                            >
+                              Install
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -301,7 +358,7 @@ export const ExtensionsPanel: React.FC<ExtensionsPanelProps> = ({
 
                         <div className="extension-list-info">
                           <div className="extension-list-name-row">
-                            <span className="extension-list-name">{ext.displayName}</span>
+                            <span className="extension-list-name" title={ext.displayName}>{ext.displayName}</span>
                           </div>
 
                           <div className="extension-list-desc">{ext.description}</div>
@@ -312,8 +369,27 @@ export const ExtensionsPanel: React.FC<ExtensionsPanelProps> = ({
                               v{ext.version}
                             </span>
                             {isInstalled ? (
-                              <span style={{ fontSize: 11, color: "#4ec9b0", display: "flex", alignItems: "center", gap: 3 }}>
+                              <span style={{ fontSize: 11, color: "#858585", display: "flex", alignItems: "center", gap: 3 }}>
                                 <Check size={11} /> Installed
+                              </span>
+                            ) : ext.blockedByPolicy || isAiExtension(ext) ? (
+                              <span
+                                style={{
+                                  fontSize: 10.5,
+                                  color: "#858585",
+                                  background: "#252526",
+                                  border: "1px solid #333333",
+                                  padding: "1px 6px",
+                                  borderRadius: 2,
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 4,
+                                  cursor: "not-allowed",
+                                }}
+                                title={ext.blockReason || "Restricted by security policy: AI assistants disabled"}
+                              >
+                                <Shield size={10} style={{ color: "#6e7681" }} />
+                                Restricted
                               </span>
                             ) : (
                               <button

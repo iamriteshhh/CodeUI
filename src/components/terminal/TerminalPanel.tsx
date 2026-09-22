@@ -25,11 +25,24 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
 
   sessionRef.current = activeSessionId;
 
+  // Keep sessionRef and activeSessionId synchronized and listen to output if sessionId updates
   useEffect(() => {
-    if (sessionId && sessionId !== activeSessionId) {
-      setActiveSessionId(sessionId);
-    }
-  }, [sessionId, activeSessionId]);
+    if (!sessionId) return;
+    sessionRef.current = sessionId;
+    setActiveSessionId(sessionId);
+
+    let unlisten: (() => void) | null = null;
+    ptyService.onPtyData(sessionId, (chunk) => {
+      termRef.current?.write(chunk);
+    }).then((fn) => {
+      unlisten = fn;
+    });
+
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, [sessionId]);
+
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -283,6 +296,7 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
       <div
         className="terminal-xterm-viewport"
         ref={containerRef}
+        onMouseDown={() => termRef.current?.focus()}
         onClick={() => termRef.current?.focus()}
       />
     </div>

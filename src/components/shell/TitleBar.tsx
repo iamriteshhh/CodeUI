@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   Search,
   PanelLeft,
@@ -86,6 +86,23 @@ export const TitleBar: React.FC<TitleBarProps> = ({
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const isTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
+  // Handle window dragging on mousedown for the titlebar background
+  const handleDragStart = useCallback(async (e: React.MouseEvent) => {
+    // Only drag if clicking directly on the titlebar background (not on buttons/menus/inputs)
+    const target = e.target as HTMLElement;
+    const isInteractive = target.closest('button, input, .menu-item, .titlebar-dropdown, .titlebar-logo, .titlebar-search, .titlebar-action-btn, .titlebar-window-btn, .titlebar-window-controls');
+    if (isInteractive) return;
+    
+    if (isTauri()) {
+      try {
+        const { getCurrentWindow } = await import("@tauri-apps/api/window");
+        await getCurrentWindow().startDragging();
+      } catch (e) {
+        console.warn("Drag window error:", e);
+      }
+    }
+  }, []);
 
   const handleMinimize = async () => {
     if (isTauri()) {
@@ -257,7 +274,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
   const menuNames = Object.keys(menus);
 
   return (
-    <div className="titlebar" data-tauri-drag-region onDoubleClick={handleToggleMaximize}>
+    <div className="titlebar" data-tauri-drag-region onMouseDown={handleDragStart} onDoubleClick={handleToggleMaximize}>
       {/* Logo & Menus */}
       <div className="titlebar-left" ref={menuContainerRef}>
         <div className="titlebar-logo" onClick={onOpenWelcome} style={{ cursor: "pointer" }}>

@@ -45,18 +45,32 @@ export const MONACO_LAB_SAFE_OPTIONS: NonNullable<EditorProps["options"]> = {
   tabCompletion: "off",
   snippetSuggestions: "none",
 
-  // Visual ergonomics & performance
+  // Visual ergonomics & stability
   fontSize: 14,
+  lineHeight: 20,
+  fontFamily: "Consolas, 'Courier New', monospace",
   lineNumbers: "on",
   glyphMargin: false,
-  folding: true,
+  folding: false,
+  showFoldingControls: "never",
+  dragAndDrop: false, // Disables accidental drag & drop of text chunks when clicking rapidly
+  mouseWheelZoom: false, // Prevents viewport scaling desynchronizing line offsets
+  links: false,
+  selectOnLineNumbers: true,
+  multiCursorModifier: "alt",
   lineDecorationsWidth: 10,
   lineNumbersMinChars: 3,
   minimap: { enabled: true, side: "right", scale: 1 },
   scrollBeyondLastLine: false,
   automaticLayout: true,
-  renderWhitespace: "selection",
-  cursorBlinking: "smooth",
-  smoothScrolling: true,
+  renderWhitespace: "none",
+  cursorBlinking: "solid",
+  cursorSmoothCaretAnimation: "off",
+  smoothScrolling: false,
+  disableLayerHinting: false, // Keep GPU hardware acceleration enabled to prevent line repaint collisions
+  renderLineHighlight: "none", // Eliminates active line overlay that was shifting vertical coordinates on click
+  occurrencesHighlight: "off", // Disables background highlighting on matching words across lines on click
+  selectionHighlight: false, // Disables selection-based word highlights across lines
+  matchBrackets: "never", // Disables bracket matching decoration shifts
   contextmenu: true,
 };

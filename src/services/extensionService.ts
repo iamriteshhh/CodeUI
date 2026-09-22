@@ -166,6 +166,52 @@ export async function syncAllExtensionsLive(
 }
 
 /**
+ * Security Rule: Enterprise Policy - AI Extensions Prohibited
+ * Checks if an extension is an AI assistant/code generator.
+ */
+export function isAiExtension(ext: {
+  id?: string;
+  name?: string;
+  displayName?: string;
+  description?: string;
+  publisher?: string;
+  categories?: string[];
+}): boolean {
+  const combined = [
+    ext.id || "",
+    ext.name || "",
+    ext.displayName || "",
+    ext.description || "",
+    ext.publisher || "",
+    ...(ext.categories || []),
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  const aiPatterns = [
+    /\bcopilot\b/i,
+    /\bclaude\b/i,
+    /\bchatgpt\b/i,
+    /\bgpt-?[345]\b/i,
+    /\btabnine\b/i,
+    /\bcodeium\b/i,
+    /\bcody\b/i,
+    /\bcursor\b/i,
+    /\bdeepseek\b/i,
+    /\bopenai\b/i,
+    /\banthropic\b/i,
+    /\bgenerative ai\b/i,
+    /\bai assistant\b/i,
+    /\bai code\b/i,
+    /\bai autocomplete\b/i,
+    /\bai-powered\b/i,
+    /\bllm\b/i,
+  ];
+
+  return aiPatterns.some((pattern) => pattern.test(combined));
+}
+
+/**
  * Searches the live Open VSX Marketplace directly
  */
 export async function searchOpenVsxMarketplace(query: string): Promise<ExtensionItem[]> {
@@ -191,21 +237,30 @@ export async function searchOpenVsxMarketplace(query: string): Promise<Extension
 
     return json.extensions.map((item: any) => {
       const id = `${item.namespace}.${item.name}`;
+      const name = item.name;
+      const displayName = item.displayName || item.name;
+      const publisher = item.namespaceDisplayName || item.namespace;
+      const description = item.description || "No description provided";
+      const categories = item.categories || ["Tools"];
+      const blocked = isAiExtension({ id, name, displayName, publisher, description, categories });
+
       return {
         id,
-        name: item.name,
-        displayName: item.displayName || item.name,
-        publisher: item.namespaceDisplayName || item.namespace,
+        name,
+        displayName,
+        publisher,
         version: item.version || "1.0.0",
-        description: item.description || "No description provided",
+        description,
         downloads: typeof item.downloadCount === "number" ? item.downloadCount.toLocaleString() : "0",
         rating: typeof item.averageRating === "number" ? Math.round(item.averageRating * 10) / 10 : 5.0,
         ratingCount: typeof item.reviewCount === "number" ? item.reviewCount : 0,
         installed: false,
-        enabled: true,
+        enabled: !blocked,
+        blockedByPolicy: blocked,
+        blockReason: blocked ? "Restricted by security policy: AI assistants are disabled." : undefined,
         lastUpdated: formatTimestamp(item.timestamp),
         license: item.license || "Open Source",
-        categories: item.categories || ["Tools"],
+        categories,
         overviewMarkdown: "", // Dynamically fetched when opened
         iconUrl: item.files?.icon,
         repositoryUrl: item.repository || undefined,

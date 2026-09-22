@@ -1,22 +1,16 @@
 // ptyService.ts: Cross-platform PTY service for Tauri desktop & web-dev mode
 import { fsService } from "./fsService";
+import { invoke, isTauri as isTauriCore } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
-const isTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
-
-async function getInvoke() {
-  if (isTauri()) {
-    const { invoke } = await import("@tauri-apps/api/core");
-    return invoke;
+const isTauri = () => {
+  if (typeof window === "undefined") return false;
+  try {
+    return isTauriCore() || "__TAURI_INTERNALS__" in window || "__TAURI__" in window;
+  } catch {
+    return "__TAURI_INTERNALS__" in window || "__TAURI__" in window;
   }
-  return null;
-}
-
-async function getEvent() {
-  if (isTauri()) {
-    return await import("@tauri-apps/api/event");
-  }
-  return null;
-}
+};
 
 interface MockSession {
   id: string;
@@ -40,8 +34,7 @@ export const ptyService = {
     shell?: string;
     cwd?: string;
   }): Promise<string> {
-    const invoke = await getInvoke();
-    if (invoke) {
+    if (isTauri()) {
       return await invoke<string>("spawn_pty", {
         sessionId: options?.sessionId,
         cols: options?.cols,
@@ -73,8 +66,7 @@ export const ptyService = {
   },
 
   async writePty(sessionId: string, data: string): Promise<void> {
-    const invoke = await getInvoke();
-    if (invoke) {
+    if (isTauri()) {
       return await invoke<void>("write_pty", { sessionId, data });
     }
 
@@ -285,7 +277,7 @@ export const ptyService = {
 
       // Java compiler
       if (cmd.startsWith("javac ")) {
-        this.triggerMockData(session.id, "[javac] Compiled source files with 0 warnings.\r\n");
+        this.triggerMockData(session.id, "\x1b[36m[javac]\x1b[0m Compiled source files in 138ms (0 warnings).\r\n");
         continue;
       }
 
@@ -321,6 +313,7 @@ export const ptyService = {
         if (arg.startsWith("run ") || arg.startsWith("build ")) {
           const filePart = arg.replace(/^(run|build)\s+/, "").trim().replace(/^["']|["']$/g, "");
           const filePath = filePart.includes(":") || filePart.startsWith("/") ? filePart : `${session.cwd}\\${filePart}`;
+          this.triggerMockData(session.id, "\x1b[36m[salivo]\x1b[0m Compiled in 42ms\r\n");
           try {
             const content = await fsService.readFile(filePath);
             const outlnMatches = content.match(/outln\(\s*(\$?"(?:[^"\\]|\\.)*")\s*\)/g);
@@ -340,7 +333,7 @@ export const ptyService = {
 
         this.triggerMockData(
           session.id,
-          `\x1b[36m[salivo]\x1b[0m compiling and executing ${arg}...\r\nHello from Salivo! Stream pipeline >< active.\r\n`
+          `\x1b[36m[salivo]\x1b[0m Compiled in 42ms\r\nHello from Salivo! Stream pipeline >< active.\r\n`
         );
         continue;
       }
@@ -433,17 +426,15 @@ export const ptyService = {
   },
 
   async resizePty(sessionId: string, cols: number, rows: number): Promise<void> {
-    const invoke = await getInvoke();
-    if (invoke) {
-      const safeCols = Math.max(cols || 80, 10);
+    if (isTauri()) {
+      const safeCols = Math.max(cols || 80, 20);
       const safeRows = Math.max(rows || 24, 4);
       return await invoke<void>("resize_pty", { sessionId, cols: safeCols, rows: safeRows });
     }
   },
 
   async killPty(sessionId: string): Promise<void> {
-    const invoke = await getInvoke();
-    if (invoke) {
+    if (isTauri()) {
       return await invoke<void>("kill_pty", { sessionId });
     }
     mockSessions.delete(sessionId);
@@ -452,16 +443,14 @@ export const ptyService = {
   },
 
   async listPtySessions(): Promise<string[]> {
-    const invoke = await getInvoke();
-    if (invoke) {
+    if (isTauri()) {
       return await invoke<string[]>("list_pty_sessions");
     }
     return Array.from(mockSessions.keys());
   },
 
   async getDefaultShell(): Promise<string> {
-    const invoke = await getInvoke();
-    if (invoke) {
+    if (isTauri()) {
       return await invoke<string>("get_default_shell");
     }
     return "powershell.exe";
@@ -471,10 +460,9 @@ export const ptyService = {
     sessionId: string,
     callback: (data: string) => void
   ): Promise<() => void> {
-    const event = await getEvent();
-    if (event) {
+    if (isTauri()) {
       try {
-        const unlisten = await event.listen<any>(
+        const unlisten = await listen<any>(
           `pty-data-${sessionId}`,
           (e) => {
             let text = "";
@@ -507,10 +495,9 @@ export const ptyService = {
   },
 
   async onPtyExit(sessionId: string, callback: () => void): Promise<() => void> {
-    const event = await getEvent();
-    if (event) {
+    if (isTauri()) {
       try {
-        const unlisten = await event.listen<any>(`pty-exit-${sessionId}`, () => {
+        const unlisten = await listen<any>(`pty-exit-${sessionId}`, () => {
           callback();
         });
         return unlisten;

@@ -4,6 +4,8 @@ type AnyEditor = any;
 
 let activeEditorInstance: AnyEditor | null = null;
 let monacoInstance: any = null;
+type CursorCallback = (line: number, col: number) => void;
+const cursorCallbacks: CursorCallback[] = [];
 
 export const editorService = {
   setActiveEditor(editor: AnyEditor | null) {
@@ -12,6 +14,20 @@ export const editorService = {
 
   setMonaco(monaco: any) {
     monacoInstance = monaco;
+  },
+
+  onCursorChange(cb: CursorCallback) {
+    cursorCallbacks.push(cb);
+    return () => {
+      const idx = cursorCallbacks.indexOf(cb);
+      if (idx !== -1) cursorCallbacks.splice(idx, 1);
+    };
+  },
+
+  notifyCursorChange(line: number, col: number) {
+    for (const cb of cursorCallbacks) {
+      cb(line, col);
+    }
   },
 
   setLanguage(languageId: string) {
@@ -137,7 +153,8 @@ export const editorService = {
   disposeModel(path: string) {
     if (!monacoInstance) return;
     try {
-      const uri = monacoInstance.Uri.parse(path);
+      const uriStr = getNormalizedUri(path);
+      const uri = monacoInstance.Uri.parse(uriStr);
       const model = monacoInstance.editor.getModel(uri);
       if (model) {
         model.dispose();
@@ -147,3 +164,11 @@ export const editorService = {
     }
   },
 };
+
+export function getNormalizedUri(filePath: string): string {
+  if (!filePath) return "inmemory://default";
+  if (filePath.startsWith("file://")) return filePath;
+  const clean = filePath.replace(/\\/g, "/");
+  return `file:///${clean.replace(/^\/+/, "")}`;
+}
+

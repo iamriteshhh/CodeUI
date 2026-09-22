@@ -19,11 +19,12 @@
         "minHeight": 700,
         "resizable": true,
         "decorations": false,
+        "zoomHotkeysEnabled": false,
         "theme": "Dark"
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost; frame-src 'self' data: about:"
+      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost https:; frame-src 'self' data: about:"
     }
   },
   "bundle": {
@@ -44,6 +45,9 @@
     "windows": {
       "nsis": {
         "installMode": "both"
+      },
+      "webviewInstallMode": {
+        "type": "embedBootstrapper"
       }
     },
     "linux": {

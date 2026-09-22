@@ -5,6 +5,7 @@ let isSalivoRegistered = false;
 
 export function registerSalivoLanguage(monaco: any) {
   if (isSalivoRegistered || !monaco || !monaco.languages) return;
+  isSalivoRegistered = true;
 
   // 1. Register language ID
   const existingLanguages = monaco.languages.getLanguages();

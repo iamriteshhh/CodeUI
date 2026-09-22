@@ -18,38 +18,81 @@ pub struct ToolStatus {
 
 struct ToolSpec {
     name: &'static str,
+    candidates: &'static [&'static str],
     purpose: &'static str,
     install_hint: &'static str,
 }
 
 const TOOLS: &[ToolSpec] = &[
     ToolSpec {
+        name: "python",
+        candidates: &["python3", "python", "py"],
+        purpose: "Runs Python programs",
+        install_hint: "Install Python from python.org or via winget install Python.Python.3.12",
+    },
+    ToolSpec {
         name: "gcc",
+        candidates: &["gcc", "clang", "cl"],
         purpose: "Compiles C programs",
-        install_hint: "sudo apt install build-essential",
+        install_hint: "Install GCC or Clang (MinGW-w64 or Visual Studio Build Tools)",
     },
     ToolSpec {
         name: "g++",
+        candidates: &["g++", "clang++"],
         purpose: "Compiles C++ programs",
-        install_hint: "sudo apt install build-essential",
+        install_hint: "Install G++ or Clang++ (MinGW-w64 or Visual Studio Build Tools)",
     },
     ToolSpec {
-        name: "python3",
-        purpose: "Runs Python programs",
-        install_hint: "sudo apt install python3",
+        name: "rustc",
+        candidates: &["rustc"],
+        purpose: "Compiles Rust programs",
+        install_hint: "Install Rust via rustup (https://rustup.rs)",
+    },
+    ToolSpec {
+        name: "cargo",
+        candidates: &["cargo"],
+        purpose: "Rust package manager & build tool",
+        install_hint: "Install Rust via rustup (https://rustup.rs)",
+    },
+    ToolSpec {
+        name: "go",
+        candidates: &["go"],
+        purpose: "Compiles and runs Go programs",
+        install_hint: "Install Go from https://go.dev",
     },
     ToolSpec {
         name: "javac",
+        candidates: &["javac"],
         purpose: "Compiles Java programs",
-        install_hint: "sudo apt install default-jdk",
+        install_hint: "Install OpenJDK or Microsoft Build of OpenJDK",
     },
     ToolSpec {
         name: "java",
+        candidates: &["java"],
         purpose: "Runs compiled Java programs",
-        install_hint: "sudo apt install default-jre",
+        install_hint: "Install Java Runtime or JDK",
+    },
+    ToolSpec {
+        name: "node",
+        candidates: &["node", "nodejs"],
+        purpose: "Runs JavaScript / TypeScript programs",
+        install_hint: "Install Node.js from https://nodejs.org",
+    },
+    ToolSpec {
+        name: "git",
+        candidates: &["git"],
+        purpose: "Git version control system",
+        install_hint: "Install Git from https://git-scm.com",
+    },
+    ToolSpec {
+        name: "zig",
+        candidates: &["zig"],
+        purpose: "Compiles and runs Zig programs",
+        install_hint: "Install Zig from https://ziglang.org",
     },
     ToolSpec {
         name: "sf",
+        candidates: &["sf"],
         purpose: "Compiles and runs Salivo programs",
         install_hint: "Install the Salivo toolchain, then add ~/.salivo/bin to your PATH",
     },
@@ -65,9 +108,14 @@ pub fn detect_tools() -> Vec<ToolStatus> {
     let mut out: Vec<ToolStatus> = TOOLS
         .iter()
         .map(|spec| {
-            let path = which::which(spec.name)
-                .ok()
-                .map(|p| p.to_string_lossy().into_owned());
+            let path = spec
+                .candidates
+                .iter()
+                .find_map(|&cand| {
+                    which::which(cand)
+                        .ok()
+                        .map(|p| p.to_string_lossy().into_owned())
+                });
             ToolStatus {
                 name: spec.name.to_string(),
                 available: path.is_some(),

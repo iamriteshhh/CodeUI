@@ -4,7 +4,7 @@ import { MONACO_LAB_SAFE_OPTIONS } from "./monacoSafeDefaults";
 import { OpenFile } from "../../types";
 import { ChevronRight } from "lucide-react";
 import { FileIcon } from "../icons/FileIcon";
-import { editorService } from "../../services/editorService";
+import { editorService, getNormalizedUri } from "../../services/editorService";
 import { registerSalivoLanguage } from "../../languages/salivoMonaco";
 
 interface MonacoEditorGroupProps {
@@ -15,13 +15,37 @@ interface MonacoEditorGroupProps {
   onMarkersChange?: (errors: number, warnings: number) => void;
 }
 
-export const MonacoEditorGroup: React.FC<MonacoEditorGroupProps> = ({
+const MonacoEditorGroupComponent: React.FC<MonacoEditorGroupProps> = ({
   file,
   onChangeContent,
   onSave,
   onCursorChange,
   onMarkersChange,
 }) => {
+  const editorRef = React.useRef<any>(null);
+  const monacoRef = React.useRef<any>(null);
+  const [isShieldActive, setIsShieldActive] = React.useState(false);
+  const prevPathRef = React.useRef<string | undefined>(file?.path);
+
+  // When switching or opening files, immediately shield the editor container
+  // with the solid #1e1e1e background for ~100ms. This guarantees the user never
+  // experiences overlapping words, character diffing, or layout flickering.
+  React.useEffect(() => {
+    if (!file?.path) return;
+    if (prevPathRef.current !== file.path) {
+      prevPathRef.current = file.path;
+      setIsShieldActive(true);
+      const timer = setTimeout(() => {
+        if (editorRef.current) {
+          editorRef.current.layout();
+        }
+        setIsShieldActive(false);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [file?.path]);
+
+
   if (!file) {
     return (
       <div className="empty-watermark">
@@ -61,13 +85,32 @@ export const MonacoEditorGroup: React.FC<MonacoEditorGroupProps> = ({
       </div>
 
       {/* Monaco Editor Container */}
-      <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
+      <div style={{ flex: 1, position: "relative", overflow: "hidden", background: "#1e1e1e" }}>
+        {/* Anti-glitch shield: clean 0.1s blank cover prevents any visual text overlap or morphing */}
+        {isShieldActive && (
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: "#1e1e1e",
+              zIndex: 20,
+              pointerEvents: "none",
+            }}
+          />
+        )}
+
         <Editor
           height="100%"
-          path={file.path}
+          path={getNormalizedUri(file.path)}
           language={file.language}
-          value={file.content}
+          defaultValue={file.content}
           theme="vs-dark"
+          keepCurrentModel={false}
+          saveViewState={false}
+          loading={<div style={{ height: "100%", width: "100%", background: "#1e1e1e" }} />}
           options={MONACO_LAB_SAFE_OPTIONS}
           beforeMount={(monaco) => {
             registerSalivoLanguage(monaco);
@@ -78,16 +121,20 @@ export const MonacoEditorGroup: React.FC<MonacoEditorGroupProps> = ({
             }
           }}
           onMount={(editor, monaco) => {
+            editorRef.current = editor;
+            monacoRef.current = monaco;
             registerSalivoLanguage(monaco);
             editorService.setActiveEditor(editor);
             editorService.setMonaco(monaco);
+            editor.layout();
 
             editor.onDidFocusEditorText(() => {
               editorService.setActiveEditor(editor);
             });
 
             // Track live cursor position
-            editor.onDidChangeCursorPosition((e) => {
+            editor.onDidChangeCursorPosition((e: any) => {
+              editorService.notifyCursorChange(e.position.lineNumber, e.position.column);
               onCursorChange?.(e.position.lineNumber, e.position.column);
             });
 
@@ -109,6 +156,8 @@ export const MonacoEditorGroup: React.FC<MonacoEditorGroupProps> = ({
 
             // Add Ctrl+S keybinding directly in Monaco
             editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+              const currentVal = editor.getValue();
+              onChangeContent(file.path, currentVal);
               onSave(file.path);
             });
           }}
@@ -117,3 +166,5 @@ export const MonacoEditorGroup: React.FC<MonacoEditorGroupProps> = ({
     </div>
   );
 };
+
+export const MonacoEditorGroup = React.memo(MonacoEditorGroupComponent);

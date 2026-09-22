@@ -431,65 +431,64 @@ export function useWorkspace() {
     let cmd = "";
     switch (active.language) {
       case "java": {
-        // e.g. cd <dir> ; javac <file> ; java <class>
         if (isWin) {
-          cmd = `cd "${dir}"; javac "${fileName}"; if ($?) { java "${baseName}" }\r`;
+          cmd = `cd "${dir}"; $sw = [System.Diagnostics.Stopwatch]::StartNew(); javac "${fileName}"; $ms = $sw.ElapsedMilliseconds; if ($?) { Write-Host "[Compiled in $($ms)ms]" -ForegroundColor Cyan; java "${baseName}" }\r`;
         } else {
-          cmd = `cd "${dir}" && javac "${fileName}" && java "${baseName}"\n`;
+          cmd = `cd "${dir}" && t0=$(date +%s%3N) && javac "${fileName}" && t1=$(date +%s%3N) && echo -e "\\x1b[36m[Compiled in $((t1 - t0))ms]\\x1b[0m" && java "${baseName}"\n`;
         }
         break;
       }
       case "python": {
         if (isWin) {
-          cmd = `cd "${dir}"; python -u "${fileName}"\r`;
+          cmd = `cd "${dir}"; $sw = [System.Diagnostics.Stopwatch]::StartNew(); python -u "${fileName}"; $sw.Stop(); Write-Host "\`n[Executed in $($sw.ElapsedMilliseconds)ms]" -ForegroundColor Cyan\r`;
         } else {
-          cmd = `cd "${dir}" && python3 -u "${fileName}"\n`;
+          cmd = `cd "${dir}" && t0=$(date +%s%3N) && python3 -u "${fileName}" && t1=$(date +%s%3N) && echo -e "\\n\\x1b[36m[Executed in $((t1 - t0))ms]\\x1b[0m"\n`;
         }
         break;
       }
       case "c": {
         if (isWin) {
-          cmd = `cd "${dir}"; gcc -Wall -g "${fileName}" -o "${baseName}.exe"; if ($?) { .\\"${baseName}.exe" }\r`;
+          cmd = `cd "${dir}"; $sw = [System.Diagnostics.Stopwatch]::StartNew(); gcc -Wall -g "${fileName}" -o "${baseName}.exe"; $ms = $sw.ElapsedMilliseconds; if ($?) { Write-Host "[Compiled in $($ms)ms]" -ForegroundColor Cyan; .\\"${baseName}.exe" }\r`;
         } else {
-          cmd = `cd "${dir}" && gcc -Wall -g "${fileName}" -o "${baseName}" && ./"${baseName}"\n`;
+          cmd = `cd "${dir}" && t0=$(date +%s%3N) && gcc -Wall -g "${fileName}" -o "${baseName}" && t1=$(date +%s%3N) && echo -e "\\x1b[36m[Compiled in $((t1 - t0))ms]\\x1b[0m" && ./"${baseName}"\n`;
         }
         break;
       }
       case "cpp": {
         if (isWin) {
-          cmd = `cd "${dir}"; g++ -Wall -g -std=c++17 "${fileName}" -o "${baseName}.exe"; if ($?) { .\\"${baseName}.exe" }\r`;
+          cmd = `cd "${dir}"; $sw = [System.Diagnostics.Stopwatch]::StartNew(); g++ -Wall -g -std=c++17 "${fileName}" -o "${baseName}.exe"; $ms = $sw.ElapsedMilliseconds; if ($?) { Write-Host "[Compiled in $($ms)ms]" -ForegroundColor Cyan; .\\"${baseName}.exe" }\r`;
         } else {
-          cmd = `cd "${dir}" && g++ -Wall -g -std=c++17 "${fileName}" -o "${baseName}" && ./"${baseName}"\n`;
+          cmd = `cd "${dir}" && t0=$(date +%s%3N) && g++ -Wall -g -std=c++17 "${fileName}" -o "${baseName}" && t1=$(date +%s%3N) && echo -e "\\x1b[36m[Compiled in $((t1 - t0))ms]\\x1b[0m" && ./"${baseName}"\n`;
         }
         break;
       }
       case "rust": {
         if (isWin) {
-          cmd = `cd "${dir}"; rustc "${fileName}" -o "${baseName}.exe"; if ($?) { .\\"${baseName}.exe" }\r`;
+          cmd = `cd "${dir}"; $sw = [System.Diagnostics.Stopwatch]::StartNew(); rustc "${fileName}" -o "${baseName}.exe"; $ms = $sw.ElapsedMilliseconds; if ($?) { Write-Host "[Compiled in $($ms)ms]" -ForegroundColor Cyan; .\\"${baseName}.exe" }\r`;
         } else {
-          cmd = `cd "${dir}" && rustc "${fileName}" -o "${baseName}" && ./"${baseName}"\n`;
+          cmd = `cd "${dir}" && t0=$(date +%s%3N) && rustc "${fileName}" -o "${baseName}" && t1=$(date +%s%3N) && echo -e "\\x1b[36m[Compiled in $((t1 - t0))ms]\\x1b[0m" && ./"${baseName}"\n`;
         }
         break;
       }
       case "salivo": {
         if (isWin) {
-          cmd = `cd "${dir}"; sf run "${fileName}"\r`;
+          cmd = `cd "${dir}"; $sw = [System.Diagnostics.Stopwatch]::StartNew(); sf run "${fileName}"; $sw.Stop(); Write-Host "\`n[Compile & run time: $($sw.ElapsedMilliseconds)ms]" -ForegroundColor Cyan\r`;
         } else {
-          cmd = `cd "${dir}" && sf run "${fileName}"\n`;
+          cmd = `cd "${dir}" && t0=$(date +%s%3N) && sf run "${fileName}" && t1=$(date +%s%3N) && echo -e "\\n\\x1b[36m[Compile & run time: $((t1 - t0))ms]\\x1b[0m"\n`;
         }
         break;
       }
       case "zig": {
         if (isWin) {
-          cmd = `cd "${dir}"; zig run "${fileName}"\r`;
+          cmd = `cd "${dir}"; $sw = [System.Diagnostics.Stopwatch]::StartNew(); zig run "${fileName}"; $sw.Stop(); Write-Host "\`n[Compile & run time: $($sw.ElapsedMilliseconds)ms]" -ForegroundColor Cyan\r`;
         } else {
-          cmd = `cd "${dir}" && zig run "${fileName}"\n`;
+          cmd = `cd "${dir}" && t0=$(date +%s%3N) && zig run "${fileName}" && t1=$(date +%s%3N) && echo -e "\\n\\x1b[36m[Compile & run time: $((t1 - t0))ms]\\x1b[0m"\n`;
         }
         break;
       }
       case "javascript": {
         if (isWin) {
-          cmd = `cd "${dir}"; node "${fileName}"\r`;
+          cmd = `cd "${dir}"; $sw = [System.Diagnostics.Stopwatch]::StartNew(); node "${fileName}"; $sw.Stop(); Write-Host "\`n[Executed in $($sw.ElapsedMilliseconds)ms]" -ForegroundColor Cyan\r`;
         } else {
           cmd = `cd "${dir}" && node "${fileName}"\n`;
         }
@@ -497,7 +496,7 @@ export function useWorkspace() {
       }
       case "typescript": {
         if (isWin) {
-          cmd = `cd "${dir}"; npx ts-node "${fileName}"\r`;
+          cmd = `cd "${dir}"; $sw = [System.Diagnostics.Stopwatch]::StartNew(); npx ts-node "${fileName}"; $sw.Stop(); Write-Host "\`n[Executed in $($sw.ElapsedMilliseconds)ms]" -ForegroundColor Cyan\r`;
         } else {
           cmd = `cd "${dir}" && npx ts-node "${fileName}"\n`;
         }
@@ -505,7 +504,7 @@ export function useWorkspace() {
       }
       case "go": {
         if (isWin) {
-          cmd = `cd "${dir}"; go run "${fileName}"\r`;
+          cmd = `cd "${dir}"; $sw = [System.Diagnostics.Stopwatch]::StartNew(); go run "${fileName}"; $sw.Stop(); Write-Host "\`n[Compile & run time: $($sw.ElapsedMilliseconds)ms]" -ForegroundColor Cyan\r`;
         } else {
           cmd = `cd "${dir}" && go run "${fileName}"\n`;
         }

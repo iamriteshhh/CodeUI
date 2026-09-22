@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 
-use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
+use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, SlavePty, PtySize};
 use serde::Serialize;
 
 #[derive(Debug, thiserror::Error, Serialize)]
@@ -29,6 +29,7 @@ type SessionWriter = Arc<Mutex<Box<dyn Write + Send>>>;
 
 pub struct PtySession {
     master: Box<dyn MasterPty + Send>,
+    _slave: Option<Box<dyn SlavePty + Send>>,
     writer: SessionWriter,
     child: Box<dyn Child + Send + Sync>,
 }
@@ -133,14 +134,21 @@ impl PtyManager {
             }
         };
 
-        // The slave handle must drop here, otherwise the reader never sees EOF
-        // when the shell exits.
-        drop(pair.slave);
+        // On Windows ConPTY, the slave handle must be kept alive alongside the session
+        // so child process stdin (e.g. scanf, input prompts) remains connected.
+        #[cfg(windows)]
+        let slave_handle = Some(pair.slave);
+        #[cfg(not(windows))]
+        let slave_handle = {
+            drop(pair.slave);
+            None
+        };
 
         self.sessions.lock().expect("pty sessions").insert(
             id.clone(),
             PtySession {
                 master: pair.master,
+                _slave: slave_handle,
                 writer: Arc::new(Mutex::new(writer)),
                 child,
             },

@@ -55,7 +55,6 @@ const SUPPORTED_LANGUAGES = [
 export const StatusBar: React.FC<StatusBarProps> = ({
   activeFile,
   toolReadyStatus,
-  cursorPos = { line: 1, col: 1 },
   errorCount = 0,
   warningCount = 0,
   tabSize = 4,
@@ -64,10 +63,17 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   onOpenExtensions,
   onLanguageChange,
 }) => {
+  const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 });
   const [showRestrictedModal, setShowRestrictedModal] = useState(false);
   const [showLanguageMenu, setShowLanguageMenu] = useState(false);
   const [showNotificationToast, setShowNotificationToast] = useState(false);
   const [crlfMode, setCrlfMode] = useState<"CRLF" | "LF">("CRLF");
+
+  React.useEffect(() => {
+    return editorService.onCursorChange((line, col) => {
+      setCursorPos({ line, col });
+    });
+  }, []);
 
   const currentLanguage = activeFile?.language || "plaintext";
 

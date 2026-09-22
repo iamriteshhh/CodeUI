@@ -16,6 +16,7 @@ import {
   getStoredLiveExtensions,
   syncAllExtensionsLive,
   fetchLiveExtensionDetails,
+  isAiExtension,
 } from "./services/extensionService";
 
 const TerminalPanel = lazy(() =>
@@ -41,7 +42,6 @@ const QuickOpenModal = lazy(() =>
 
 export function App() {
   const [quickOpenVisible, setQuickOpenVisible] = useState(false);
-  const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 });
   const [errorCount, setErrorCount] = useState(0);
   const [warningCount, setWarningCount] = useState(0);
   const [tabSize, setTabSize] = useState(4);
@@ -136,6 +136,49 @@ export function App() {
     return () => clearTimeout(timer);
   }, []);
 
+  // Synchronize detected system language toolchains with the installed extensions list
+  useEffect(() => {
+    if (!tools || tools.length === 0) return;
+
+    const findTool = (names: string[]) =>
+      tools.find((t) => names.includes(t.name) && t.available);
+
+    setExtensionsList((prev) =>
+      prev.map((ext) => {
+        let systemTool = null;
+
+        if (ext.id === "ms-python.python") {
+          systemTool = findTool(["python", "python3"]);
+        } else if (ext.id === "llvm-vs-code-extensions.vscode-clangd") {
+          systemTool = findTool(["gcc", "g++", "clang"]);
+        } else if (ext.id === "rust-lang.rust-analyzer") {
+          systemTool = findTool(["rustc", "cargo"]);
+        } else if (ext.id === "golang.go") {
+          systemTool = findTool(["go"]);
+        } else if (ext.id === "vscjava.vscode-java-pack" || ext.id === "vscjava.vscode-java-debug") {
+          systemTool = findTool(["javac", "java"]);
+        } else if (ext.id === "eamodio.gitlens") {
+          systemTool = findTool(["git"]);
+        } else if (ext.id === "ziglang.vscode-zig") {
+          systemTool = findTool(["zig"]);
+        } else if (ext.id === "salivo.salivo-tools") {
+          systemTool = findTool(["sf"]);
+        }
+
+        if (systemTool && systemTool.available) {
+          return {
+            ...ext,
+            installed: true,
+            systemDetected: true,
+            systemToolPath: systemTool.path || "System Path Detected",
+          };
+        }
+
+        return ext;
+      })
+    );
+  }, [tools]);
+
   const handleRefreshExtensions = async () => {
     setIsSyncingExtensions(true);
     try {
@@ -187,6 +230,12 @@ export function App() {
   };
 
   const handleToggleExtensionInstalled = (id: string, extItem?: ExtensionItem) => {
+    const item = extItem || extensionsList.find((e) => e.id === id);
+    if (item?.blockedByPolicy || (item && isAiExtension(item))) {
+      alert("Installation Blocked: AI extensions are restricted by enterprise security policy.");
+      return;
+    }
+
     setExtensionsList((prev) => {
       const exists = prev.some((e) => e.id === id);
       if (!exists && extItem) {
@@ -552,7 +601,6 @@ export function App() {
               onSelectWalkthrough={handleWalkthroughSelect}
               onChangeContent={updateFileContent}
               onSave={saveFile}
-              onCursorChange={(line, col) => setCursorPos({ line, col })}
               onMarkersChange={(errors, warnings) => {
                 setErrorCount(errors);
                 setWarningCount(warnings);
@@ -643,7 +691,6 @@ export function App() {
       <StatusBar
         activeFile={activeFile}
         toolReadyStatus={toolReadyStatus}
-        cursorPos={cursorPos}
         errorCount={errorCount}
         warningCount={warningCount}
         tabSize={tabSize}
