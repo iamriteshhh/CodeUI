@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 
-use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, SlavePty, PtySize};
+use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize, SlavePty};
 use serde::Serialize;
 
 #[derive(Debug, thiserror::Error, Serialize)]

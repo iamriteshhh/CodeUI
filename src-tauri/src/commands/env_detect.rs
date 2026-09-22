@@ -108,14 +108,11 @@ pub fn detect_tools() -> Vec<ToolStatus> {
     let mut out: Vec<ToolStatus> = TOOLS
         .iter()
         .map(|spec| {
-            let path = spec
-                .candidates
-                .iter()
-                .find_map(|&cand| {
-                    which::which(cand)
-                        .ok()
-                        .map(|p| p.to_string_lossy().into_owned())
-                });
+            let path = spec.candidates.iter().find_map(|&cand| {
+                which::which(cand)
+                    .ok()
+                    .map(|p| p.to_string_lossy().into_owned())
+            });
             ToolStatus {
                 name: spec.name.to_string(),
                 available: path.is_some(),
