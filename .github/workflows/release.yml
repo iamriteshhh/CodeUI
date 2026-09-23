@@ -79,6 +79,11 @@ jobs:
         with:
           name: codeui-${{ matrix.platform }}-bundles
           path: |
+            target/release/bundle/nsis/*.exe
+            target/release/bundle/msi/*.msi
+            target/release/bundle/appimage/*.AppImage
+            target/release/bundle/deb/*.deb
+            target/release/bundle/dmg/*.dmg
             src-tauri/target/release/bundle/nsis/*.exe
             src-tauri/target/release/bundle/msi/*.msi
             src-tauri/target/release/bundle/appimage/*.AppImage
