@@ -25,35 +25,22 @@ const MonacoEditorGroupComponent: React.FC<MonacoEditorGroupProps> = ({
   const editorRef = React.useRef<any>(null);
   const monacoRef = React.useRef<any>(null);
 
-  // Recalculate editor model and layout cleanly on file switch
+  // Cleanly synchronize layout and language on file switch without conflicting setModel calls
   React.useEffect(() => {
-    if (!file?.path || !editorRef.current || !monacoRef.current) return;
-    const editor = editorRef.current;
-    const monaco = monacoRef.current;
-
-    const uriStr = getNormalizedUri(file.path);
-    const uri = monaco.Uri.parse(uriStr);
-    let model = monaco.editor.getModel(uri);
-
-    const cleanContent = file.content.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-
-    if (!model) {
-      model = monaco.editor.createModel(cleanContent, file.language, uri);
-    } else {
-      if (file.language) {
-        monaco.editor.setModelLanguage(model, file.language);
-      }
-      if (!file.isDirty && model.getValue() !== cleanContent) {
-        model.setValue(cleanContent);
-      }
-    }
-
-    if (editor.getModel() !== model) {
-      editor.setModel(model);
-    }
-
-    editor.layout();
+    if (!editorRef.current) return;
+    const raf = requestAnimationFrame(() => {
+      editorRef.current?.layout();
+    });
+    return () => cancelAnimationFrame(raf);
   }, [file?.path]);
+
+  React.useEffect(() => {
+    if (!editorRef.current || !monacoRef.current || !file?.language) return;
+    const model = editorRef.current.getModel();
+    if (model) {
+      monacoRef.current.editor.setModelLanguage(model, file.language);
+    }
+  }, [file?.language]);
 
   if (!file) {
     return (

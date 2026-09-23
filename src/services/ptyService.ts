@@ -27,8 +27,10 @@ const mockSessions = new Map<string, MockSession>();
 interface SessionListeners {
   dataCallbacks: Set<(data: string) => void>;
   tauriDataUnlisten?: () => void;
+  tauriDataPromise?: Promise<() => void>;
   exitCallbacks: Set<() => void>;
   tauriExitUnlisten?: () => void;
+  tauriExitPromise?: Promise<() => void>;
 }
 
 const sessionRegistry = new Map<string, SessionListeners>();
@@ -481,9 +483,9 @@ export const ptyService = {
     const entry = getSessionEntry(sessionId);
     entry.dataCallbacks.add(callback);
 
-    if (isTauri() && !entry.tauriDataUnlisten) {
-      try {
-        entry.tauriDataUnlisten = await listen<any>(
+    if (isTauri()) {
+      if (!entry.tauriDataUnlisten && !entry.tauriDataPromise) {
+        entry.tauriDataPromise = listen<any>(
           `pty-data-${sessionId}`,
           (e) => {
             let text = "";
@@ -502,17 +504,35 @@ export const ptyService = {
               });
             }
           }
-        );
-      } catch (err) {
-        console.error(`[ptyService] Failed to listen on pty-data-${sessionId}:`, err);
+        )
+          .then((unlisten) => {
+            entry.tauriDataUnlisten = unlisten;
+            return unlisten;
+          })
+          .catch((err) => {
+            console.error(`[ptyService] Failed to listen on pty-data-${sessionId}:`, err);
+            entry.tauriDataPromise = undefined;
+            return () => {};
+          });
+      }
+
+      if (entry.tauriDataPromise) {
+        await entry.tauriDataPromise;
       }
     }
 
     return () => {
       entry.dataCallbacks.delete(callback);
-      if (entry.dataCallbacks.size === 0 && entry.tauriDataUnlisten) {
-        entry.tauriDataUnlisten();
-        delete entry.tauriDataUnlisten;
+      if (entry.dataCallbacks.size === 0) {
+        if (entry.tauriDataUnlisten) {
+          entry.tauriDataUnlisten();
+          delete entry.tauriDataUnlisten;
+        } else if (entry.tauriDataPromise) {
+          entry.tauriDataPromise.then((un) => {
+            if (un) un();
+          });
+        }
+        delete entry.tauriDataPromise;
       }
       if (entry.dataCallbacks.size === 0 && entry.exitCallbacks.size === 0) {
         sessionRegistry.delete(sessionId);
@@ -524,9 +544,9 @@ export const ptyService = {
     const entry = getSessionEntry(sessionId);
     entry.exitCallbacks.add(callback);
 
-    if (isTauri() && !entry.tauriExitUnlisten) {
-      try {
-        entry.tauriExitUnlisten = await listen<any>(`pty-exit-${sessionId}`, () => {
+    if (isTauri()) {
+      if (!entry.tauriExitUnlisten && !entry.tauriExitPromise) {
+        entry.tauriExitPromise = listen<any>(`pty-exit-${sessionId}`, () => {
           entry.exitCallbacks.forEach((cb) => {
             try {
               cb();
@@ -534,17 +554,35 @@ export const ptyService = {
               console.error("[ptyService] exit callback error:", err);
             }
           });
-        });
-      } catch (err) {
-        console.error(`[ptyService] Failed to listen on pty-exit-${sessionId}:`, err);
+        })
+          .then((unlisten) => {
+            entry.tauriExitUnlisten = unlisten;
+            return unlisten;
+          })
+          .catch((err) => {
+            console.error(`[ptyService] Failed to listen on pty-exit-${sessionId}:`, err);
+            entry.tauriExitPromise = undefined;
+            return () => {};
+          });
+      }
+
+      if (entry.tauriExitPromise) {
+        await entry.tauriExitPromise;
       }
     }
 
     return () => {
       entry.exitCallbacks.delete(callback);
-      if (entry.exitCallbacks.size === 0 && entry.tauriExitUnlisten) {
-        entry.tauriExitUnlisten();
-        delete entry.tauriExitUnlisten;
+      if (entry.exitCallbacks.size === 0) {
+        if (entry.tauriExitUnlisten) {
+          entry.tauriExitUnlisten();
+          delete entry.tauriExitUnlisten;
+        } else if (entry.tauriExitPromise) {
+          entry.tauriExitPromise.then((un) => {
+            if (un) un();
+          });
+        }
+        delete entry.tauriExitPromise;
       }
       if (entry.dataCallbacks.size === 0 && entry.exitCallbacks.size === 0) {
         sessionRegistry.delete(sessionId);

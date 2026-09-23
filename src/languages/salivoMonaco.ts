@@ -1,11 +1,8 @@
 // Monaco language definition and Monarch tokenizer for Salivo
 // High-performance systems language with stream header imports (><)
 
-let isSalivoRegistered = false;
-
 export function registerSalivoLanguage(monaco: any) {
-  if (isSalivoRegistered || !monaco || !monaco.languages) return;
-  isSalivoRegistered = true;
+  if (!monaco || !monaco.languages) return;
 
   // 1. Register language ID
   const existingLanguages = monaco.languages.getLanguages();
@@ -114,6 +111,7 @@ export function registerSalivoLanguage(monaco: any) {
       "outln",
       "out",
       "input",
+      "in",
       "assert",
       "assertEq",
       "some",
@@ -252,10 +250,8 @@ export function registerSalivoLanguage(monaco: any) {
 
       interpolatedExpr: [
         [/\}/, { token: "delimiter.bracket", next: "@pop" }],
-        { include: "root" },
+        { include: "@root" },
       ],
     },
   });
-
-  isSalivoRegistered = true;
 }

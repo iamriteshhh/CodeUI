@@ -20,14 +20,15 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
   const termRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const sessionRef = useRef<string | null>(sessionId);
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(sessionId);
+  const [, setActiveSessionId] = useState<string | null>(sessionId);
   const [shellName, setShellName] = useState<string>("powershell");
   const unlistenRef = useRef<{ data?: () => void; exit?: () => void }>({});
 
-  sessionRef.current = activeSessionId;
-
   // Single centralized listener binder to guarantee zero duplicate data callbacks
   const attachSessionListeners = async (sid: string) => {
+    if (sessionRef.current === sid && unlistenRef.current.data) {
+      return;
+    }
     if (unlistenRef.current.data) {
       unlistenRef.current.data();
     }
@@ -89,8 +90,8 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
       fontSize: 13,
       lineHeight: 1.25,
       cursorBlink: true,
-      cursorStyle: "block",
-      cursorInactiveStyle: "block",
+      cursorStyle: "bar",
+      cursorInactiveStyle: "bar",
       cursorWidth: 2,
       convertEol: true,
       scrollback: 5000,
@@ -155,7 +156,10 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
         const cols = Math.max(term.cols || 80, 20);
         const rows = Math.max(term.rows || 24, 4);
         if (onEnsureSession) {
-          await onEnsureSession(sid);
+          const actualSid = await onEnsureSession(sid);
+          if (actualSid && actualSid !== sid && !isDisposed) {
+            await attachSessionListeners(actualSid);
+          }
         } else {
           await ptyService.spawnPty({
             sessionId: sid,

@@ -108,6 +108,12 @@ textarea,
   z-index: 10 !important;
 }
 
+.xterm .xterm-cursor-bar {
+  opacity: 1 !important;
+  visibility: visible !important;
+  border-left-width: 2px !important;
+}
+
 
 /* Scrollbars */
 ::-webkit-scrollbar {
