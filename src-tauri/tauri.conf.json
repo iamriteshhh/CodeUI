@@ -32,10 +32,12 @@
     "targets": "all",
     "icon": [
       "icons/32x32.png",
+      "icons/64x64.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.png",
-      "icons/icon.ico"
+      "icons/icon.ico",
+      "icons/icon.icns"
     ],
     "publisher": "CodeUI",
     "copyright": "Copyright © 2026 CodeUI Contributors",
@@ -44,7 +46,8 @@
     "longDescription": "A fast, lightweight code editor with integrated terminal, Monaco editor, and multi-language toolchain support.",
     "windows": {
       "nsis": {
-        "installMode": "both"
+        "installMode": "both",
+        "installerIcon": "icons/icon.ico"
       },
       "webviewInstallMode": {
         "type": "embedBootstrapper"
@@ -53,6 +56,26 @@
     "linux": {
       "deb": {
         "depends": []
+      },
+      "appimage": {
+        "bundleMediaFramework": false
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "10.13",
+      "dmg": {
+        "windowSize": {
+          "width": 660,
+          "height": 400
+        },
+        "appPosition": {
+          "x": 180,
+          "y": 170
+        },
+        "applicationFolderPosition": {
+          "x": 420,
+          "y": 170
+        }
       }
     }
   }
