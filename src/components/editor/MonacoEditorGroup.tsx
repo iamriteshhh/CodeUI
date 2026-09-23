@@ -24,24 +24,16 @@ const MonacoEditorGroupComponent: React.FC<MonacoEditorGroupProps> = ({
 }) => {
   const editorRef = React.useRef<any>(null);
   const monacoRef = React.useRef<any>(null);
-  const [isShieldActive, setIsShieldActive] = React.useState(false);
   const prevPathRef = React.useRef<string | undefined>(file?.path);
 
-  // When switching or opening files, immediately shield the editor container
-  // with the solid #1e1e1e background for ~100ms. This guarantees the user never
-  // experiences overlapping words, character diffing, or layout flickering.
+  // Recalculate editor layout smoothly on file switch
   React.useEffect(() => {
     if (!file?.path) return;
     if (prevPathRef.current !== file.path) {
       prevPathRef.current = file.path;
-      setIsShieldActive(true);
-      const timer = setTimeout(() => {
-        if (editorRef.current) {
-          editorRef.current.layout();
-        }
-        setIsShieldActive(false);
-      }, 100);
-      return () => clearTimeout(timer);
+      requestAnimationFrame(() => {
+        editorRef.current?.layout();
+      });
     }
   }, [file?.path]);
 
@@ -86,30 +78,14 @@ const MonacoEditorGroupComponent: React.FC<MonacoEditorGroupProps> = ({
 
       {/* Monaco Editor Container */}
       <div style={{ flex: 1, position: "relative", overflow: "hidden", background: "#1e1e1e" }}>
-        {/* Anti-glitch shield: clean 0.1s blank cover prevents any visual text overlap or morphing */}
-        {isShieldActive && (
-          <div
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: "#1e1e1e",
-              zIndex: 20,
-              pointerEvents: "none",
-            }}
-          />
-        )}
-
         <Editor
           height="100%"
           path={getNormalizedUri(file.path)}
           language={file.language}
-          defaultValue={file.content}
+          value={file.content}
           theme="vs-dark"
-          keepCurrentModel={false}
-          saveViewState={false}
+          keepCurrentModel={true}
+          saveViewState={true}
           loading={<div style={{ height: "100%", width: "100%", background: "#1e1e1e" }} />}
           options={MONACO_LAB_SAFE_OPTIONS}
           beforeMount={(monaco) => {
@@ -127,6 +103,9 @@ const MonacoEditorGroupComponent: React.FC<MonacoEditorGroupProps> = ({
             editorService.setActiveEditor(editor);
             editorService.setMonaco(monaco);
             editor.layout();
+            requestAnimationFrame(() => {
+              editor.layout();
+            });
 
             editor.onDidFocusEditorText(() => {
               editorService.setActiveEditor(editor);

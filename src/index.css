@@ -75,22 +75,26 @@ textarea,
   -webkit-user-select: text !important;
 }
 
-/* Ensure Monaco editor line measurements use content-box */
-.monaco-editor,
-.monaco-editor * {
-  box-sizing: content-box !important;
+/* Monaco Editor line numbers and margin styling */
+.monaco-editor .margin-view-overlays .line-numbers {
+  font-family: Consolas, 'Courier New', monospace;
+  color: #858585 !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  z-index: 5;
 }
 
-.monaco-editor * div,
-.monaco-editor * span {
-  line-height: normal;
+.monaco-editor .margin-view-overlays .line-numbers.active-line-number {
+  color: #ffffff !important;
+  font-weight: 600;
+  visibility: visible !important;
+  opacity: 1 !important;
+  z-index: 6;
 }
 
-/* Prevent native browser selection and gestures from interfering with Monaco */
+/* Prevent native browser selection outside editor input area */
 .monaco-editor {
-  user-select: none !important;
-  -webkit-user-select: none !important;
-  touch-action: none !important;
+  touch-action: none;
 }
 
 .monaco-editor .inputarea {
