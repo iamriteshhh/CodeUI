@@ -58,6 +58,7 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_OPTIONS: "--max-old-space-size=6144"
         with:
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || format('v0.1.0-{0}', github.run_number) }}
           releaseName: 'CodeUI v__VERSION__'
