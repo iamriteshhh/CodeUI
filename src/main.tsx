@@ -16,7 +16,11 @@ import htmlWorker from "../node_modules/monaco-editor/esm/vs/language/html/html.
 import tsWorker from "../node_modules/monaco-editor/esm/vs/language/typescript/ts.worker.js?worker";
 
 // Register all core languages and tokenizers eagerly
-registerAllEagerLanguages(monaco);
+try {
+  registerAllEagerLanguages(monaco);
+} catch (e) {
+  console.error("Failed to register eager languages:", e);
+}
 
 // Define vibrant high-contrast dark theme with guaranteed token colors
 monaco.editor.defineTheme("codeui-dark", {

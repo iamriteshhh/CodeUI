@@ -86,6 +86,7 @@ const zigMonarch: monaco.languages.IMonarchLanguage = {
     "%", "<<", ">>", "+=", "-=", "*=", "/=", "&=", "|=", "^=",
     "%=", "<<=", ">>=", "->", "=>",
   ],
+  escapes: /\\(?:[abfnrtv\\"']|x[0-9A-Fa-f]{1,4}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})/,
   symbols: /[=><!~?:&|+\-*\/\^%]+/,
   tokenizer: {
     root: [
@@ -129,8 +130,12 @@ const zigMonarch: monaco.languages.IMonarchLanguage = {
 };
 
 export function registerAllEagerLanguages(monacoInstance: typeof monaco) {
-  // 1. Salivo language registration
-  registerSalivoLanguage(monacoInstance);
+  try {
+    // 1. Salivo language registration
+    registerSalivoLanguage(monacoInstance);
+  } catch (err) {
+    console.error("[registerAllEagerLanguages] Failed to register Salivo:", err);
+  }
 
   // 2. Synchronous list of all core languages
   const definitions: Array<{
@@ -159,22 +164,30 @@ export function registerAllEagerLanguages(monacoInstance: typeof monaco) {
     { id: "zig", conf: zigConfiguration, language: zigMonarch, aliases: ["Zig", "zig"], extensions: [".zig"] },
   ];
 
-  const existingLangs = new Set(monacoInstance.languages.getLanguages().map((l) => l.id));
+  try {
+    const existingLangs = new Set(monacoInstance.languages.getLanguages().map((l) => l.id));
 
-  for (const def of definitions) {
-    if (!existingLangs.has(def.id)) {
-      monacoInstance.languages.register({
-        id: def.id,
-        extensions: def.extensions,
-        aliases: def.aliases,
-      });
-      existingLangs.add(def.id);
+    for (const def of definitions) {
+      try {
+        if (!existingLangs.has(def.id)) {
+          monacoInstance.languages.register({
+            id: def.id,
+            extensions: def.extensions,
+            aliases: def.aliases,
+          });
+          existingLangs.add(def.id);
+        }
+        if (def.conf) {
+          monacoInstance.languages.setLanguageConfiguration(def.id, def.conf);
+        }
+        if (def.language) {
+          monacoInstance.languages.setMonarchTokensProvider(def.id, def.language);
+        }
+      } catch (innerErr) {
+        console.warn(`[registerAllEagerLanguages] Failed to register tokens for ${def.id}:`, innerErr);
+      }
     }
-    if (def.conf) {
-      monacoInstance.languages.setLanguageConfiguration(def.id, def.conf);
-    }
-    if (def.language) {
-      monacoInstance.languages.setMonarchTokensProvider(def.id, def.language);
-    }
+  } catch (outerErr) {
+    console.error("[registerAllEagerLanguages] Unexpected error registering languages:", outerErr);
   }
 }
