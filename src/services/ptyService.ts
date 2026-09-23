@@ -23,8 +23,27 @@ interface MockSession {
 
 // In-memory fallback sessions for testing outside Tauri webview
 const mockSessions = new Map<string, MockSession>();
-const mockDataListeners = new Map<string, ((data: string) => void)[]>();
-const mockExitListeners = new Map<string, (() => void)[]>();
+
+interface SessionListeners {
+  dataCallbacks: Set<(data: string) => void>;
+  tauriDataUnlisten?: () => void;
+  exitCallbacks: Set<() => void>;
+  tauriExitUnlisten?: () => void;
+}
+
+const sessionRegistry = new Map<string, SessionListeners>();
+
+function getSessionEntry(sessionId: string): SessionListeners {
+  let entry = sessionRegistry.get(sessionId);
+  if (!entry) {
+    entry = {
+      dataCallbacks: new Set(),
+      exitCallbacks: new Set(),
+    };
+    sessionRegistry.set(sessionId, entry);
+  }
+  return entry;
+}
 
 export const ptyService = {
   async spawnPty(options?: {
@@ -438,8 +457,7 @@ export const ptyService = {
       return await invoke<void>("kill_pty", { sessionId });
     }
     mockSessions.delete(sessionId);
-    mockDataListeners.delete(sessionId);
-    mockExitListeners.delete(sessionId);
+    sessionRegistry.delete(sessionId);
   },
 
   async listPtySessions(): Promise<string[]> {
@@ -460,9 +478,12 @@ export const ptyService = {
     sessionId: string,
     callback: (data: string) => void
   ): Promise<() => void> {
-    if (isTauri()) {
+    const entry = getSessionEntry(sessionId);
+    entry.dataCallbacks.add(callback);
+
+    if (isTauri() && !entry.tauriDataUnlisten) {
       try {
-        const unlisten = await listen<any>(
+        entry.tauriDataUnlisten = await listen<any>(
           `pty-data-${sessionId}`,
           (e) => {
             let text = "";
@@ -472,55 +493,69 @@ export const ptyService = {
               text = e.payload.data;
             }
             if (text) {
-              callback(text);
+              entry.dataCallbacks.forEach((cb) => {
+                try {
+                  cb(text);
+                } catch (err) {
+                  console.error("[ptyService] callback error:", err);
+                }
+              });
             }
           }
         );
-        return unlisten;
       } catch (err) {
         console.error(`[ptyService] Failed to listen on pty-data-${sessionId}:`, err);
       }
     }
 
-    // Mock listener
-    if (!mockDataListeners.has(sessionId)) {
-      mockDataListeners.set(sessionId, []);
-    }
-    mockDataListeners.get(sessionId)!.push(callback);
     return () => {
-      const list = mockDataListeners.get(sessionId) || [];
-      const idx = list.indexOf(callback);
-      if (idx !== -1) list.splice(idx, 1);
+      entry.dataCallbacks.delete(callback);
+      if (entry.dataCallbacks.size === 0 && entry.tauriDataUnlisten) {
+        entry.tauriDataUnlisten();
+        delete entry.tauriDataUnlisten;
+      }
+      if (entry.dataCallbacks.size === 0 && entry.exitCallbacks.size === 0) {
+        sessionRegistry.delete(sessionId);
+      }
     };
   },
 
   async onPtyExit(sessionId: string, callback: () => void): Promise<() => void> {
-    if (isTauri()) {
+    const entry = getSessionEntry(sessionId);
+    entry.exitCallbacks.add(callback);
+
+    if (isTauri() && !entry.tauriExitUnlisten) {
       try {
-        const unlisten = await listen<any>(`pty-exit-${sessionId}`, () => {
-          callback();
+        entry.tauriExitUnlisten = await listen<any>(`pty-exit-${sessionId}`, () => {
+          entry.exitCallbacks.forEach((cb) => {
+            try {
+              cb();
+            } catch (err) {
+              console.error("[ptyService] exit callback error:", err);
+            }
+          });
         });
-        return unlisten;
       } catch (err) {
         console.error(`[ptyService] Failed to listen on pty-exit-${sessionId}:`, err);
       }
     }
 
-    if (!mockExitListeners.has(sessionId)) {
-      mockExitListeners.set(sessionId, []);
-    }
-    mockExitListeners.get(sessionId)!.push(callback);
     return () => {
-      const list = mockExitListeners.get(sessionId) || [];
-      const idx = list.indexOf(callback);
-      if (idx !== -1) list.splice(idx, 1);
+      entry.exitCallbacks.delete(callback);
+      if (entry.exitCallbacks.size === 0 && entry.tauriExitUnlisten) {
+        entry.tauriExitUnlisten();
+        delete entry.tauriExitUnlisten;
+      }
+      if (entry.dataCallbacks.size === 0 && entry.exitCallbacks.size === 0) {
+        sessionRegistry.delete(sessionId);
+      }
     };
   },
 
   triggerMockData(sessionId: string, data: string) {
-    const listeners = mockDataListeners.get(sessionId);
-    if (listeners) {
-      listeners.forEach((cb) => cb(data));
+    const entry = sessionRegistry.get(sessionId);
+    if (entry) {
+      entry.dataCallbacks.forEach((cb) => cb(data));
     }
   },
 };

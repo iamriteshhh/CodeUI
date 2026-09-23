@@ -22,36 +22,51 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
   const sessionRef = useRef<string | null>(sessionId);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(sessionId);
   const [shellName, setShellName] = useState<string>("powershell");
+  const unlistenRef = useRef<{ data?: () => void; exit?: () => void }>({});
 
   sessionRef.current = activeSessionId;
 
-  // Keep sessionRef and activeSessionId synchronized and listen to output if sessionId updates
+  // React to external sessionId prop updates without creating duplicate listeners
   useEffect(() => {
-    if (!sessionId) return;
-    sessionRef.current = sessionId;
-    setActiveSessionId(sessionId);
+    if (!sessionId || sessionId === sessionRef.current) return;
+    let cancelled = false;
 
-    let unlisten: (() => void) | null = null;
-    ptyService.onPtyData(sessionId, (chunk) => {
-      termRef.current?.write(chunk);
-    }).then((fn) => {
-      unlisten = fn;
-    });
+    const bindNewSession = async () => {
+      if (unlistenRef.current.data) unlistenRef.current.data();
+      if (unlistenRef.current.exit) unlistenRef.current.exit();
+      unlistenRef.current = {};
+
+      sessionRef.current = sessionId;
+      setActiveSessionId(sessionId);
+
+      const unData = await ptyService.onPtyData(sessionId, (chunk) => {
+        if (!cancelled) termRef.current?.write(chunk);
+      });
+      const unExit = await ptyService.onPtyExit(sessionId, () => {
+        if (!cancelled) termRef.current?.writeln("\r\n\x1b[33m[Process exited]\x1b[0m");
+      });
+
+      if (cancelled) {
+        unData();
+        unExit();
+      } else {
+        unlistenRef.current = { data: unData, exit: unExit };
+      }
+    };
+
+    bindNewSession();
 
     return () => {
-      if (unlisten) unlisten();
+      cancelled = true;
     };
   }, [sessionId]);
-
 
   useEffect(() => {
     if (!containerRef.current) return;
 
     let isDisposed = false;
-    let unlistenData: (() => void) | null = null;
-    let unlistenExit: (() => void) | null = null;
 
-    // 1. Initialize xterm instance
+    // 1. Initialize xterm instance with blinking vertical bar cursor
     const term = new Terminal({
       theme: {
         background: "#181818",
@@ -80,7 +95,9 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
       fontSize: 13,
       lineHeight: 1.25,
       cursorBlink: true,
-      cursorStyle: "block",
+      cursorStyle: "bar",
+      cursorWidth: 2,
+      cursorInactiveStyle: "bar",
       convertEol: true,
       scrollback: 5000,
       allowTransparency: false,
@@ -92,6 +109,9 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
 
     termRef.current = term;
     fitAddonRef.current = fitAddon;
+
+    // Immediately focus so the cursor bar blinks on mount
+    term.focus();
 
     // Detect default shell name
     ptyService.getDefaultShell().then((sh) => {
@@ -106,7 +126,7 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
       }
     });
 
-    // 2. Keyboard typing -> Send to current active PTY session
+    // 2. Keyboard typing -> Send to current active PTY session (NO local echo, PTY handles echo)
     term.onData((input) => {
       const current = sessionRef.current;
       if (current) {
@@ -129,17 +149,25 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
         setActiveSessionId(sid);
 
         // Subscribe to output first BEFORE spawning so zero output is dropped
-        unlistenData = await ptyService.onPtyData(sid, (chunk) => {
+        const unData = await ptyService.onPtyData(sid, (chunk) => {
           if (!isDisposed) {
             term.write(chunk);
           }
         });
 
-        unlistenExit = await ptyService.onPtyExit(sid, () => {
+        const unExit = await ptyService.onPtyExit(sid, () => {
           if (!isDisposed) {
             term.writeln("\r\n\x1b[33m[Process exited]\x1b[0m");
           }
         });
+
+        if (isDisposed) {
+          unData();
+          unExit();
+          return;
+        }
+
+        unlistenRef.current = { data: unData, exit: unExit };
 
         // Spawn PTY session with pre-registered sid
         const cols = Math.max(term.cols || 80, 20);
@@ -155,7 +183,7 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
           });
         }
 
-        // Fit & initial size sync
+        // Fit & initial size sync & focus
         setTimeout(() => {
           if (isDisposed || !containerRef.current) return;
           try {
@@ -193,9 +221,12 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
     return () => {
       isDisposed = true;
       resizeObserver.disconnect();
-      if (unlistenData) unlistenData();
-      if (unlistenExit) unlistenExit();
+      if (unlistenRef.current.data) unlistenRef.current.data();
+      if (unlistenRef.current.exit) unlistenRef.current.exit();
+      unlistenRef.current = {};
       term.dispose();
+      termRef.current = null;
+      fitAddonRef.current = null;
     };
   }, []);
 
@@ -212,6 +243,9 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
   const handleRestart = async () => {
     const oldId = sessionRef.current;
     if (oldId) {
+      if (unlistenRef.current.data) unlistenRef.current.data();
+      if (unlistenRef.current.exit) unlistenRef.current.exit();
+      unlistenRef.current = {};
       await ptyService.killPty(oldId);
     }
 
@@ -224,12 +258,13 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
       setActiveSessionId(newId);
 
       // Listen first
-      await ptyService.onPtyData(newId, (chunk) => {
+      const unData = await ptyService.onPtyData(newId, (chunk) => {
         termRef.current?.write(chunk);
       });
-      await ptyService.onPtyExit(newId, () => {
+      const unExit = await ptyService.onPtyExit(newId, () => {
         termRef.current?.writeln("\r\n\x1b[33m[Process exited]\x1b[0m");
       });
+      unlistenRef.current = { data: unData, exit: unExit };
 
       // Spawn
       const cols = Math.max(termRef.current.cols || 80, 20);
