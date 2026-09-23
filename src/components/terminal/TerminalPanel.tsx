@@ -26,39 +26,33 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
 
   sessionRef.current = activeSessionId;
 
+  // Single centralized listener binder to guarantee zero duplicate data callbacks
+  const attachSessionListeners = async (sid: string) => {
+    if (unlistenRef.current.data) {
+      unlistenRef.current.data();
+    }
+    if (unlistenRef.current.exit) {
+      unlistenRef.current.exit();
+    }
+    unlistenRef.current = {};
+
+    sessionRef.current = sid;
+    setActiveSessionId(sid);
+
+    const unData = await ptyService.onPtyData(sid, (chunk) => {
+      termRef.current?.write(chunk);
+    });
+    const unExit = await ptyService.onPtyExit(sid, () => {
+      termRef.current?.writeln("\r\n\x1b[33m[Process exited]\x1b[0m");
+    });
+
+    unlistenRef.current = { data: unData, exit: unExit };
+  };
+
   // React to external sessionId prop updates without creating duplicate listeners
   useEffect(() => {
     if (!sessionId || sessionId === sessionRef.current) return;
-    let cancelled = false;
-
-    const bindNewSession = async () => {
-      if (unlistenRef.current.data) unlistenRef.current.data();
-      if (unlistenRef.current.exit) unlistenRef.current.exit();
-      unlistenRef.current = {};
-
-      sessionRef.current = sessionId;
-      setActiveSessionId(sessionId);
-
-      const unData = await ptyService.onPtyData(sessionId, (chunk) => {
-        if (!cancelled) termRef.current?.write(chunk);
-      });
-      const unExit = await ptyService.onPtyExit(sessionId, () => {
-        if (!cancelled) termRef.current?.writeln("\r\n\x1b[33m[Process exited]\x1b[0m");
-      });
-
-      if (cancelled) {
-        unData();
-        unExit();
-      } else {
-        unlistenRef.current = { data: unData, exit: unExit };
-      }
-    };
-
-    bindNewSession();
-
-    return () => {
-      cancelled = true;
-    };
+    attachSessionListeners(sessionId);
   }, [sessionId]);
 
   useEffect(() => {
@@ -96,7 +90,8 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
       lineHeight: 1.25,
       cursorBlink: true,
       cursorStyle: "block",
-      cursorInactiveStyle: "outline",
+      cursorInactiveStyle: "block",
+      cursorWidth: 2,
       convertEol: true,
       scrollback: 5000,
       allowTransparency: false,
@@ -150,29 +145,11 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
         }
 
         if (isDisposed) return;
-        sessionRef.current = sid;
-        setActiveSessionId(sid);
 
-        // Subscribe to output first BEFORE spawning so zero output is dropped
-        const unData = await ptyService.onPtyData(sid, (chunk) => {
-          if (!isDisposed) {
-            term.write(chunk);
-          }
-        });
+        // Attach centralized single listener (prevents duplicate data/typing echoes)
+        await attachSessionListeners(sid);
 
-        const unExit = await ptyService.onPtyExit(sid, () => {
-          if (!isDisposed) {
-            term.writeln("\r\n\x1b[33m[Process exited]\x1b[0m");
-          }
-        });
-
-        if (isDisposed) {
-          unData();
-          unExit();
-          return;
-        }
-
-        unlistenRef.current = { data: unData, exit: unExit };
+        if (isDisposed) return;
 
         // Spawn PTY session with pre-registered sid
         const cols = Math.max(term.cols || 80, 20);

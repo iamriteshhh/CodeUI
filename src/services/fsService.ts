@@ -23,10 +23,11 @@ export const fsService = {
   async readFile(path: string): Promise<string> {
     const invoke = await getInvoke();
     if (invoke) {
-      return await invoke<string>("read_file", { path });
+      const raw = await invoke<string>("read_file", { path });
+      return raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
     }
     if (mockFs.has(path)) {
-      return mockFs.get(path)!;
+      return mockFs.get(path)!.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
     }
     throw new Error(`File not found: ${path}`);
   },

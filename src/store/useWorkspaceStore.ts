@@ -472,9 +472,9 @@ export function useWorkspace() {
       }
       case "salivo": {
         if (isWin) {
-          cmd = `cd "${dir}"; $sw = [System.Diagnostics.Stopwatch]::StartNew(); sf build "${fileName}"; $ms = $sw.ElapsedMilliseconds; if ($?) { Write-Host "[Compiled in $($ms)ms]" -ForegroundColor Cyan; .\\"${baseName}.exe" }\r`;
+          cmd = `cd "${dir}"; $sw = [System.Diagnostics.Stopwatch]::StartNew(); sf build "${fileName}"; $ms = $sw.ElapsedMilliseconds; if ($?) { Write-Host "[Compiled in $($ms)ms]" -ForegroundColor Cyan; if (Test-Path ".\\build\\${baseName}.exe") { .\\build\\"${baseName}.exe" } else { .\\"${baseName}.exe" } }\r`;
         } else {
-          cmd = `cd "${dir}" && t0=$(date +%s%3N) && sf build "${fileName}" && t1=$(date +%s%3N) && echo -e "\\x1b[36m[Compiled in $((t1 - t0))ms]\\x1b[0m" && ./"${baseName}"\n`;
+          cmd = `cd "${dir}" && t0=$(date +%s%3N) && sf build "${fileName}" && t1=$(date +%s%3N) && echo -e "\\x1b[36m[Compiled in $((t1 - t0))ms]\\x1b[0m" && if [ -f "./build/${baseName}" ]; then "./build/${baseName}"; else ./"${baseName}"; fi\n`;
         }
         break;
       }

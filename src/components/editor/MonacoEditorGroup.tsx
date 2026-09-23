@@ -5,7 +5,7 @@ import { OpenFile } from "../../types";
 import { ChevronRight } from "lucide-react";
 import { FileIcon } from "../icons/FileIcon";
 import { editorService, getNormalizedUri } from "../../services/editorService";
-import { registerSalivoLanguage } from "../../languages/salivoMonaco";
+import { registerAllEagerLanguages } from "../../languages/registerAllLanguages";
 
 interface MonacoEditorGroupProps {
   file: OpenFile | undefined;
@@ -25,7 +25,7 @@ const MonacoEditorGroupComponent: React.FC<MonacoEditorGroupProps> = ({
   const editorRef = React.useRef<any>(null);
   const monacoRef = React.useRef<any>(null);
 
-  // Recalculate editor layout and update model & language smoothly on file switch
+  // Recalculate editor model and layout cleanly on file switch
   React.useEffect(() => {
     if (!file?.path || !editorRef.current || !monacoRef.current) return;
     const editor = editorRef.current;
@@ -35,14 +35,16 @@ const MonacoEditorGroupComponent: React.FC<MonacoEditorGroupProps> = ({
     const uri = monaco.Uri.parse(uriStr);
     let model = monaco.editor.getModel(uri);
 
+    const cleanContent = file.content.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+
     if (!model) {
-      model = monaco.editor.createModel(file.content, file.language, uri);
+      model = monaco.editor.createModel(cleanContent, file.language, uri);
     } else {
       if (file.language) {
         monaco.editor.setModelLanguage(model, file.language);
       }
-      if (!file.isDirty && model.getValue() !== file.content) {
-        model.setValue(file.content);
+      if (!file.isDirty && model.getValue() !== cleanContent) {
+        model.setValue(cleanContent);
       }
     }
 
@@ -50,26 +52,8 @@ const MonacoEditorGroupComponent: React.FC<MonacoEditorGroupProps> = ({
       editor.setModel(model);
     }
 
-    // Guarantee line separation and font metrics
-    editor.updateOptions({ lineHeight: 21, fontSize: 14 });
-    monaco.editor.remeasureFonts();
     editor.layout();
-
-    requestAnimationFrame(() => {
-      editor.updateOptions({ lineHeight: 21 });
-      editor.layout();
-      if (typeof editor.render === "function") {
-        editor.render(true);
-      }
-    });
-
-    const timer = setTimeout(() => {
-      editor.updateOptions({ lineHeight: 21 });
-      editor.layout();
-    }, 50);
-
-    return () => clearTimeout(timer);
-  }, [file?.path, file?.language, file?.content, file?.isDirty]);
+  }, [file?.path]);
 
   if (!file) {
     return (
@@ -122,7 +106,7 @@ const MonacoEditorGroupComponent: React.FC<MonacoEditorGroupProps> = ({
           loading={<div style={{ height: "100%", width: "100%", background: "#1e1e1e" }} />}
           options={MONACO_LAB_SAFE_OPTIONS}
           beforeMount={(monaco) => {
-            registerSalivoLanguage(monaco);
+            registerAllEagerLanguages(monaco);
           }}
           onChange={(value) => {
             if (value !== undefined) {
@@ -132,7 +116,7 @@ const MonacoEditorGroupComponent: React.FC<MonacoEditorGroupProps> = ({
           onMount={(editor, monaco) => {
             editorRef.current = editor;
             monacoRef.current = monaco;
-            registerSalivoLanguage(monaco);
+            registerAllEagerLanguages(monaco);
             monaco.editor.setTheme("codeui-dark");
             editorService.setActiveEditor(editor);
             editorService.setMonaco(monaco);
@@ -142,16 +126,7 @@ const MonacoEditorGroupComponent: React.FC<MonacoEditorGroupProps> = ({
               monaco.editor.setModelLanguage(model, file.language);
             }
 
-            editor.updateOptions({ lineHeight: 21, fontSize: 14 });
-            monaco.editor.remeasureFonts();
             editor.layout();
-            requestAnimationFrame(() => {
-              editor.updateOptions({ lineHeight: 21 });
-              editor.layout();
-              if (typeof editor.render === "function") {
-                editor.render(true);
-              }
-            });
 
             editor.onDidFocusEditorText(() => {
               editorService.setActiveEditor(editor);

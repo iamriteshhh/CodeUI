@@ -2,12 +2,21 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { loader } from "@monaco-editor/react";
 import * as monaco from "monaco-editor";
-import { registerSalivoLanguage } from "./languages/salivoMonaco";
+import { registerAllEagerLanguages } from "./languages/registerAllLanguages";
 import { App } from "./App";
 import "./index.css";
 
-// Register custom languages eagerly
-registerSalivoLanguage(monaco);
+// Import Monaco workers directly using Vite ?worker syntax.
+// This bundles workers into self-contained classic scripts compatible with
+// Tauri's custom URI schemes and WebView2 without failing module-worker restrictions.
+import editorWorker from "../node_modules/monaco-editor/esm/vs/editor/editor.worker.js?worker";
+import jsonWorker from "../node_modules/monaco-editor/esm/vs/language/json/json.worker.js?worker";
+import cssWorker from "../node_modules/monaco-editor/esm/vs/language/css/css.worker.js?worker";
+import htmlWorker from "../node_modules/monaco-editor/esm/vs/language/html/html.worker.js?worker";
+import tsWorker from "../node_modules/monaco-editor/esm/vs/language/typescript/ts.worker.js?worker";
+
+// Register all core languages and tokenizers eagerly
+registerAllEagerLanguages(monaco);
 
 // Define vibrant high-contrast dark theme with guaranteed token colors
 monaco.editor.defineTheme("codeui-dark", {
@@ -48,38 +57,14 @@ monaco.editor.defineTheme("codeui-dark", {
 });
 monaco.editor.setTheme("codeui-dark");
 
-// Configure Monaco web workers for local bundling (Vite)
-// Using new URL() + import.meta.url pattern for Vite compatibility
+// Configure Monaco web workers via Vite ?worker constructors
 self.MonacoEnvironment = {
   getWorker(_, label) {
-    if (label === "json") {
-      return new Worker(
-        new URL("../node_modules/monaco-editor/esm/vs/language/json/json.worker.js", import.meta.url),
-        { type: "module" }
-      );
-    }
-    if (label === "css" || label === "scss" || label === "less") {
-      return new Worker(
-        new URL("../node_modules/monaco-editor/esm/vs/language/css/css.worker.js", import.meta.url),
-        { type: "module" }
-      );
-    }
-    if (label === "html" || label === "handlebars" || label === "razor") {
-      return new Worker(
-        new URL("../node_modules/monaco-editor/esm/vs/language/html/html.worker.js", import.meta.url),
-        { type: "module" }
-      );
-    }
-    if (label === "typescript" || label === "javascript") {
-      return new Worker(
-        new URL("../node_modules/monaco-editor/esm/vs/language/typescript/ts.worker.js", import.meta.url),
-        { type: "module" }
-      );
-    }
-    return new Worker(
-      new URL("../node_modules/monaco-editor/esm/vs/editor/editor.worker.js", import.meta.url),
-      { type: "module" }
-    );
+    if (label === "json") return new jsonWorker();
+    if (label === "css" || label === "scss" || label === "less") return new cssWorker();
+    if (label === "html" || label === "handlebars" || label === "razor") return new htmlWorker();
+    if (label === "typescript" || label === "javascript") return new tsWorker();
+    return new editorWorker();
   },
 };
 
