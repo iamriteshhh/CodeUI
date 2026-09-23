@@ -24,19 +24,52 @@ const MonacoEditorGroupComponent: React.FC<MonacoEditorGroupProps> = ({
 }) => {
   const editorRef = React.useRef<any>(null);
   const monacoRef = React.useRef<any>(null);
-  const prevPathRef = React.useRef<string | undefined>(file?.path);
 
-  // Recalculate editor layout smoothly on file switch
+  // Recalculate editor layout and update model & language smoothly on file switch
   React.useEffect(() => {
-    if (!file?.path) return;
-    if (prevPathRef.current !== file.path) {
-      prevPathRef.current = file.path;
-      requestAnimationFrame(() => {
-        editorRef.current?.layout();
-      });
-    }
-  }, [file?.path]);
+    if (!file?.path || !editorRef.current || !monacoRef.current) return;
+    const editor = editorRef.current;
+    const monaco = monacoRef.current;
 
+    const uriStr = getNormalizedUri(file.path);
+    const uri = monaco.Uri.parse(uriStr);
+    let model = monaco.editor.getModel(uri);
+
+    if (!model) {
+      model = monaco.editor.createModel(file.content, file.language, uri);
+    } else {
+      if (file.language) {
+        monaco.editor.setModelLanguage(model, file.language);
+      }
+      if (!file.isDirty && model.getValue() !== file.content) {
+        model.setValue(file.content);
+      }
+    }
+
+    if (editor.getModel() !== model) {
+      editor.setModel(model);
+    }
+
+    // Guarantee line separation and font metrics
+    editor.updateOptions({ lineHeight: 21, fontSize: 14 });
+    monaco.editor.remeasureFonts();
+    editor.layout();
+
+    requestAnimationFrame(() => {
+      editor.updateOptions({ lineHeight: 21 });
+      editor.layout();
+      if (typeof editor.render === "function") {
+        editor.render(true);
+      }
+    });
+
+    const timer = setTimeout(() => {
+      editor.updateOptions({ lineHeight: 21 });
+      editor.layout();
+    }, 50);
+
+    return () => clearTimeout(timer);
+  }, [file?.path, file?.language, file?.content, file?.isDirty]);
 
   if (!file) {
     return (
@@ -77,15 +110,15 @@ const MonacoEditorGroupComponent: React.FC<MonacoEditorGroupProps> = ({
       </div>
 
       {/* Monaco Editor Container */}
-      <div style={{ flex: 1, position: "relative", overflow: "hidden", background: "#1e1e1e" }}>
+      <div style={{ flex: 1, position: "relative", overflow: "hidden", background: "#1e1e1e", minHeight: 0 }}>
         <Editor
           height="100%"
           path={getNormalizedUri(file.path)}
           language={file.language}
           value={file.content}
-          theme="vs-dark"
+          theme="codeui-dark"
           keepCurrentModel={true}
-          saveViewState={true}
+          saveViewState={false}
           loading={<div style={{ height: "100%", width: "100%", background: "#1e1e1e" }} />}
           options={MONACO_LAB_SAFE_OPTIONS}
           beforeMount={(monaco) => {
@@ -100,11 +133,24 @@ const MonacoEditorGroupComponent: React.FC<MonacoEditorGroupProps> = ({
             editorRef.current = editor;
             monacoRef.current = monaco;
             registerSalivoLanguage(monaco);
+            monaco.editor.setTheme("codeui-dark");
             editorService.setActiveEditor(editor);
             editorService.setMonaco(monaco);
+
+            const model = editor.getModel();
+            if (model && file.language) {
+              monaco.editor.setModelLanguage(model, file.language);
+            }
+
+            editor.updateOptions({ lineHeight: 21, fontSize: 14 });
+            monaco.editor.remeasureFonts();
             editor.layout();
             requestAnimationFrame(() => {
+              editor.updateOptions({ lineHeight: 21 });
               editor.layout();
+              if (typeof editor.render === "function") {
+                editor.render(true);
+              }
             });
 
             editor.onDidFocusEditorText(() => {

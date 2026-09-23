@@ -128,13 +128,6 @@ export function App() {
     }
   }, [sidebarTab]);
 
-  // Silently pre-cache Monaco bundle in background after initial paint
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      import("./components/editor/MonacoEditorGroup");
-    }, 1200);
-    return () => clearTimeout(timer);
-  }, []);
 
   // Synchronize detected system language toolchains with the installed extensions list
   useEffect(() => {

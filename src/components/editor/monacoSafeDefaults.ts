@@ -68,7 +68,7 @@ export const MONACO_LAB_SAFE_OPTIONS: NonNullable<EditorProps["options"]> = {
   cursorSmoothCaretAnimation: "off",
   smoothScrolling: false,
   disableLayerHinting: false,
-  renderLineHighlight: "all",
+  renderLineHighlight: "line",
   occurrencesHighlight: "off",
   selectionHighlight: true,
   matchBrackets: "always",

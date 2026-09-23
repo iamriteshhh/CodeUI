@@ -82,11 +82,12 @@ textarea,
   visibility: visible !important;
   opacity: 1 !important;
   z-index: 5;
+  font-weight: 400 !important;
 }
 
 .monaco-editor .margin-view-overlays .line-numbers.active-line-number {
   color: #ffffff !important;
-  font-weight: 600;
+  font-weight: 400 !important;
   visibility: visible !important;
   opacity: 1 !important;
   z-index: 6;
@@ -95,12 +96,6 @@ textarea,
 /* Prevent native browser selection outside editor input area */
 .monaco-editor {
   touch-action: none;
-}
-
-.monaco-editor,
-.monaco-editor .view-lines,
-.monaco-editor .view-line {
-  box-sizing: border-box !important;
 }
 
 .monaco-editor .inputarea {
