@@ -97,9 +97,20 @@ textarea,
   touch-action: none;
 }
 
+.monaco-editor,
+.monaco-editor .view-lines,
+.monaco-editor .view-line {
+  box-sizing: border-box !important;
+}
+
 .monaco-editor .inputarea {
   user-select: text !important;
   -webkit-user-select: text !important;
+}
+
+/* Ensure xterm cursor is sharply visible */
+.terminal-xterm-viewport .xterm .xterm-cursor-layer {
+  z-index: 10 !important;
 }
 
 

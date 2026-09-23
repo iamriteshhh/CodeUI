@@ -440,9 +440,9 @@ export function useWorkspace() {
       }
       case "python": {
         if (isWin) {
-          cmd = `cd "${dir}"; $sw = [System.Diagnostics.Stopwatch]::StartNew(); python -u "${fileName}"; $sw.Stop(); Write-Host "\`n[Executed in $($sw.ElapsedMilliseconds)ms]" -ForegroundColor Cyan\r`;
+          cmd = `cd "${dir}"; python -u "${fileName}"\r`;
         } else {
-          cmd = `cd "${dir}" && t0=$(date +%s%3N) && python3 -u "${fileName}" && t1=$(date +%s%3N) && echo -e "\\n\\x1b[36m[Executed in $((t1 - t0))ms]\\x1b[0m"\n`;
+          cmd = `cd "${dir}" && python3 -u "${fileName}"\n`;
         }
         break;
       }
@@ -472,9 +472,9 @@ export function useWorkspace() {
       }
       case "salivo": {
         if (isWin) {
-          cmd = `cd "${dir}"; $sw = [System.Diagnostics.Stopwatch]::StartNew(); sf run "${fileName}"; $sw.Stop(); Write-Host "\`n[Compile & run time: $($sw.ElapsedMilliseconds)ms]" -ForegroundColor Cyan\r`;
+          cmd = `cd "${dir}"; $sw = [System.Diagnostics.Stopwatch]::StartNew(); sf build "${fileName}"; $ms = $sw.ElapsedMilliseconds; if ($?) { Write-Host "[Compiled in $($ms)ms]" -ForegroundColor Cyan; .\\"${baseName}.exe" }\r`;
         } else {
-          cmd = `cd "${dir}" && t0=$(date +%s%3N) && sf run "${fileName}" && t1=$(date +%s%3N) && echo -e "\\n\\x1b[36m[Compile & run time: $((t1 - t0))ms]\\x1b[0m"\n`;
+          cmd = `cd "${dir}" && t0=$(date +%s%3N) && sf build "${fileName}" && t1=$(date +%s%3N) && echo -e "\\x1b[36m[Compiled in $((t1 - t0))ms]\\x1b[0m" && ./"${baseName}"\n`;
         }
         break;
       }
@@ -568,8 +568,11 @@ export function useWorkspace() {
       }
     }
 
-    // 5. Send command to terminal
+    // 5. Send command to terminal and automatically focus it
     await ptyService.writePty(sessionId, cmd);
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("focus-terminal"));
+    }, 100);
   }, [activeFilePath, openFiles, saveFile, ensurePtySession]);
 
   return {

@@ -95,9 +95,8 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
       fontSize: 13,
       lineHeight: 1.25,
       cursorBlink: true,
-      cursorStyle: "bar",
-      cursorWidth: 2,
-      cursorInactiveStyle: "bar",
+      cursorStyle: "block",
+      cursorInactiveStyle: "outline",
       convertEol: true,
       scrollback: 5000,
       allowTransparency: false,
@@ -110,8 +109,14 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
     termRef.current = term;
     fitAddonRef.current = fitAddon;
 
-    // Immediately focus so the cursor bar blinks on mount
+    // Immediately focus so the cursor block blinks on mount
     term.focus();
+
+    // Listen for custom focus events from Run button or workspace actions
+    const handleFocusTerminal = () => {
+      term.focus();
+    };
+    window.addEventListener("focus-terminal", handleFocusTerminal);
 
     // Detect default shell name
     ptyService.getDefaultShell().then((sh) => {
@@ -220,6 +225,7 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
 
     return () => {
       isDisposed = true;
+      window.removeEventListener("focus-terminal", handleFocusTerminal);
       resizeObserver.disconnect();
       if (unlistenRef.current.data) unlistenRef.current.data();
       if (unlistenRef.current.exit) unlistenRef.current.exit();
