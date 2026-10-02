@@ -1,4 +1,4 @@
-use super::runner_trait::{require_tool, CommandSpec, LanguageRunner, RunContext, RunnerError};
+use super::runner_trait::{resolve_tool_cmd, CommandSpec, LanguageRunner, RunContext, RunnerError};
 
 pub struct CRunner;
 
@@ -12,12 +12,12 @@ impl LanguageRunner for CRunner {
     }
 
     fn compile(&self, ctx: &RunContext) -> Result<Option<CommandSpec>, RunnerError> {
-        require_tool("gcc")?;
+        let compiler = resolve_tool_cmd(&["gcc", "clang"])?;
         let out = ctx
             .scratch
             .join(format!("{}{}", ctx.stem(), std::env::consts::EXE_SUFFIX));
         Ok(Some(CommandSpec::new(
-            "gcc",
+            compiler,
             vec![
                 "-Wall".into(),
                 "-g".into(),

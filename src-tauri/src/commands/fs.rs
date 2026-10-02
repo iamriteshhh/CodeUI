@@ -107,20 +107,20 @@ pub fn is_dangerous_system_path(path: &Path) -> bool {
     false
 }
 
-#[tauri::command]
-pub fn read_file(path: String) -> Result<String, FsError> {
-    let p = validate(&path)?;
+pub fn read_file_sync(path: &str) -> Result<String, FsError> {
+    let p = validate(path)?;
     std::fs::read_to_string(&p).map_err(|e| FsError::from_io(e, &p))
 }
 
-/// Saves a file without ever leaving it half-written.
-///
-/// Writes a sibling temporary file and renames it over the original, so a crash
-/// or power cut during save cannot truncate the student's source. The temp file
-/// is a sibling rather than in /tmp so the rename stays within one filesystem.
 #[tauri::command]
-pub fn write_file(path: String, contents: String) -> Result<(), FsError> {
-    let p = validate(&path)?;
+pub async fn read_file(path: String) -> Result<String, FsError> {
+    tauri::async_runtime::spawn_blocking(move || read_file_sync(&path))
+        .await
+        .map_err(|e| FsError::Io(e.to_string()))?
+}
+
+pub fn write_file_sync(path: &str, contents: &str) -> Result<(), FsError> {
+    let p = validate(path)?;
     if is_dangerous_system_path(&p) {
         return Err(FsError::PermissionDenied(format!(
             "Refusing to write to protected system path: {path}"
@@ -170,8 +170,14 @@ pub fn write_file(path: String, contents: String) -> Result<(), FsError> {
 }
 
 #[tauri::command]
-pub fn list_dir(path: String) -> Result<Vec<FileEntry>, FsError> {
-    let p = validate(&path)?;
+pub async fn write_file(path: String, contents: String) -> Result<(), FsError> {
+    tauri::async_runtime::spawn_blocking(move || write_file_sync(&path, &contents))
+        .await
+        .map_err(|e| FsError::Io(e.to_string()))?
+}
+
+pub fn list_dir_sync(path: &str) -> Result<Vec<FileEntry>, FsError> {
+    let p = validate(path)?;
     if p.exists() && !p.is_dir() {
         return Err(FsError::NotADirectory(p.display().to_string()));
     }
@@ -208,8 +214,14 @@ pub fn list_dir(path: String) -> Result<Vec<FileEntry>, FsError> {
 }
 
 #[tauri::command]
-pub fn create_file(path: String) -> Result<(), FsError> {
-    let p = validate(&path)?;
+pub async fn list_dir(path: String) -> Result<Vec<FileEntry>, FsError> {
+    tauri::async_runtime::spawn_blocking(move || list_dir_sync(&path))
+        .await
+        .map_err(|e| FsError::Io(e.to_string()))?
+}
+
+pub fn create_file_sync(path: &str) -> Result<(), FsError> {
+    let p = validate(path)?;
     if is_dangerous_system_path(&p) {
         return Err(FsError::PermissionDenied(format!(
             "Refusing to create file in protected system path: {path}"
@@ -225,8 +237,14 @@ pub fn create_file(path: String) -> Result<(), FsError> {
 }
 
 #[tauri::command]
-pub fn create_dir(path: String) -> Result<(), FsError> {
-    let p = validate(&path)?;
+pub async fn create_file(path: String) -> Result<(), FsError> {
+    tauri::async_runtime::spawn_blocking(move || create_file_sync(&path))
+        .await
+        .map_err(|e| FsError::Io(e.to_string()))?
+}
+
+pub fn create_dir_sync(path: &str) -> Result<(), FsError> {
+    let p = validate(path)?;
     if is_dangerous_system_path(&p) {
         return Err(FsError::PermissionDenied(format!(
             "Refusing to create directory in protected system path: {path}"
@@ -239,9 +257,15 @@ pub fn create_dir(path: String) -> Result<(), FsError> {
 }
 
 #[tauri::command]
-pub fn rename_file(old_path: String, new_path: String) -> Result<(), FsError> {
-    let from = validate(&old_path)?;
-    let to = validate(&new_path)?;
+pub async fn create_dir(path: String) -> Result<(), FsError> {
+    tauri::async_runtime::spawn_blocking(move || create_dir_sync(&path))
+        .await
+        .map_err(|e| FsError::Io(e.to_string()))?
+}
+
+pub fn rename_file_sync(old_path: &str, new_path: &str) -> Result<(), FsError> {
+    let from = validate(old_path)?;
+    let to = validate(new_path)?;
     if is_dangerous_system_path(&from) || is_dangerous_system_path(&to) {
         return Err(FsError::PermissionDenied(
             "Cannot rename protected system or root paths".into(),
@@ -258,8 +282,14 @@ pub fn rename_file(old_path: String, new_path: String) -> Result<(), FsError> {
 }
 
 #[tauri::command]
-pub fn delete_file(path: String) -> Result<(), FsError> {
-    let p = validate(&path)?;
+pub async fn rename_file(old_path: String, new_path: String) -> Result<(), FsError> {
+    tauri::async_runtime::spawn_blocking(move || rename_file_sync(&old_path, &new_path))
+        .await
+        .map_err(|e| FsError::Io(e.to_string()))?
+}
+
+pub fn delete_file_sync(path: &str) -> Result<(), FsError> {
+    let p = validate(path)?;
     if is_dangerous_system_path(&p) {
         return Err(FsError::PermissionDenied(format!(
             "Refusing to delete protected system path: {path}"
@@ -271,6 +301,13 @@ pub fn delete_file(path: String) -> Result<(), FsError> {
     } else {
         std::fs::remove_file(&p).map_err(|e| FsError::from_io(e, &p))
     }
+}
+
+#[tauri::command]
+pub async fn delete_file(path: String) -> Result<(), FsError> {
+    tauri::async_runtime::spawn_blocking(move || delete_file_sync(&path))
+        .await
+        .map_err(|e| FsError::Io(e.to_string()))?
 }
 
 #[tauri::command]
@@ -526,6 +563,36 @@ mod tests {
 
     fn tmp() -> tempfile::TempDir {
         tempfile::tempdir().expect("tempdir")
+    }
+
+    #[allow(dead_code)]
+    fn read_file(path: String) -> Result<String, FsError> {
+        tauri::async_runtime::block_on(super::read_file(path))
+    }
+
+    fn write_file(path: String, contents: String) -> Result<(), FsError> {
+        tauri::async_runtime::block_on(super::write_file(path, contents))
+    }
+
+    fn list_dir(path: String) -> Result<Vec<FileEntry>, FsError> {
+        tauri::async_runtime::block_on(super::list_dir(path))
+    }
+
+    fn create_file(path: String) -> Result<(), FsError> {
+        tauri::async_runtime::block_on(super::create_file(path))
+    }
+
+    #[allow(dead_code)]
+    fn create_dir(path: String) -> Result<(), FsError> {
+        tauri::async_runtime::block_on(super::create_dir(path))
+    }
+
+    fn rename_file(old_path: String, new_path: String) -> Result<(), FsError> {
+        tauri::async_runtime::block_on(super::rename_file(old_path, new_path))
+    }
+
+    fn delete_file(path: String) -> Result<(), FsError> {
+        tauri::async_runtime::block_on(super::delete_file(path))
     }
 
     #[test]

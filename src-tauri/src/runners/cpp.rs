@@ -1,4 +1,4 @@
-use super::runner_trait::{require_tool, CommandSpec, LanguageRunner, RunContext, RunnerError};
+use super::runner_trait::{resolve_tool_cmd, CommandSpec, LanguageRunner, RunContext, RunnerError};
 
 pub struct CppRunner;
 
@@ -12,12 +12,12 @@ impl LanguageRunner for CppRunner {
     }
 
     fn compile(&self, ctx: &RunContext) -> Result<Option<CommandSpec>, RunnerError> {
-        require_tool("g++")?;
+        let compiler = resolve_tool_cmd(&["g++", "clang++"])?;
         let out = ctx
             .scratch
             .join(format!("{}{}", ctx.stem(), std::env::consts::EXE_SUFFIX));
         Ok(Some(CommandSpec::new(
-            "g++",
+            compiler,
             vec![
                 "-Wall".into(),
                 "-g".into(),

@@ -10,6 +10,10 @@ import {
   Globe,
   Check,
   Shield,
+  Cpu,
+  CheckCircle2,
+  AlertCircle,
+  Copy,
 } from "lucide-react";
 import { ExtensionItem, ToolStatus } from "../../types";
 import { ExtensionIcon } from "./ExtensionIcon";
@@ -36,11 +40,19 @@ export const ExtensionsPanel: React.FC<ExtensionsPanelProps> = ({
   onRefresh,
 }) => {
   const [query, setQuery] = useState("");
+  const [toolchainsOpen, setToolchainsOpen] = useState(true);
+  const [copiedTool, setCopiedTool] = useState<string | null>(null);
   const [installedOpen, setInstalledOpen] = useState(true);
   const [recommendedOpen, setRecommendedOpen] = useState(false);
   const [marketplaceOpen, setMarketplaceOpen] = useState(true);
   const [marketplaceResults, setMarketplaceResults] = useState<ExtensionItem[]>([]);
   const [isSearchingMarketplace, setIsSearchingMarketplace] = useState(false);
+
+  const handleCopyHint = (name: string, hint: string) => {
+    navigator.clipboard?.writeText(hint);
+    setCopiedTool(name);
+    setTimeout(() => setCopiedTool(null), 2000);
+  };
 
   const installedExtensions = useMemo(
     () => extensions.filter((e) => e.installed),
@@ -150,16 +162,105 @@ export const ExtensionsPanel: React.FC<ExtensionsPanelProps> = ({
         </div>
 
         <div className="extensions-marketplace-note">
-          By default, CodeUI uses Open VSX as a live marketplace. This can be changed in{" "}
-          <span className="settings-link" onClick={onOpenSettings}>
-            CodeUI settings
-          </span>
-          .
+          CodeUI provides direct execution via native toolchains and bundled syntax grammars. External VSIX extension runtime is not loaded in practical laboratory mode.
         </div>
       </div>
 
-      {/* 3. Extension Tree Lists */}
+      {/* 3. Extension & Toolchain Tree Lists */}
       <div className="extensions-list-scroll">
+        {/* Toolchains & Compilers Health Section (Y4) */}
+        {tools && tools.length > 0 && (
+          <div className="extensions-group">
+            <div
+              className="extensions-group-header"
+              onClick={() => setToolchainsOpen(!toolchainsOpen)}
+            >
+              <div className="extensions-group-title">
+                {toolchainsOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                <Cpu size={13} style={{ marginRight: 4, color: "#4ec9b0" }} />
+                <span>Toolchains & Compilers</span>
+              </div>
+              <span className="extensions-count-badge">
+                {tools.filter((t) => t.available).length}/{tools.length}
+              </span>
+            </div>
+
+            {toolchainsOpen && (
+              <div className="extensions-items-list" style={{ padding: "4px 8px 8px" }}>
+                {tools.map((tool) => (
+                  <div
+                    key={tool.name}
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      justifyContent: "space-between",
+                      padding: "6px 8px",
+                      background: tool.available ? "#1f2328" : "#251c1c",
+                      border: `1px solid ${tool.available ? "#30363d" : "#442727"}`,
+                      borderRadius: 4,
+                      marginBottom: 4,
+                      fontSize: 11,
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        {tool.available ? (
+                          <CheckCircle2 size={13} style={{ color: "#3fb950", flexShrink: 0 }} />
+                        ) : (
+                          <AlertCircle size={13} style={{ color: "#f85149", flexShrink: 0 }} />
+                        )}
+                        <span style={{ fontWeight: 600, color: "#e6edf3" }}>{tool.name}</span>
+                        <span style={{ color: "#8b949e", fontSize: 10 }}>{tool.purpose}</span>
+                      </div>
+
+                      {tool.available && tool.path && (
+                        <div
+                          style={{
+                            color: "#8b949e",
+                            fontSize: 10,
+                            marginTop: 2,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                          title={tool.path}
+                        >
+                          {tool.path}
+                        </div>
+                      )}
+
+                      {!tool.available && (
+                        <div style={{ color: "#d29922", fontSize: 10, marginTop: 2 }}>
+                          {tool.install_hint}
+                        </div>
+                      )}
+                    </div>
+
+                    {!tool.available && tool.install_hint && (
+                      <button
+                        className="icon-btn"
+                        onClick={() => handleCopyHint(tool.name, tool.install_hint)}
+                        title="Copy install command"
+                        style={{
+                          padding: "2px 6px",
+                          fontSize: 10,
+                          marginLeft: 6,
+                          flexShrink: 0,
+                          background: "#333",
+                          borderRadius: 3,
+                          color: copiedTool === tool.name ? "#3fb950" : "#ccc",
+                        }}
+                      >
+                        {copiedTool === tool.name ? "Copied" : <Copy size={11} />}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Installed Section */}
         <div className="extensions-group">
           <div
@@ -299,10 +400,11 @@ export const ExtensionsPanel: React.FC<ExtensionsPanelProps> = ({
                               className="extension-install-badge-btn"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                onToggleInstall?.(ext.id, ext);
+                                onSelectExtension(ext.id, ext);
                               }}
+                              title="View extension documentation"
                             >
-                              Install
+                              Details
                             </button>
                           )}
                         </div>
@@ -396,10 +498,11 @@ export const ExtensionsPanel: React.FC<ExtensionsPanelProps> = ({
                                 className="extension-install-badge-btn"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  onToggleInstall?.(ext.id, ext);
+                                  onSelectExtension(ext.id, ext);
                                 }}
+                                title="View extension documentation"
                               >
-                                Install
+                                Details
                               </button>
                             )}
                           </div>
