@@ -1,3 +1,22 @@
+@font-face {
+  font-family: "CodeUI Mono";
+  src: url("./assets/fonts/CodeUI-Mono.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: block;
+}
+
+@keyframes fadeInToast {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 :root {
   --bg-app: #1e1e1e;
   --bg-titlebar: #3c3c3c;
@@ -29,7 +48,7 @@
   --accent-yellow: #cca700;
 
   --font-ui: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
-  --font-mono: Consolas, "Courier New", monospace;
+  --font-mono: "CodeUI Mono", Consolas, "Courier New", monospace;
 
   --titlebar-height: 35px;
   --activitybar-width: 48px;
@@ -77,7 +96,7 @@ textarea,
 
 /* Monaco Editor line numbers and margin styling */
 .monaco-editor .margin-view-overlays .line-numbers {
-  font-family: Consolas, 'Courier New', monospace;
+  font-family: var(--font-mono);
   color: #858585 !important;
   visibility: visible !important;
   opacity: 1 !important;
@@ -93,25 +112,14 @@ textarea,
   z-index: 6;
 }
 
-/* Prevent native browser selection outside editor input area */
-.monaco-editor {
-  touch-action: none;
-}
-
 .monaco-editor .inputarea {
   user-select: text !important;
   -webkit-user-select: text !important;
 }
 
-/* Ensure xterm cursor is sharply visible */
-.terminal-xterm-viewport .xterm .xterm-cursor-layer {
-  z-index: 10 !important;
-}
-
-.xterm .xterm-cursor-bar {
-  opacity: 1 !important;
-  visibility: visible !important;
-  border-left-width: 2px !important;
+/* Ensure xterm DOM cursor styling is crisp and visible */
+.terminal-xterm-viewport .xterm .xterm-cursor.xterm-cursor-bar {
+  border-left-width: 2px;
 }
 
 
@@ -775,11 +783,25 @@ textarea,
   gap: 6px;
   font-size: 11px;
   font-weight: 500;
-  color: #cccccc;
-  background-color: #282828;
-  padding: 2px 8px;
+  color: #8c8c8c;
+  background-color: transparent;
+  padding: 3px 10px;
   border-radius: 3px;
-  border: 1px solid #383838;
+  border: 1px solid transparent;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+}
+
+.terminal-tab-pill:hover {
+  color: #cccccc;
+  background-color: #252526;
+}
+
+.terminal-tab-pill.active {
+  color: #ffffff;
+  background-color: #282828;
+  border-color: #383838;
 }
 
 .terminal-toolbar-right {

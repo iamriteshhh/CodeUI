@@ -24,6 +24,8 @@ import {
   Layers,
 } from "lucide-react";
 import { editorService } from "../../services/editorService";
+import { copyDiagnosticsToClipboard } from "../../services/diagnostics";
+import { notify } from "../../services/notify";
 import codeuiLogo from "../../assets/codeui-logo.png";
 
 interface MenuItemDef {
@@ -260,12 +262,20 @@ export const TitleBar: React.FC<TitleBarProps> = ({
         icon: <img src={codeuiLogo} alt="CodeUI" style={{ width: 14, height: 14, objectFit: "contain" }} />,
         action: onOpenWelcome,
       },
+      {
+        label: "Copy Diagnostics",
+        icon: <Clipboard size={14} />,
+        action: () => copyDiagnosticsToClipboard(),
+      },
       { divider: true, label: "" },
       {
         label: "About CodeUI",
         icon: <Info size={14} />,
         action: () => {
-          alert("CodeUI v0.1.0\nA lab-safe IDE for students & developers.\nBuilt with Tauri 2 and Monaco Editor.");
+          notify.info(
+            "CodeUI v0.1.0",
+            "A lab-safe, distraction-free IDE for students & developers. Built with Tauri 2 and Monaco Editor."
+          );
         },
       },
     ],

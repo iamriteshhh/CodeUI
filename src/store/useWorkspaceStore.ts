@@ -1,12 +1,16 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { FileEntry, OpenFile, ToolStatus, UserSettings } from "../types";
 import { fsService } from "../services/fsService";
 import { envService } from "../services/envService";
 import { settingsService } from "../services/settingsService";
 import { ptyService } from "../services/ptyService";
+import { processService } from "../services/processService";
 import { editorService } from "../services/editorService";
+import { notify, formatError } from "../services/notify";
+import { parseCompilerDiagnostics } from "../services/diagnostics";
+import { join, dirname, basename, isInside, rebase, validateName } from "../utils/path";
 
-function detectLanguage(fileName: string): string {
+export function detectLanguage(fileName: string): string {
   const lower = fileName.toLowerCase();
   if (lower === "cargo.toml" || lower === "cargo.lock") return "toml";
   if (lower === "package.json") return "json";
@@ -104,12 +108,17 @@ function detectLanguage(fileName: string): string {
 }
 
 export function useWorkspace() {
-  const [workspacePath, setWorkspacePath] = useState<string>("D:\\JAVA");
+  const [workspacePath, setWorkspacePath] = useState<string>("");
   const [fileTree, setFileTree] = useState<FileEntry[]>([]);
   const [openFiles, setOpenFiles] = useState<OpenFile[]>([]);
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
   const [splitActiveFilePath, setSplitActiveFilePath] = useState<string | null>(null);
   const [isSplit, setIsSplit] = useState<boolean>(false);
+
+  // Folder and directory cache lifted to store for consistency
+  const [dirCache, setDirCache] = useState<Map<string, FileEntry[]>>(new Map());
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const [loadingFolders, setLoadingFolders] = useState<Set<string>>(new Set());
 
   // Layout states
   const [sidebarTab, setSidebarTab] = useState<"explorer" | "extensions" | "search" | "run">("explorer");
@@ -123,10 +132,7 @@ export function useWorkspace() {
 
   // Welcome tab state
   const [isWelcomeOpen, setIsWelcomeOpen] = useState<boolean>(true);
-  const [recentFolders, setRecentFolders] = useState<string[]>([
-    "D:\\JAVA",
-    "C:\\Users\\sahil\\CodeUI",
-  ]);
+  const [recentFolders, setRecentFolders] = useState<string[]>([]);
   const [showWelcomeOnStartup, setShowWelcomeOnStartup] = useState<boolean>(true);
 
   // Tools & Settings
@@ -135,21 +141,26 @@ export function useWorkspace() {
     theme: "dark",
     fontSize: 14,
     tabWidth: 4,
-    runTimeoutSecs: 12,
-    recentFolders: ["D:\\JAVA", "C:\\Users\\sahil\\CodeUI"],
+    runTimeoutSecs: 30,
+    recentFolders: [],
     showWelcomeOnStartup: true,
   });
 
-  // PTY Session
+  // Single-flight PTY session promise ref
   const [ptySessionId, setPtySessionId] = useState<string | null>(null);
+  const pendingPtyPromiseRef = useRef<Promise<string> | null>(null);
 
-  // Load initial settings and toolchains
+  // Live ref for openFiles to avoid stale closures
+  const openFilesRef = useRef<OpenFile[]>(openFiles);
+  openFilesRef.current = openFiles;
+
+  const activeFilePathRef = useRef<string | null>(activeFilePath);
+  activeFilePathRef.current = activeFilePath;
+
+  // Load initial settings and toolchains with existence check on lastFolder
   useEffect(() => {
-    settingsService.loadSettings().then((s) => {
+    settingsService.loadSettings().then(async (s) => {
       setSettings(s);
-      if (s.lastFolder) {
-        setWorkspacePath(s.lastFolder);
-      }
       if (s.recentFolders && s.recentFolders.length > 0) {
         setRecentFolders(s.recentFolders);
       }
@@ -157,37 +168,98 @@ export function useWorkspace() {
         setShowWelcomeOnStartup(s.showWelcomeOnStartup);
         setIsWelcomeOpen(s.showWelcomeOnStartup);
       }
+
+      if (s.lastFolder) {
+        try {
+          const exists = await fsService.exists(s.lastFolder);
+          if (exists) {
+            setWorkspacePath(s.lastFolder);
+            setIsWelcomeOpen(false);
+          } else {
+            notify.info("Workspace", "Last folder is no longer available.");
+            settingsService.saveSettings({ ...s, lastFolder: undefined });
+          }
+        } catch {
+          notify.info("Workspace", "Last folder is no longer available.");
+        }
+      }
     });
 
     envService.detectTools().then(setTools);
   }, []);
 
-  // Load file tree when workspace changes
-  const refreshExplorer = useCallback(async () => {
-    if (!workspacePath) return;
+  // Refresh a directory's contents
+  const refreshDir = useCallback(async (dirPath: string) => {
+    if (!dirPath) return;
     try {
-      const entries = await fsService.listDir(workspacePath);
-      setFileTree(entries);
+      const entries = await fsService.listDir(dirPath);
+      setDirCache((prev) => new Map(prev).set(dirPath, entries));
+      if (dirPath === workspacePath) {
+        setFileTree(entries);
+      }
     } catch (err) {
-      console.error("Failed to load directory:", err);
+      console.error("Failed to list dir:", err);
     }
   }, [workspacePath]);
+
+  // Refresh entire explorer including workspace root
+  const refreshExplorer = useCallback(async () => {
+    if (!workspacePath) {
+      setFileTree([]);
+      setDirCache(new Map());
+      return;
+    }
+    await refreshDir(workspacePath);
+  }, [workspacePath, refreshDir]);
 
   useEffect(() => {
     refreshExplorer();
   }, [refreshExplorer]);
 
+  // Toggle subfolder expansion
+  const toggleFolder = useCallback(
+    async (folderPath: string) => {
+      setExpandedFolders((prev) => {
+        const next = new Set(prev);
+        if (next.has(folderPath)) {
+          next.delete(folderPath);
+        } else {
+          next.add(folderPath);
+        }
+        return next;
+      });
+
+      if (!dirCache.has(folderPath)) {
+        setLoadingFolders((prev) => new Set(prev).add(folderPath));
+        try {
+          const entries = await fsService.listDir(folderPath);
+          setDirCache((prev) => new Map(prev).set(folderPath, entries));
+        } catch (err) {
+          notify.error("Folder Error", formatError(err));
+        } finally {
+          setLoadingFolders((prev) => {
+            const next = new Set(prev);
+            next.delete(folderPath);
+            return next;
+          });
+        }
+      }
+    },
+    [dirCache]
+  );
+
   // Open file into tabs
   const openFileByPath = useCallback(
     async (path: string, name?: string) => {
-      const existing = openFiles.find((f) => f.path === path);
+      const existing = openFilesRef.current.find((f) => f.path === path);
       if (existing) {
         setActiveFilePath(path);
+        editorService.focusActive();
         return;
       }
 
       try {
-        const fileName = name || path.split(/[/\\]/).pop() || "untitled";
+        const fileName = name || basename(path) || "untitled";
         const content = await fsService.readFile(path);
         const language = detectLanguage(fileName);
         const newFile: OpenFile = {
@@ -200,23 +272,22 @@ export function useWorkspace() {
 
         setOpenFiles((prev) => [...prev, newFile]);
         setActiveFilePath(path);
-        if (isSplit && !splitActiveFilePath) {
-          setSplitActiveFilePath(path);
-        }
+        editorService.focusActive();
       } catch (err) {
         console.error("Failed to open file:", err);
+        notify.error("File Open Error", formatError(err));
       }
     },
-    [openFiles, isSplit, splitActiveFilePath]
+    []
   );
 
-  // Close file tab
+  // Close file tab and dispose model
   const closeFile = useCallback(
     (path: string) => {
       editorService.disposeModel(path);
       setOpenFiles((prev) => {
         const next = prev.filter((f) => f.path !== path);
-        if (activeFilePath === path) {
+        if (activeFilePathRef.current === path) {
           const closedIdx = prev.findIndex((f) => f.path === path);
           const newActive = next[closedIdx] || next[closedIdx - 1] || next[0] || null;
           setActiveFilePath(newActive ? newActive.path : null);
@@ -227,51 +298,59 @@ export function useWorkspace() {
         return next;
       });
     },
-    [activeFilePath, splitActiveFilePath]
+    [splitActiveFilePath]
   );
 
   // Close all other tabs
   const closeOtherFiles = useCallback((path: string) => {
+    for (const f of openFilesRef.current) {
+      if (f.path !== path) {
+        editorService.disposeModel(f.path);
+      }
+    }
     setOpenFiles((prev) => prev.filter((f) => f.path === path));
     setActiveFilePath(path);
   }, []);
 
-  // Update file content in memory (mark dirty)
-  const updateFileContent = useCallback((path: string, content: string) => {
+  // Update file content in memory (marks dirty)
+  const updateFileContent = useCallback((path: string, _content: string) => {
     setOpenFiles((prev) =>
       prev.map((f) => {
         if (f.path === path) {
-          return { ...f, content, isDirty: true };
+          if (f.isDirty) return f;
+          return { ...f, isDirty: true };
         }
         return f;
       })
     );
   }, []);
 
-  // Save file to disk
+  // Save file to disk reading from model-as-truth
   const saveFile = useCallback(
     async (path: string) => {
-      const target = openFiles.find((f) => f.path === path);
+      const target = openFilesRef.current.find((f) => f.path === path);
       if (!target) return;
       try {
-        await fsService.writeFile(path, target.content);
+        const contentToSave = editorService.getText(path) ?? target.content;
+        await fsService.writeFile(path, contentToSave);
         const language = detectLanguage(target.name);
         setOpenFiles((prev) =>
-          prev.map((f) => (f.path === path ? { ...f, isDirty: false, language } : f))
+          prev.map((f) => (f.path === path ? { ...f, content: contentToSave, isDirty: false, language } : f))
         );
       } catch (err) {
         console.error("Failed to save file:", err);
+        notify.error("Save Error", formatError(err));
       }
     },
-    [openFiles]
+    []
   );
 
   // Save active file
   const saveActiveFile = useCallback(() => {
-    if (activeFilePath) {
-      saveFile(activeFilePath);
+    if (activeFilePathRef.current) {
+      saveFile(activeFilePathRef.current);
     }
-  }, [activeFilePath, saveFile]);
+  }, [saveFile]);
 
   // Open a new folder workspace
   const openFolder = useCallback(
@@ -308,6 +387,9 @@ export function useWorkspace() {
   );
 
   const closeAllFiles = useCallback(() => {
+    for (const f of openFilesRef.current) {
+      editorService.disposeModel(f.path);
+    }
     setOpenFiles([]);
     setActiveFilePath(null);
     setSplitActiveFilePath(null);
@@ -315,265 +397,278 @@ export function useWorkspace() {
   }, []);
 
   const switchToNextTab = useCallback(() => {
-    if (openFiles.length === 0) return;
-    const currentIdx = openFiles.findIndex((f) => f.path === activeFilePath);
-    const nextIdx = (currentIdx + 1) % openFiles.length;
-    setActiveFilePath(openFiles[nextIdx].path);
-  }, [openFiles, activeFilePath]);
+    const files = openFilesRef.current;
+    if (files.length === 0) return;
+    const currentIdx = files.findIndex((f) => f.path === activeFilePathRef.current);
+    const nextIdx = (currentIdx + 1) % files.length;
+    setActiveFilePath(files[nextIdx].path);
+    editorService.focusActive();
+  }, []);
 
   const switchToPrevTab = useCallback(() => {
-    if (openFiles.length === 0) return;
-    const currentIdx = openFiles.findIndex((f) => f.path === activeFilePath);
-    const prevIdx = (currentIdx - 1 + openFiles.length) % openFiles.length;
-    setActiveFilePath(openFiles[prevIdx].path);
-  }, [openFiles, activeFilePath]);
+    const files = openFilesRef.current;
+    if (files.length === 0) return;
+    const currentIdx = files.findIndex((f) => f.path === activeFilePathRef.current);
+    const prevIdx = (currentIdx - 1 + files.length) % files.length;
+    setActiveFilePath(files[prevIdx].path);
+    editorService.focusActive();
+  }, []);
 
-  // Create new file in workspace
-  const createNewFile = useCallback(
-    async (fileName: string) => {
-      const separator = workspacePath.includes("\\") ? "\\" : "/";
-      const fullPath = `${workspacePath}${separator}${fileName}`;
+  // Create new entry (file or folder) at any depth
+  const createEntry = useCallback(
+    async (parentDir: string, name: string, isDir: boolean) => {
+      const err = validateName(name);
+      if (err) {
+        notify.error("Invalid Name", err);
+        return;
+      }
+
+      const fullPath = join(parentDir, name);
       try {
-        await fsService.createFile(fullPath);
-        await refreshExplorer();
-        await openFileByPath(fullPath, fileName);
-      } catch (err) {
-        console.error("Failed to create file:", err);
+        if (isDir) {
+          await fsService.createDir(fullPath);
+          await refreshDir(parentDir);
+          setExpandedFolders((prev) => new Set(prev).add(parentDir));
+        } else {
+          await fsService.createFile(fullPath);
+          await refreshDir(parentDir);
+          await openFileByPath(fullPath, name);
+        }
+      } catch (e) {
+        notify.error(isDir ? "Folder Creation Failed" : "File Creation Failed", formatError(e));
       }
     },
-    [workspacePath, refreshExplorer, openFileByPath]
+    [refreshDir, openFileByPath]
   );
 
-  // Create new folder in workspace
-  const createNewFolder = useCallback(
-    async (folderName: string) => {
-      const separator = workspacePath.includes("\\") ? "\\" : "/";
-      const fullPath = `${workspacePath}${separator}${folderName}`;
+  // Rename entry (file or folder) at any depth with tab synchronization
+  const renameEntry = useCallback(
+    async (oldPath: string, newName: string) => {
+      const err = validateName(newName);
+      if (err) {
+        notify.error("Invalid Name", err);
+        return;
+      }
+
+      const parentDir = dirname(oldPath);
+      const newPath = join(parentDir, newName);
       try {
-        await fsService.createDir(fullPath);
-        await refreshExplorer();
-      } catch (err) {
-        console.error("Failed to create folder:", err);
+        await fsService.renameFile(oldPath, newPath);
+
+        // Invalidate directory cache
+        await refreshDir(parentDir);
+        setDirCache((prev) => {
+          const next = new Map(prev);
+          for (const k of next.keys()) {
+            if (isInside(k, oldPath)) next.delete(k);
+          }
+          return next;
+        });
+
+        // Rebase open tabs preserving unsaved dirty edits
+        setOpenFiles((prev) =>
+          prev.map((tab) => {
+            if (tab.path === oldPath || isInside(tab.path, oldPath)) {
+              const liveText = editorService.getText(tab.path) ?? tab.content;
+              editorService.disposeModel(tab.path);
+              const rebasedPath = rebase(tab.path, oldPath, newPath);
+              const rebasedName = basename(rebasedPath);
+              const language = detectLanguage(rebasedName);
+              return {
+                ...tab,
+                path: rebasedPath,
+                name: rebasedName,
+                content: liveText,
+                language,
+              };
+            }
+            return tab;
+          })
+        );
+
+        // Rebase active file paths
+        if (activeFilePathRef.current && (activeFilePathRef.current === oldPath || isInside(activeFilePathRef.current, oldPath))) {
+          setActiveFilePath(rebase(activeFilePathRef.current, oldPath, newPath));
+        }
+        if (splitActiveFilePath && (splitActiveFilePath === oldPath || isInside(splitActiveFilePath, oldPath))) {
+          setSplitActiveFilePath(rebase(splitActiveFilePath, oldPath, newPath));
+        }
+      } catch (e) {
+        notify.error("Rename Failed", formatError(e));
       }
     },
-    [workspacePath, refreshExplorer]
+    [refreshDir, splitActiveFilePath]
   );
 
-  // Delete file or folder
-  const deletePath = useCallback(
+  // Delete entry (file or folder) at any depth with descendant tab closing
+  const deleteEntry = useCallback(
     async (path: string) => {
       try {
         await fsService.deleteFile(path);
-        closeFile(path);
-        await refreshExplorer();
-      } catch (err) {
-        console.error("Failed to delete path:", err);
+        const parentDir = dirname(path);
+        await refreshDir(parentDir);
+
+        // Invalidate directory cache
+        setDirCache((prev) => {
+          const next = new Map(prev);
+          for (const k of next.keys()) {
+            if (isInside(k, path)) next.delete(k);
+          }
+          return next;
+        });
+
+        // Close all tabs for this file or any file inside this deleted folder
+        for (const tab of openFilesRef.current) {
+          if (tab.path === path || isInside(tab.path, path)) {
+            editorService.disposeModel(tab.path);
+          }
+        }
+
+        setOpenFiles((prev) => {
+          const remaining = prev.filter((f) => f.path !== path && !isInside(f.path, path));
+          if (activeFilePathRef.current && (activeFilePathRef.current === path || isInside(activeFilePathRef.current, path))) {
+            setActiveFilePath(remaining[0]?.path || null);
+          }
+          if (splitActiveFilePath && (splitActiveFilePath === path || isInside(splitActiveFilePath, path))) {
+            setSplitActiveFilePath(remaining[0]?.path || null);
+          }
+          return remaining;
+        });
+      } catch (e) {
+        notify.error("Delete Failed", formatError(e));
       }
     },
-    [closeFile, refreshExplorer]
+    [refreshDir, splitActiveFilePath]
   );
 
-  // Rename file or folder
+  // Backward compatible creation wrappers for root
+  const createNewFile = useCallback(
+    async (fileName: string) => {
+      if (!workspacePath) return;
+      await createEntry(workspacePath, fileName, false);
+    },
+    [workspacePath, createEntry]
+  );
+
+  const createNewFolder = useCallback(
+    async (folderName: string) => {
+      if (!workspacePath) return;
+      await createEntry(workspacePath, folderName, true);
+    },
+    [workspacePath, createEntry]
+  );
+
+  const deletePath = useCallback(
+    async (path: string) => {
+      await deleteEntry(path);
+    },
+    [deleteEntry]
+  );
+
   const renamePath = useCallback(
     async (oldPath: string, newPath: string) => {
-      try {
-        await fsService.renameFile(oldPath, newPath);
-        closeFile(oldPath);
-        await refreshExplorer();
-        await openFileByPath(newPath);
-      } catch (err) {
-        console.error("Failed to rename path:", err);
-      }
+      const newName = basename(newPath);
+      await renameEntry(oldPath, newName);
     },
-    [closeFile, refreshExplorer, openFileByPath]
+    [renameEntry]
   );
 
-  // Ensure PTY session exists or spawn one
+  // Ensure single-flight PTY session (F3 race resolution)
   const ensurePtySession = useCallback(async (preferredId?: string): Promise<string> => {
     if (ptySessionId) return ptySessionId;
-    try {
-      const id = preferredId || "pty-" + Math.random().toString(36).substring(2, 10);
-      const spawnedId = await ptyService.spawnPty({ sessionId: id, cwd: workspacePath });
-      const finalId = spawnedId || id;
-      setPtySessionId(finalId);
-      return finalId;
-    } catch (err) {
-      console.error("Failed to spawn PTY:", err);
-      return "";
-    }
+    if (pendingPtyPromiseRef.current) return pendingPtyPromiseRef.current;
+
+    pendingPtyPromiseRef.current = (async () => {
+      try {
+        const id = preferredId || "pty-" + Math.random().toString(36).substring(2, 10);
+        const spawnedId = await ptyService.spawnPty({ sessionId: id, cwd: workspacePath || undefined });
+        const finalId = spawnedId || id;
+        setPtySessionId(finalId);
+        return finalId;
+      } catch (err) {
+        console.error("Failed to spawn PTY:", err);
+        return "";
+      } finally {
+        pendingPtyPromiseRef.current = null;
+      }
+    })();
+
+    return pendingPtyPromiseRef.current;
   }, [ptySessionId, workspacePath]);
 
-  // Run/Debug active file
+  // Unified Run Engine: Authoritative Rust Runner Pipeline with PTY & Diagnostics
   const runActiveFile = useCallback(async () => {
-    const active = openFiles.find((f) => f.path === activeFilePath);
+    const active = openFilesRef.current.find((f) => f.path === activeFilePathRef.current);
     if (!active) return;
 
-    // 1. Auto-save if dirty
-    if (active.isDirty) {
-      await saveFile(active.path);
+    // 1. Auto-save active file using latest model text
+    await saveFile(active.path);
+
+    // 2. HTML files automatically switch to Live Preview
+    if (active.language === "html") {
+      setPanelVisible(true);
+      setActivePanelTab("preview");
+      return;
     }
 
-    // 2. Open terminal panel
+    // 3. Clear previous compiler markers on active file
+    editorService.clearMarkers(active.path);
+
+    // 4. Open terminal panel
     setPanelVisible(true);
     setActivePanelTab("terminal");
 
-    // 3. Connect/spawn PTY
-    const sessionId = await ensurePtySession();
-    if (!sessionId) return;
+    // 5. Generate run ID
+    const runId = "run-" + Math.random().toString(36).substring(2, 10);
+    let compileStderr = "";
 
-    // 4. Generate command based on language
-    const path = active.path;
-    const isWin = path.includes("\\");
-    const fileName = active.name;
-    const baseName = fileName.replace(/\.[^/.]+$/, "");
-    const dir = path.substring(0, Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\")));
+    // Stream listeners: capture stderr for Monaco squiggles and handle global notifications
+    const unOutput = await processService.onRunOutput(runId, (chunk) => {
+      if (chunk.stream === "stderr") {
+        compileStderr += chunk.chunk;
+      }
+    });
 
-    let cmd = "";
-    switch (active.language) {
-      case "java": {
-        if (isWin) {
-          cmd = `cd "${dir}"; $sw = [System.Diagnostics.Stopwatch]::StartNew(); javac "${fileName}"; $ms = $sw.ElapsedMilliseconds; if ($?) { Write-Host "[Compiled in $($ms)ms]" -ForegroundColor Cyan; java "${baseName}" }\r`;
-        } else {
-          cmd = `cd "${dir}" && t0=$(date +%s%3N) && javac "${fileName}" && t1=$(date +%s%3N) && echo -e "\\x1b[36m[Compiled in $((t1 - t0))ms]\\x1b[0m" && java "${baseName}"\n`;
+    const unStatus = await processService.onRunStatus(runId, (status) => {
+      if (status.phase === "compileFailed") {
+        // Parse compiler errors and attach red squiggles in Monaco
+        const diagnostics = parseCompilerDiagnostics(active.language, compileStderr, active.path);
+        if (diagnostics.length > 0) {
+          editorService.setMarkers(active.path, diagnostics);
         }
-        break;
+        unOutput();
+        unStatus();
+      } else if (status.phase === "finished") {
+        unOutput();
+        unStatus();
+      } else if (status.phase === "failed") {
+        notify.error("Run Error", status.message);
+        unOutput();
+        unStatus();
       }
-      case "python": {
-        if (isWin) {
-          cmd = `cd "${dir}"; python -u "${fileName}"\r`;
-        } else {
-          cmd = `cd "${dir}" && python3 -u "${fileName}"\n`;
-        }
-        break;
-      }
-      case "c": {
-        if (isWin) {
-          cmd = `cd "${dir}"; $sw = [System.Diagnostics.Stopwatch]::StartNew(); gcc -Wall -g "${fileName}" -o "${baseName}.exe"; $ms = $sw.ElapsedMilliseconds; if ($?) { Write-Host "[Compiled in $($ms)ms]" -ForegroundColor Cyan; .\\"${baseName}.exe" }\r`;
-        } else {
-          cmd = `cd "${dir}" && t0=$(date +%s%3N) && gcc -Wall -g "${fileName}" -o "${baseName}" && t1=$(date +%s%3N) && echo -e "\\x1b[36m[Compiled in $((t1 - t0))ms]\\x1b[0m" && ./"${baseName}"\n`;
-        }
-        break;
-      }
-      case "cpp": {
-        if (isWin) {
-          cmd = `cd "${dir}"; $sw = [System.Diagnostics.Stopwatch]::StartNew(); g++ -Wall -g -std=c++17 "${fileName}" -o "${baseName}.exe"; $ms = $sw.ElapsedMilliseconds; if ($?) { Write-Host "[Compiled in $($ms)ms]" -ForegroundColor Cyan; .\\"${baseName}.exe" }\r`;
-        } else {
-          cmd = `cd "${dir}" && t0=$(date +%s%3N) && g++ -Wall -g -std=c++17 "${fileName}" -o "${baseName}" && t1=$(date +%s%3N) && echo -e "\\x1b[36m[Compiled in $((t1 - t0))ms]\\x1b[0m" && ./"${baseName}"\n`;
-        }
-        break;
-      }
-      case "rust": {
-        if (isWin) {
-          cmd = `cd "${dir}"; $sw = [System.Diagnostics.Stopwatch]::StartNew(); rustc "${fileName}" -o "${baseName}.exe"; $ms = $sw.ElapsedMilliseconds; if ($?) { Write-Host "[Compiled in $($ms)ms]" -ForegroundColor Cyan; .\\"${baseName}.exe" }\r`;
-        } else {
-          cmd = `cd "${dir}" && t0=$(date +%s%3N) && rustc "${fileName}" -o "${baseName}" && t1=$(date +%s%3N) && echo -e "\\x1b[36m[Compiled in $((t1 - t0))ms]\\x1b[0m" && ./"${baseName}"\n`;
-        }
-        break;
-      }
-      case "salivo": {
-        if (isWin) {
-          cmd = `cd "${dir}"; $sw = [System.Diagnostics.Stopwatch]::StartNew(); sf build "${fileName}"; $ms = $sw.ElapsedMilliseconds; if ($?) { Write-Host "[Compiled in $($ms)ms]" -ForegroundColor Cyan; if (Test-Path ".\\build\\${baseName}.exe") { .\\build\\"${baseName}.exe" } else { .\\"${baseName}.exe" } }\r`;
-        } else {
-          cmd = `cd "${dir}" && t0=$(date +%s%3N) && sf build "${fileName}" && t1=$(date +%s%3N) && echo -e "\\x1b[36m[Compiled in $((t1 - t0))ms]\\x1b[0m" && if [ -f "./build/${baseName}" ]; then "./build/${baseName}"; else ./"${baseName}"; fi\n`;
-        }
-        break;
-      }
-      case "zig": {
-        if (isWin) {
-          cmd = `cd "${dir}"; $sw = [System.Diagnostics.Stopwatch]::StartNew(); zig run "${fileName}"; $sw.Stop(); Write-Host "\`n[Compile & run time: $($sw.ElapsedMilliseconds)ms]" -ForegroundColor Cyan\r`;
-        } else {
-          cmd = `cd "${dir}" && t0=$(date +%s%3N) && zig run "${fileName}" && t1=$(date +%s%3N) && echo -e "\\n\\x1b[36m[Compile & run time: $((t1 - t0))ms]\\x1b[0m"\n`;
-        }
-        break;
-      }
-      case "javascript": {
-        if (isWin) {
-          cmd = `cd "${dir}"; $sw = [System.Diagnostics.Stopwatch]::StartNew(); node "${fileName}"; $sw.Stop(); Write-Host "\`n[Executed in $($sw.ElapsedMilliseconds)ms]" -ForegroundColor Cyan\r`;
-        } else {
-          cmd = `cd "${dir}" && node "${fileName}"\n`;
-        }
-        break;
-      }
-      case "typescript": {
-        if (isWin) {
-          cmd = `cd "${dir}"; $sw = [System.Diagnostics.Stopwatch]::StartNew(); npx ts-node "${fileName}"; $sw.Stop(); Write-Host "\`n[Executed in $($sw.ElapsedMilliseconds)ms]" -ForegroundColor Cyan\r`;
-        } else {
-          cmd = `cd "${dir}" && npx ts-node "${fileName}"\n`;
-        }
-        break;
-      }
-      case "go": {
-        if (isWin) {
-          cmd = `cd "${dir}"; $sw = [System.Diagnostics.Stopwatch]::StartNew(); go run "${fileName}"; $sw.Stop(); Write-Host "\`n[Compile & run time: $($sw.ElapsedMilliseconds)ms]" -ForegroundColor Cyan\r`;
-        } else {
-          cmd = `cd "${dir}" && go run "${fileName}"\n`;
-        }
-        break;
-      }
-      case "ruby": {
-        if (isWin) {
-          cmd = `cd "${dir}"; ruby "${fileName}"\r`;
-        } else {
-          cmd = `cd "${dir}" && ruby "${fileName}"\n`;
-        }
-        break;
-      }
-      case "php": {
-        if (isWin) {
-          cmd = `cd "${dir}"; php "${fileName}"\r`;
-        } else {
-          cmd = `cd "${dir}" && php "${fileName}"\n`;
-        }
-        break;
-      }
-      case "lua": {
-        if (isWin) {
-          cmd = `cd "${dir}"; lua "${fileName}"\r`;
-        } else {
-          cmd = `cd "${dir}" && lua "${fileName}"\n`;
-        }
-        break;
-      }
-      case "csharp": {
-        if (isWin) {
-          cmd = `cd "${dir}"; dotnet run\r`;
-        } else {
-          cmd = `cd "${dir}" && dotnet run\n`;
-        }
-        break;
-      }
-      case "shell": {
-        if (isWin) {
-          cmd = `cd "${dir}"; bash "${fileName}"\r`;
-        } else {
-          cmd = `cd "${dir}" && bash "${fileName}"\n`;
-        }
-        break;
-      }
-      case "powershell": {
-        cmd = `cd "${dir}"; & ".\\${fileName}"\r`;
-        break;
-      }
-      case "bat": {
-        cmd = `cd "${dir}"; .\\"${fileName}"\r`;
-        break;
-      }
-      case "html": {
-        // Switch to preview panel
-        setActivePanelTab("preview");
-        return;
-      }
-      default: {
-        cmd = `echo "No runner configured for ${active.language}"\r`;
-      }
+    });
+
+    // 6. Notify TerminalPanel to bind to this run in the dedicated Run tab
+    window.dispatchEvent(
+      new CustomEvent("codeui-run-start", {
+        detail: {
+          runId,
+          name: active.name,
+          language: active.language,
+          path: active.path,
+        },
+      })
+    );
+
+    // 7. Invoke Rust supervised runner (executes in its own dedicated PTY, completely separate from shell)
+    try {
+      await processService.runFile(active.path, runId, settings.runTimeoutSecs);
+    } catch (err: any) {
+      notify.error("Run Error", formatError(err));
+      unOutput();
+      unStatus();
     }
-
-    // 5. Send command to terminal and automatically focus it
-    await ptyService.writePty(sessionId, cmd);
-    setTimeout(() => {
-      window.dispatchEvent(new CustomEvent("focus-terminal"));
-    }, 100);
-  }, [activeFilePath, openFiles, saveFile, ensurePtySession]);
+  }, [saveFile, settings.runTimeoutSecs]);
 
   return {
     workspacePath,
@@ -582,6 +677,9 @@ export function useWorkspace() {
     activeFilePath,
     splitActiveFilePath,
     isSplit,
+    dirCache,
+    expandedFolders,
+    loadingFolders,
     sidebarTab,
     sidebarVisible,
     sidebarWidth,
@@ -618,6 +716,11 @@ export function useWorkspace() {
     updateFileContent,
     saveFile,
     saveActiveFile,
+    createEntry,
+    renameEntry,
+    deleteEntry,
+    toggleFolder,
+    refreshDir,
     createNewFile,
     createNewFolder,
     deletePath,

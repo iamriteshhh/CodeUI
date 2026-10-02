@@ -3,6 +3,7 @@ import { loader } from "@monaco-editor/react";
 import * as monaco from "monaco-editor";
 import { registerAllEagerLanguages } from "./languages/registerAllLanguages";
 import { App } from "./App";
+import { ensureMonacoFontsReady } from "./utils/fontCheck";
 import "./index.css";
 
 // Import Monaco workers directly using Vite ?worker syntax.
@@ -19,6 +20,58 @@ try {
   registerAllEagerLanguages(monaco);
 } catch (e) {
   console.error("Failed to register eager languages:", e);
+}
+
+// Strict lab-safe lockdown: disable all built-in completion, hover, and suggestion engines (F14)
+try {
+  const noAssistance = {
+    completionItems: false,
+    hovers: false,
+    documentHighlights: false,
+    definitions: false,
+    referenceProviders: false,
+    documentSymbols: false,
+    signatureHelp: false,
+    rename: false,
+    colors: false,
+    folding: false,
+    selectionRanges: false,
+    documentFormattingEdits: false,
+    documentRangeFormattingEdits: false,
+    onTypeFormattingEdits: false,
+    codeActions: false,
+    inlayHints: false,
+    diagnostics: false,
+  };
+  (monaco.languages as any).typescript?.typescriptDefaults?.setModeConfiguration(noAssistance);
+  (monaco.languages as any).typescript?.javascriptDefaults?.setModeConfiguration(noAssistance);
+  (monaco.languages as any).css?.cssDefaults?.setModeConfiguration({
+    completionItems: false,
+    hovers: false,
+    documentHighlights: false,
+    documentSymbols: false,
+    colors: false,
+    folding: false,
+    diagnostics: false,
+  });
+  (monaco.languages as any).html?.htmlDefaults?.setModeConfiguration({
+    completionItems: false,
+    hovers: false,
+    documentHighlights: false,
+    documentSymbols: false,
+    colors: false,
+    folding: false,
+  });
+  (monaco.languages as any).json?.jsonDefaults?.setModeConfiguration({
+    completionItems: false,
+    hovers: false,
+    documentSymbols: false,
+    colors: false,
+    folding: false,
+    diagnostics: false,
+  });
+} catch (err) {
+  console.warn("Failed to apply lab-safe mode configuration:", err);
 }
 
 // Define vibrant high-contrast dark theme with guaranteed token colors
@@ -51,6 +104,10 @@ monaco.editor.defineTheme("codeui-dark", {
   colors: {
     "editor.background": "#1e1e1e",
     "editor.foreground": "#d4d4d4",
+    "editorCursor.foreground": "#ffffff",
+    "editorCursor.background": "#1e1e1e",
+    "editor.selectionBackground": "#264f78",
+    "editor.inactiveSelectionBackground": "#3a3d41",
     "editorLineNumber.foreground": "#858585",
     "editorLineNumber.activeForeground": "#ffffff",
     "editor.lineHighlightBackground": "#282828",
@@ -90,13 +147,42 @@ window.addEventListener("gesturestart", (e) => e.preventDefault());
 window.addEventListener("gesturechange", (e) => e.preventDefault());
 window.addEventListener("gestureend", (e) => e.preventDefault());
 
-// Ensure Monaco line and character measurements match after web fonts load
-if (document.fonts && document.fonts.ready) {
-  document.fonts.ready.then(() => {
-    monaco.editor.remeasureFonts();
+// In production builds, disable right-click inspect and DevTools shortcuts (R5)
+if (import.meta.env.PROD) {
+  window.addEventListener("contextmenu", (e) => {
+    const target = e.target as HTMLElement | null;
+    if (!target?.closest("input, textarea, [contenteditable='true']")) {
+      e.preventDefault();
+    }
+  });
+
+  window.addEventListener("keydown", (e) => {
+    if (
+      e.key === "F12" ||
+      ((e.ctrlKey || e.metaKey) && e.shiftKey && ["I", "i", "J", "j", "C", "c"].includes(e.key)) ||
+      ((e.ctrlKey || e.metaKey) && ["U", "u"].includes(e.key))
+    ) {
+      e.preventDefault();
+    }
   });
 }
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <App />
-);
+// Ensure Monaco line and character measurements match after font readiness
+async function initApp() {
+  await ensureMonacoFontsReady(monaco);
+
+  // Remeasure fonts if devicePixelRatio / monitor DPI changes
+  if (window.matchMedia) {
+    try {
+      window.matchMedia("(resolution: 1dppx)").addEventListener("change", () => {
+        monaco.editor.remeasureFonts();
+      });
+    } catch {}
+  }
+
+  ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+    <App />
+  );
+}
+
+initApp();

@@ -5,7 +5,6 @@ import { OpenFile } from "../../types";
 import { ChevronRight } from "lucide-react";
 import { FileIcon } from "../icons/FileIcon";
 import { editorService, getNormalizedUri } from "../../services/editorService";
-import { registerAllEagerLanguages } from "../../languages/registerAllLanguages";
 
 interface MonacoEditorGroupProps {
   file: OpenFile | undefined;
@@ -24,16 +23,32 @@ const MonacoEditorGroupComponent: React.FC<MonacoEditorGroupProps> = ({
 }) => {
   const editorRef = React.useRef<any>(null);
   const monacoRef = React.useRef<any>(null);
+  const markersDisposableRef = React.useRef<any>(null);
 
-  // Cleanly synchronize layout and language on file switch without conflicting setModel calls
+  // Live refs to prevent stale closure bugs (F6)
+  const fileRef = React.useRef<OpenFile | undefined>(file);
+  fileRef.current = file;
+
+  const onSaveRef = React.useRef(onSave);
+  onSaveRef.current = onSave;
+
+  const onChangeContentRef = React.useRef(onChangeContent);
+  onChangeContentRef.current = onChangeContent;
+
+  const onCursorChangeRef = React.useRef(onCursorChange);
+  onCursorChangeRef.current = onCursorChange;
+
+  const onMarkersChangeRef = React.useRef(onMarkersChange);
+  onMarkersChangeRef.current = onMarkersChange;
+
+  // Auto-focus editor whenever switching files (F7)
   React.useEffect(() => {
-    if (!editorRef.current) return;
-    const raf = requestAnimationFrame(() => {
-      editorRef.current?.layout();
-    });
-    return () => cancelAnimationFrame(raf);
+    if (editorRef.current && file?.path) {
+      editorRef.current.focus();
+    }
   }, [file?.path]);
 
+  // Synchronize language if file type or language changes
   React.useEffect(() => {
     if (!editorRef.current || !monacoRef.current || !file?.language) return;
     const model = editorRef.current.getModel();
@@ -41,6 +56,16 @@ const MonacoEditorGroupComponent: React.FC<MonacoEditorGroupProps> = ({
       monacoRef.current.editor.setModelLanguage(model, file.language);
     }
   }, [file?.language]);
+
+  // Clean up global listeners on unmount
+  React.useEffect(() => {
+    return () => {
+      if (markersDisposableRef.current) {
+        markersDisposableRef.current.dispose();
+        markersDisposableRef.current = null;
+      }
+    };
+  }, []);
 
   if (!file) {
     return (
@@ -86,34 +111,39 @@ const MonacoEditorGroupComponent: React.FC<MonacoEditorGroupProps> = ({
           height="100%"
           path={getNormalizedUri(file.path)}
           language={file.language}
-          value={file.content}
+          defaultValue={file.content}
           theme="codeui-dark"
           keepCurrentModel={true}
-          saveViewState={false}
+          saveViewState={true}
           loading={<div style={{ height: "100%", width: "100%", background: "#1e1e1e" }} />}
           options={MONACO_LAB_SAFE_OPTIONS}
-          beforeMount={(monaco) => {
-            registerAllEagerLanguages(monaco);
-          }}
           onChange={(value) => {
-            if (value !== undefined) {
-              onChangeContent(file.path, value);
+            if (value !== undefined && fileRef.current?.path) {
+              onChangeContentRef.current(fileRef.current.path, value);
             }
           }}
           onMount={(editor, monaco) => {
             editorRef.current = editor;
             monacoRef.current = monaco;
-            registerAllEagerLanguages(monaco);
             monaco.editor.setTheme("codeui-dark");
             editorService.setActiveEditor(editor);
             editorService.setMonaco(monaco);
 
-            const model = editor.getModel();
-            if (model && file.language) {
-              monaco.editor.setModelLanguage(model, file.language);
+            // R3: Guarantee character metrics match font before rendering
+            monaco.editor.remeasureFonts();
+            if (typeof document !== "undefined" && document.fonts?.ready) {
+              document.fonts.ready.then(() => {
+                monaco.editor.remeasureFonts();
+                editor.layout();
+              });
             }
 
-            editor.layout();
+            const model = editor.getModel();
+            if (model && fileRef.current?.language) {
+              monaco.editor.setModelLanguage(model, fileRef.current.language);
+            }
+
+            editor.focus();
 
             editor.onDidFocusEditorText(() => {
               editorService.setActiveEditor(editor);
@@ -122,30 +152,37 @@ const MonacoEditorGroupComponent: React.FC<MonacoEditorGroupProps> = ({
             // Track live cursor position
             editor.onDidChangeCursorPosition((e: any) => {
               editorService.notifyCursorChange(e.position.lineNumber, e.position.column);
-              onCursorChange?.(e.position.lineNumber, e.position.column);
+              onCursorChangeRef.current?.(e.position.lineNumber, e.position.column);
             });
 
             // Track live diagnostics / syntax errors & warnings
             const updateMarkers = () => {
-              const model = editor.getModel();
-              if (model) {
-                const markers = monaco.editor.getModelMarkers({ resource: model.uri });
-                const errors = markers.filter((m: any) => m.severity === monaco.MarkerSeverity.Error).length;
-                const warnings = markers.filter((m: any) => m.severity === monaco.MarkerSeverity.Warning).length;
-                onMarkersChange?.(errors, warnings);
+              const currentModel = editor.getModel();
+              if (currentModel && monacoRef.current) {
+                const markers = monacoRef.current.editor.getModelMarkers({ resource: currentModel.uri });
+                const errors = markers.filter((m: any) => m.severity === monacoRef.current.MarkerSeverity.Error).length;
+                const warnings = markers.filter((m: any) => m.severity === monacoRef.current.MarkerSeverity.Warning).length;
+                onMarkersChangeRef.current?.(errors, warnings);
               }
             };
 
-            monaco.editor.onDidChangeMarkers(() => {
+            if (markersDisposableRef.current) {
+              markersDisposableRef.current.dispose();
+            }
+            markersDisposableRef.current = monaco.editor.onDidChangeMarkers(() => {
               updateMarkers();
             });
             updateMarkers();
 
-            // Add Ctrl+S keybinding directly in Monaco
+            // Ctrl+S keybinding: resolve active model dynamically (F6 fix)
             editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-              const currentVal = editor.getValue();
-              onChangeContent(file.path, currentVal);
-              onSave(file.path);
+              const activeModel = editor.getModel();
+              const currentPath = fileRef.current?.path;
+              if (activeModel && currentPath) {
+                const currentVal = activeModel.getValue();
+                onChangeContentRef.current(currentPath, currentVal);
+                onSaveRef.current(currentPath);
+              }
             });
           }}
         />

@@ -1,5 +1,6 @@
 # Rust
 /target/
+target/
 **/*.rs.bk
 
 # Frontend
@@ -9,6 +10,10 @@ dist/
 
 # Tauri build output
 src-tauri/target/
+
+# Scratch & temporary execution artifacts
+.codeui-scratch/
+*.codeui-tmp
 
 # Editors & OS
 .DS_Store

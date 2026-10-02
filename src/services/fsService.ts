@@ -12,12 +12,7 @@ async function getInvoke() {
 }
 
 // In-memory fallback workspace for testing outside Tauri webview
-const mockFs = new Map<string, string>([
-  ["D:\\JAVA\\p1.java", `public class p1 {\n    public static void main(String[] args) {\n        System.out.println("Hello CodeUI!");\n    }\n}`],
-  ["D:\\JAVA\\p2.java", `import java.util.Scanner;\n\nclass CheckDivisibility {\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        System.out.print("Enter the number: ");\n        int n = sc.nextInt();\n        if (n % 5 == 0 && n % 11 == 0) {\n            System.out.println("The number is divisible by both 5 and 11");\n        } else {\n            System.out.println("The number is not divisible by both 5 and 11");\n        }\n        sc.close();\n    }\n}`],
-  ["D:\\JAVA\\index.html", `<!DOCTYPE html>\n<html>\n<head>\n  <title>Preview Demo</title>\n  <style>\n    body { font-family: sans-serif; background: #1e1e1e; color: #fff; padding: 20px; }\n    h1 { color: #61dafb; }\n    .box { border: 1px solid #444; border-radius: 8px; padding: 15px; margin-top: 15px; }\n  </style>\n</head>\n<body>\n  <h1>Live Web Preview</h1>\n  <p>Edit this HTML file to see changes live in CodeUI!</p>\n  <div class="box">\n    <p>Lab-friendly static preview is active.</p>\n  </div>\n</body>\n</html>`],
-  ["D:\\JAVA\\test.py", `print("Hello from Python 3!")\nname = input("Enter your name: ")\nprint(f"Welcome, {name}!")`]
-]);
+const mockFs = new Map<string, string>();
 
 export const fsService = {
   async readFile(path: string): Promise<string> {
@@ -45,14 +40,42 @@ export const fsService = {
     if (invoke) {
       return await invoke<FileEntry[]>("list_dir", { path });
     }
-    // Return mock entries if in standalone web
-    const entries: FileEntry[] = [
-      { name: "p1.java", path: `${path}\\p1.java`, is_dir: false, size: 104, modified: Date.now() / 1000 },
-      { name: "p2.java", path: `${path}\\p2.java`, is_dir: false, size: 412, modified: Date.now() / 1000 },
-      { name: "index.html", path: `${path}\\index.html`, is_dir: false, size: 380, modified: Date.now() / 1000 },
-      { name: "test.py", path: `${path}\\test.py`, is_dir: false, size: 95, modified: Date.now() / 1000 }
-    ];
+    // Return in-memory mock entries if in standalone web
+    const entries: FileEntry[] = [];
+    const normalizedPrefix = path.endsWith("/") || path.endsWith("\\") ? path : path + "/";
+    for (const [filePath, content] of mockFs.entries()) {
+      if (filePath.startsWith(normalizedPrefix) || filePath.startsWith(path)) {
+        const rest = filePath.slice(normalizedPrefix.length);
+        if (rest && !rest.includes("/") && !rest.includes("\\")) {
+          entries.push({
+            name: rest,
+            path: filePath,
+            is_dir: false,
+            size: content.length,
+            modified: Date.now() / 1000,
+          });
+        }
+      }
+    }
     return entries;
+  },
+
+  async exists(path: string): Promise<boolean> {
+    const invoke = await getInvoke();
+    if (invoke) {
+      try {
+        await invoke<FileEntry[]>("list_dir", { path });
+        return true;
+      } catch {
+        try {
+          await invoke<string>("read_file", { path });
+          return true;
+        } catch {
+          return false;
+        }
+      }
+    }
+    return mockFs.has(path);
   },
 
   async createFile(path: string): Promise<void> {

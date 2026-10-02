@@ -13,6 +13,13 @@ interface SidebarProps {
   activeFilePath: string | null;
   activeFile?: OpenFile;
   tools: ToolStatus[];
+  dirCache?: Map<string, FileEntry[]>;
+  expandedFolders?: Set<string>;
+  loadingFolders?: Set<string>;
+  onToggleFolder?: (path: string) => void;
+  onCreateEntry?: (parentDir: string, name: string, isDir: boolean) => Promise<void> | void;
+  onRenameEntry?: (oldPath: string, newName: string) => Promise<void> | void;
+  onDeleteEntry?: (path: string) => Promise<void> | void;
   onOpenFile: (path: string, name?: string) => void;
   onOpenToSide?: (path: string) => void;
   onCreateFile: (name: string) => void;
@@ -43,6 +50,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   activeFilePath,
   activeFile,
   tools,
+  dirCache,
+  expandedFolders,
+  loadingFolders,
+  onToggleFolder,
+  onCreateEntry,
+  onRenameEntry,
+  onDeleteEntry,
   onOpenFile,
   onOpenToSide,
   onCreateFile,
@@ -90,6 +104,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             entries={fileTree}
             activeFilePath={activeFilePath}
             activeFile={activeFile}
+            dirCache={dirCache}
+            expandedFolders={expandedFolders}
+            loadingFolders={loadingFolders}
+            onToggleFolder={onToggleFolder}
+            onCreateEntry={onCreateEntry}
+            onRenameEntry={onRenameEntry}
+            onDeleteEntry={onDeleteEntry}
             onOpenFile={onOpenFile}
             onOpenToSide={onOpenToSide}
             onCreateFile={onCreateFile}

@@ -67,9 +67,10 @@ export const ptyService = {
 
     // Interactive mock terminal session for browser testing
     const mockId = options?.sessionId || "pty-" + Math.random().toString(36).substring(2, 9);
+    const fallbackCwd = options?.cwd || "~";
     const session: MockSession = {
       id: mockId,
-      cwd: options?.cwd || "D:\\JAVA",
+      cwd: fallbackCwd,
       lineBuffer: "",
       history: [],
       historyIndex: -1,
@@ -79,7 +80,7 @@ export const ptyService = {
     setTimeout(() => {
       this.triggerMockData(
         mockId,
-        `\x1b[36mWindows PowerShell\x1b[0m\r\nCopyright (C) Microsoft Corporation. All rights reserved.\r\n\r\nPS ${session.cwd}> `
+        `\x1b[36mTerminal Shell\x1b[0m\r\n\r\n${session.cwd ? session.cwd + "> " : "> "}`
       );
     }, 50);
 
@@ -95,7 +96,7 @@ export const ptyService = {
     if (!session) {
       session = {
         id: sessionId,
-        cwd: "D:\\JAVA",
+        cwd: "~",
         lineBuffer: "",
         history: [],
         historyIndex: -1,

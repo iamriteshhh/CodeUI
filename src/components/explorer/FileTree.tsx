@@ -26,6 +26,13 @@ interface FileTreeProps {
   entries: FileEntry[];
   activeFilePath: string | null;
   activeFile?: OpenFile;
+  dirCache?: Map<string, FileEntry[]>;
+  expandedFolders?: Set<string>;
+  loadingFolders?: Set<string>;
+  onToggleFolder?: (path: string) => void;
+  onCreateEntry?: (parentDir: string, name: string, isDir: boolean) => Promise<void> | void;
+  onRenameEntry?: (oldPath: string, newName: string) => Promise<void> | void;
+  onDeleteEntry?: (path: string) => Promise<void> | void;
   onOpenFile: (path: string, name?: string) => void;
   onOpenToSide?: (path: string) => void;
   onCreateFile: (name: string) => void;
@@ -101,6 +108,13 @@ export const FileTree: React.FC<FileTreeProps> = ({
   entries,
   activeFilePath,
   activeFile,
+  dirCache,
+  expandedFolders,
+  loadingFolders,
+  onToggleFolder,
+  onCreateEntry,
+  onRenameEntry,
+  onDeleteEntry,
   onOpenFile,
   onOpenToSide,
   onCreateFile,
@@ -113,9 +127,15 @@ export const FileTree: React.FC<FileTreeProps> = ({
 }) => {
   const [isFolderExpanded, setIsFolderExpanded] = useState(true);
   const [outlineExpanded, setOutlineExpanded] = useState(false);
-  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
-  const [folderContents, setFolderContents] = useState<Map<string, FileEntry[]>>(new Map());
-  const [loadingFolders, setLoadingFolders] = useState<Set<string>>(new Set());
+  const [localExpandedFolders, setLocalExpandedFolders] = useState<Set<string>>(new Set());
+  const [localFolderContents, setLocalFolderContents] = useState<Map<string, FileEntry[]>>(new Map());
+  const [localLoadingFolders, setLocalLoadingFolders] = useState<Set<string>>(new Set());
+
+  const currentExpandedFolders = expandedFolders ?? localExpandedFolders;
+  const currentFolderContents = dirCache ?? localFolderContents;
+  const currentLoadingFolders = loadingFolders ?? localLoadingFolders;
+
+  const [deleteTarget, setDeleteTarget] = useState<{ path: string; name: string } | null>(null);
 
   // Creation state
   const [creatingUnder, setCreatingUnder] = useState<{ path: string; type: "file" | "folder" } | null>(null);
@@ -138,6 +158,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
         setContextMenu(null);
         setCreatingUnder(null);
         setRenamingPath(null);
+        setDeleteTarget(null);
       }
     };
     window.addEventListener("click", handleWindowClick);
@@ -151,7 +172,12 @@ export const FileTree: React.FC<FileTreeProps> = ({
   // Toggle expand / collapse of a subfolder
   const toggleFolder = useCallback(
     async (folderPath: string) => {
-      setExpandedFolders((prev) => {
+      if (onToggleFolder) {
+        onToggleFolder(folderPath);
+        return;
+      }
+
+      setLocalExpandedFolders((prev) => {
         const next = new Set(prev);
         if (next.has(folderPath)) {
           next.delete(folderPath);
@@ -161,15 +187,15 @@ export const FileTree: React.FC<FileTreeProps> = ({
         return next;
       });
 
-      if (!folderContents.has(folderPath)) {
-        setLoadingFolders((prev) => new Set(prev).add(folderPath));
+      if (!localFolderContents.has(folderPath)) {
+        setLocalLoadingFolders((prev) => new Set(prev).add(folderPath));
         try {
           const children = await fsService.listDir(folderPath);
-          setFolderContents((prev) => new Map(prev).set(folderPath, children));
+          setLocalFolderContents((prev) => new Map(prev).set(folderPath, children));
         } catch (err) {
           console.error("Failed to load folder children:", err);
         } finally {
-          setLoadingFolders((prev) => {
+          setLocalLoadingFolders((prev) => {
             const next = new Set(prev);
             next.delete(folderPath);
             return next;
@@ -177,14 +203,14 @@ export const FileTree: React.FC<FileTreeProps> = ({
         }
       }
     },
-    [folderContents]
+    [onToggleFolder, localFolderContents]
   );
 
   // Refresh a single subfolder's cached contents
   const refreshSubfolder = useCallback(async (folderPath: string) => {
     try {
       const children = await fsService.listDir(folderPath);
-      setFolderContents((prev) => new Map(prev).set(folderPath, children));
+      setLocalFolderContents((prev) => new Map(prev).set(folderPath, children));
     } catch (err) {
       console.error("Failed to refresh folder:", err);
     }
@@ -192,7 +218,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
 
   // Collapse all folders
   const handleCollapseAll = () => {
-    setExpandedFolders(new Set());
+    setLocalExpandedFolders(new Set());
   };
 
   // Submit create item (file or folder)
@@ -211,7 +237,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
     const fullPath = `${parentPath}${separator}${name}`;
 
     try {
-      if (type === "file") {
+      if (onCreateEntry) {
+        await onCreateEntry(parentPath, name, type === "folder");
+      } else if (type === "file") {
         if (parentPath === workspacePath) {
           onCreateFile(name);
         } else {
@@ -225,7 +253,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
         } else {
           await fsService.createDir(fullPath);
           await refreshSubfolder(parentPath);
-          setExpandedFolders((prev) => new Set(prev).add(parentPath));
+          setLocalExpandedFolders((prev) => new Set(prev).add(parentPath));
         }
       }
     } catch (err) {
@@ -247,7 +275,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
     const newPath = `${parentPath}${separator}${renameValue.trim()}`;
 
     try {
-      if (parentPath === workspacePath) {
+      if (onRenameEntry) {
+        await onRenameEntry(oldPath, renameValue.trim());
+      } else if (parentPath === workspacePath) {
         onRenamePath(oldPath, newPath);
       } else {
         await fsService.renameFile(oldPath, newPath);
@@ -260,19 +290,23 @@ export const FileTree: React.FC<FileTreeProps> = ({
     }
   };
 
-  // Delete item
-  const handleDeleteItem = async (path: string, name: string, parentPath: string) => {
-    if (confirm(`Permanently delete "${name}"? This action cannot be undone.`)) {
-      try {
-        if (parentPath === workspacePath) {
-          onDeletePath(path);
-        } else {
-          await fsService.deleteFile(path);
-          await refreshSubfolder(parentPath);
-        }
-      } catch (err) {
-        console.error("Delete error:", err);
+  // Delete item: opens in-app confirmation modal
+  const handleDeleteItem = (path: string, name: string) => {
+    setDeleteTarget({ path, name });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    const target = deleteTarget;
+    setDeleteTarget(null);
+    try {
+      if (onDeleteEntry) {
+        await onDeleteEntry(target.path);
+      } else {
+        onDeletePath(target.path);
       }
+    } catch (err) {
+      console.error("Delete error:", err);
     }
   };
 
@@ -280,9 +314,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
   const renderTreeNodes = (nodes: FileEntry[], parentPath: string, level: number = 0) => {
     return nodes.map((entry) => {
       const isDir = entry.is_dir;
-      const isExpanded = expandedFolders.has(entry.path);
-      const isLoading = loadingFolders.has(entry.path);
-      const children = folderContents.get(entry.path) || [];
+      const isExpanded = currentExpandedFolders.has(entry.path);
+      const isLoading = currentLoadingFolders.has(entry.path);
+      const children = currentFolderContents.get(entry.path) || [];
       const isActive = activeFilePath === entry.path;
       const isRenaming = renamingPath === entry.path;
       const isCreatingHere = creatingUnder?.path === entry.path;
@@ -723,7 +757,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
                   className="context-menu-item"
                   onClick={() => {
                     const p = contextMenu.entry!.path;
-                    setExpandedFolders((prev) => new Set(prev).add(p));
+                    if (!currentExpandedFolders.has(p)) {
+                      toggleFolder(p);
+                    }
                     setCreatingUnder({ path: p, type: "file" });
                     setNewItemName("");
                     setContextMenu(null);
@@ -738,7 +774,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
                   className="context-menu-item"
                   onClick={() => {
                     const p = contextMenu.entry!.path;
-                    setExpandedFolders((prev) => new Set(prev).add(p));
+                    if (!currentExpandedFolders.has(p)) {
+                      toggleFolder(p);
+                    }
                     setCreatingUnder({ path: p, type: "folder" });
                     setNewItemName("");
                     setContextMenu(null);
@@ -769,8 +807,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
                   onClick={() => {
                     handleDeleteItem(
                       contextMenu.entry!.path,
-                      contextMenu.entry!.name,
-                      contextMenu.parentPath || workspacePath
+                      contextMenu.entry!.name
                     );
                     setContextMenu(null);
                   }}
@@ -856,8 +893,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
                   onClick={() => {
                     handleDeleteItem(
                       contextMenu.entry!.path,
-                      contextMenu.entry!.name,
-                      contextMenu.parentPath || workspacePath
+                      contextMenu.entry!.name
                     );
                     setContextMenu(null);
                   }}
@@ -967,6 +1003,76 @@ export const FileTree: React.FC<FileTreeProps> = ({
               )}
             </>
           )}
+        </div>
+      )}
+
+      {/* In-app Delete Confirmation Modal (fixes F11 platform alert/confirm failure) */}
+      {deleteTarget && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.6)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+          }}
+          onClick={() => setDeleteTarget(null)}
+        >
+          <div
+            style={{
+              background: "#252526",
+              border: "1px solid #3c3c3c",
+              borderRadius: 6,
+              padding: 20,
+              maxWidth: 380,
+              width: "90%",
+              boxShadow: "0 8px 24px rgba(0, 0, 0, 0.5)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: "0 0 10px 0", fontSize: 15, color: "#f14c4c" }}>
+              Delete Confirmation
+            </h3>
+            <p style={{ margin: "0 0 16px 0", fontSize: 13, color: "#cccccc", lineHeight: 1.4 }}>
+              Are you sure you want to permanently delete <strong>{deleteTarget.name}</strong>? Any open tabs will be closed.
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button
+                style={{
+                  background: "#3c3c3c",
+                  border: "none",
+                  color: "#ffffff",
+                  padding: "6px 14px",
+                  borderRadius: 4,
+                  fontSize: 12,
+                  cursor: "pointer",
+                }}
+                onClick={() => setDeleteTarget(null)}
+              >
+                Cancel
+              </button>
+              <button
+                style={{
+                  background: "#d32f2f",
+                  border: "none",
+                  color: "#ffffff",
+                  padding: "6px 14px",
+                  borderRadius: 4,
+                  fontSize: 12,
+                  cursor: "pointer",
+                  fontWeight: 600,
+                }}
+                onClick={confirmDelete}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

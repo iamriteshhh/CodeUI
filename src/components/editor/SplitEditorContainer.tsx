@@ -76,44 +76,34 @@ export const SplitEditorContainer: React.FC<SplitEditorContainerProps> = ({
     isWelcomeOpen &&
     (activeFilePath === "codeui://welcome" || (!activeFile && openFiles.length === 0));
 
-  if (isExtensionActive && !isSplit) {
-    return (
-      <div className="editor-workspace">
+  return (
+    <div className="editor-workspace" style={{ position: "relative", width: "100%", height: "100%", display: "flex" }}>
+      {/* Primary Editor Group Container (always kept mounted to preserve Monaco model state) */}
+      <div
+        className="editor-group"
+        style={{
+          display: isExtensionActive || showWelcome ? "none" : "flex",
+          flex: 1,
+          height: "100%",
+          width: "100%",
+          overflow: "hidden",
+        }}
+      >
         <Suspense fallback={<EditorFallback />}>
-          <ExtensionDetailView
-            extension={activeExtension}
-            onToggleEnabled={onToggleExtensionEnabled}
-            onToggleInstalled={onToggleExtensionInstalled}
+          <MonacoEditorGroup
+            key="primary-editor-group"
+            file={activeFile}
+            onChangeContent={onChangeContent}
+            onSave={onSave}
+            onCursorChange={onCursorChange}
+            onMarkersChange={onMarkersChange}
           />
         </Suspense>
       </div>
-    );
-  }
 
-  if (showWelcome && !isSplit) {
-    return (
-      <div className="editor-workspace">
-        <WelcomeView
-          recentFolders={recentFolders}
-          showOnStartup={showOnStartup}
-          onToggleShowOnStartup={onToggleShowOnStartup}
-          onNewFile={onNewFile}
-          onOpenFile={onOpenFile}
-          onOpenFolder={onOpenFolder}
-          onOpenInFileManager={onOpenInFileManager}
-          onOpenRecentFolder={onOpenRecentFolder}
-          onOpenTerminal={onOpenTerminal}
-          onSelectWalkthrough={onSelectWalkthrough}
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div className="editor-workspace">
-      {/* Editor Group 1 */}
-      <div className="editor-group">
-        {isExtensionActive ? (
+      {/* Extension Detail View overlay when active */}
+      {isExtensionActive && (
+        <div style={{ flex: 1, height: "100%", width: "100%", overflow: "hidden" }}>
           <Suspense fallback={<EditorFallback />}>
             <ExtensionDetailView
               extension={activeExtension}
@@ -121,7 +111,12 @@ export const SplitEditorContainer: React.FC<SplitEditorContainerProps> = ({
               onToggleInstalled={onToggleExtensionInstalled}
             />
           </Suspense>
-        ) : showWelcome ? (
+        </div>
+      )}
+
+      {/* Welcome View overlay when active */}
+      {showWelcome && (
+        <div style={{ flex: 1, height: "100%", width: "100%", overflow: "hidden" }}>
           <WelcomeView
             recentFolders={recentFolders}
             showOnStartup={showOnStartup}
@@ -134,23 +129,12 @@ export const SplitEditorContainer: React.FC<SplitEditorContainerProps> = ({
             onOpenTerminal={onOpenTerminal}
             onSelectWalkthrough={onSelectWalkthrough}
           />
-        ) : (
-          <Suspense fallback={<EditorFallback />}>
-            <MonacoEditorGroup
-              key="primary-editor-group"
-              file={activeFile}
-              onChangeContent={onChangeContent}
-              onSave={onSave}
-              onCursorChange={onCursorChange}
-              onMarkersChange={onMarkersChange}
-            />
-          </Suspense>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Editor Group 2 (Split) */}
-      {isSplit && (
-        <div className="editor-group split-border">
+      {/* Editor Group 2 (Split Mode) */}
+      {isSplit && !isExtensionActive && !showWelcome && (
+        <div className="editor-group split-border" style={{ flex: 1, height: "100%", width: "100%", overflow: "hidden" }}>
           <Suspense fallback={<EditorFallback />}>
             <MonacoEditorGroup
               key="split-editor-group"

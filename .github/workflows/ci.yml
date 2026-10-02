@@ -2,32 +2,41 @@ name: CI
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main, dev, "stabilize/*"]
   pull_request:
-    branches: [main, dev]
+    branches: [main, dev, "stabilize/*"]
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  no-python:
-    name: No Python in repository
+  hygiene:
+    name: Repository Hygiene (No Python tracked, No conflict markers)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Fail if any .py file is tracked
         run: |
           matches=$(git ls-files '*.py')
           if [ -n "$matches" ]; then
-            echo "Forbidden Python files:"
+            echo "Forbidden Python files tracked in repository:"
             echo "$matches"
             exit 1
           fi
-          echo "Repository is clean."
+          echo "No tracked Python files found."
 
-  rust:
-    name: Rust (clippy + tests)
-    runs-on: ubuntu-latest
+      - name: Fail if any merge conflict markers exist in tracked files
+        run: |
+          if git grep -I -n "<<<<<<<" -- ':!*.md'; then
+            echo "Unresolved merge conflict markers detected!"
+            exit 1
+          fi
+          echo "No merge conflict markers found."
+
+  linux:
+    name: Linux (Ubuntu 22.04 - Clippy, Tests & Verification)
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
@@ -36,7 +45,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
+            libayatana-appindicator3-dev \
             librsvg2-dev \
             libxdo-dev \
             libssl-dev \
@@ -53,10 +62,10 @@ jobs:
       - name: Formatting
         run: cargo fmt --all --check
 
-      - name: Clippy
+      - name: Clippy (0 warnings permitted)
         run: cargo clippy --workspace --all-targets -- -D warnings
 
-      - name: Tests
+      - name: Backend Tests
         run: cargo test --workspace
 
       - name: Verify no orphaned processes were left behind
@@ -70,42 +79,32 @@ jobs:
           echo "No orphaned processes."
 
   frontend:
-    name: Frontend build
+    name: Frontend (Node 20 - Tests, Build & Asset Verification)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check whether the frontend exists yet
-        id: probe
-        run: |
-          if [ -f package.json ]; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "No package.json yet - skipping until the frontend lands."
-          fi
-
       - uses: actions/setup-node@v4
-        if: steps.probe.outputs.present == 'true'
         with:
           node-version: 20
           cache: npm
 
-      - name: Install and test
-        if: steps.probe.outputs.present == 'true'
-        run: |
-          npm ci
-          npm test
-          npm run build
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Run frontend unit tests
+        run: npm test
+
+      - name: Compile and bundle frontend
+        run: npm run build
 
       - name: Verify bundled font in build output
-        if: steps.probe.outputs.present == 'true'
         run: |
           find dist/assets -name "CodeUI-Mono-*.ttf" | grep -q "." || (echo "Bundled CodeUI-Mono font missing from dist/assets!" && exit 1)
           echo "Build assets verified."
 
   windows:
-    name: Windows (Rust + Tests)
+    name: Windows (Windows Latest - Backend & Frontend Tests)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -122,7 +121,32 @@ jobs:
           node-version: 20
           cache: npm
 
+      - name: Install frontend dependencies
+        run: npm ci
+
       - name: Frontend Tests
-        run: |
-          npm ci
-          npm test
+        run: npm test
+
+  macos:
+    name: macOS (macOS Latest - Backend & Frontend Tests)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Backend Tests
+        run: cargo test --workspace
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Frontend Tests
+        run: npm test

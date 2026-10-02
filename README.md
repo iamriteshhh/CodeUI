@@ -24,10 +24,21 @@ You can generate the native installers on your machine at any time:
 ```bash
 npm run tauri build
 ```
-The output installer will be located at:
-- **Windows**: `target/release/bundle/nsis/CodeUI_0.1.0_x64-setup.exe` (only **~1.5 MB**)
-- **Linux**: `target/release/bundle/appimage/` and `bundle/deb/`
-- **macOS**: `target/release/bundle/dmg/`
+The output installers will be generated under `src-tauri/target/release/bundle/`:
+- **Windows**: `src-tauri/target/release/bundle/nsis/CodeUI_<version>_x64-setup.exe` and `bundle/msi/`
+- **Linux**: `src-tauri/target/release/bundle/appimage/` and `bundle/deb/`
+- **macOS**: `src-tauri/target/release/bundle/dmg/`
+
+### Verifying Checksums
+Official releases include `SHA256SUMS.txt`. You can verify package integrity before installing:
+- **Windows (PowerShell)**:
+  ```powershell
+  Get-FileHash -Algorithm SHA256 .\CodeUI_*_x64-setup.exe
+  ```
+- **Linux / macOS**:
+  ```bash
+  sha256sum -c SHA256SUMS.txt
+  ```
 
 ---
 
@@ -87,10 +98,24 @@ Stripping away all editor capabilities makes lab practicals harder without impro
 
 ### Prerequisites
 
-Ensure the following tools are installed on your system:
-- Node.js (v18 or higher) and npm
-- Rust toolchain (`rustc`, `cargo`)
-- Target language compilers as needed (`gcc`, `g++`, `python3`/`python`, JDK `javac`/`java`)
+Ensure the development toolchains and compilers are available on your system:
+
+#### General Development Prerequisites
+- **Node.js** (v18 or higher) and **npm**
+- **Rust Toolchain** (`rustc`, `cargo` stable)
+
+#### Target Language Compilers (for Running Code)
+- **Windows**:
+  - **Microsoft Edge WebView2 Runtime** (pre-installed on Windows 11 and modern Windows 10)
+  - **C / C++**: MinGW-w64 (via MSYS2 or standalone `gcc`/`g++`) or LLVM/Clang added to PATH
+  - **Python**: Python 3.8+ (accessible via `python.exe`, `py.exe -3`, or `python3.exe`)
+  - **Java**: Java Development Kit (JDK 11+ with `javac` and `java` in PATH or `JAVA_HOME`)
+- **Ubuntu / Debian Linux (22.04+ baseline)**:
+  - System libraries: `sudo apt install libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev build-essential`
+  - **C / C++**: `sudo apt install build-essential` (`gcc`, `g++`)
+  - **Python**: `sudo apt install python3`
+  - **Java**: `sudo apt install default-jdk` (`javac`, `java`)
+  - **AppImage Support**: Ubuntu 22.04 includes FUSE 2 by default; Ubuntu 24.04+ requires `sudo apt install libfuse2t64` or running with `--appimage-extract-and-run`
 
 ### Installation
 
@@ -112,14 +137,17 @@ npm run tauri dev
 
 ### Running Tests
 
-Run the backend test suite:
-
+Run the backend Rust test suite (unit tests and runner pipeline):
 ```bash
 cargo test --workspace
 ```
 
-Run the frontend type checks and build:
+Run the frontend Vitest suite (path utils, diagnostics parser, store commands):
+```bash
+npm test
+```
 
+Run the TypeScript type check and production frontend bundle build:
 ```bash
 npm run build
 ```

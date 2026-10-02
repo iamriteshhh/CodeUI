@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef, Suspense, lazy } from "react";
+import { useState, useEffect, useRef, useCallback, Suspense, lazy } from "react";
 import { TitleBar } from "./components/shell/TitleBar";
 import { ActivityBar } from "./components/shell/ActivityBar";
 import { Sidebar } from "./components/shell/Sidebar";
 import { RunDebugBar } from "./components/editor/RunDebugBar";
 import { SplitEditorContainer } from "./components/editor/SplitEditorContainer";
 import { StatusBar } from "./components/shell/StatusBar";
+import { Toasts } from "./components/shell/Toasts";
 import { useWorkspace } from "./store/useWorkspaceStore";
 import { fsService } from "./services/fsService";
 import { editorService } from "./services/editorService";
@@ -96,7 +97,13 @@ export function App() {
     closeFile,
     updateFileContent,
     saveFile,
-    saveActiveFile,
+    dirCache,
+    expandedFolders,
+    loadingFolders,
+    toggleFolder,
+    createEntry,
+    renameEntry,
+    deleteEntry,
     createNewFile,
     createNewFolder,
     deletePath,
@@ -109,6 +116,8 @@ export function App() {
 
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
   const [isResizingPanel, setIsResizingPanel] = useState(false);
+  const [newFileModalOpen, setNewFileModalOpen] = useState(false);
+  const [newFileNameInput, setNewFileNameInput] = useState("");
 
   const activeExtension = extensionsList.find((e) => e.id === selectedExtensionId) || null;
 
@@ -272,10 +281,16 @@ export function App() {
     }
   };
 
-  const handleNewFileDialog = async () => {
-    const fileName = prompt("Enter new file name (e.g. main.java):", "untitled.java");
-    if (fileName && fileName.trim()) {
-      await createNewFile(fileName.trim());
+  const handleNewFileDialog = () => {
+    setNewFileNameInput("");
+    setNewFileModalOpen(true);
+  };
+
+  const handleConfirmNewFile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newFileNameInput.trim()) {
+      setNewFileModalOpen(false);
+      await createNewFile(newFileNameInput.trim());
     }
   };
 
@@ -304,6 +319,12 @@ export function App() {
       }
     }
   };
+
+  const saveActiveFile = useCallback(() => {
+    if (activeFilePath && activeFilePath !== "codeui://welcome" && activeFilePath !== "codeui://extension") {
+      saveFile(activeFilePath);
+    }
+  }, [activeFilePath, saveFile]);
 
   const handleSelectWelcome = () => {
     setActiveFilePath("codeui://welcome");
@@ -512,6 +533,13 @@ export function App() {
               activeFilePath={activeFilePath}
               tools={tools}
               activeFile={activeFile}
+              dirCache={dirCache}
+              expandedFolders={expandedFolders}
+              loadingFolders={loadingFolders}
+              onToggleFolder={toggleFolder}
+              onCreateEntry={createEntry}
+              onRenameEntry={renameEntry}
+              onDeleteEntry={deleteEntry}
               onOpenFile={(path, name) => openFileByPath(path, name)}
               onOpenToSide={(path) => {
                 setSplitActiveFilePath(path);
@@ -601,82 +629,110 @@ export function App() {
             />
           </div>
 
-          {/* Bottom Panel (Terminal / Preview) */}
-          {panelVisible && (
-            <>
-              {/* Panel vertical resizer */}
-              <div
-                className={`resizer-y ${isResizingPanel ? "active" : ""}`}
-                onMouseDown={() => setIsResizingPanel(true)}
-              />
-              <div className="bottom-panel" style={{ height: panelHeight }}>
-                <div className="panel-header">
-                  <div className="panel-tabs">
-                    <div
-                      className={`panel-tab ${activePanelTab === "terminal" ? "active" : ""}`}
-                      onClick={() => setActivePanelTab("terminal")}
-                    >
-                      Terminal
-                    </div>
-                    <div
-                      className={`panel-tab ${activePanelTab === "preview" ? "active" : ""}`}
-                      onClick={() => setActivePanelTab("preview")}
-                    >
-                      Live Preview
-                    </div>
+          {/* Bottom Panel (Terminal / Preview) - kept mounted to preserve xterm session */}
+          <>
+            {/* Panel vertical resizer */}
+            <div
+              className={`resizer-y ${isResizingPanel ? "active" : ""}`}
+              style={{ display: panelVisible ? "block" : "none" }}
+              onMouseDown={() => setIsResizingPanel(true)}
+            />
+            <div
+              className="bottom-panel"
+              style={{
+                height: panelHeight,
+                display: panelVisible ? "flex" : "none",
+                flexDirection: "column",
+              }}
+            >
+              <div className="panel-header">
+                <div className="panel-tabs">
+                  <div
+                    className={`panel-tab ${activePanelTab === "terminal" ? "active" : ""}`}
+                    onClick={() => setActivePanelTab("terminal")}
+                  >
+                    Terminal
                   </div>
-
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <button
-                      className="icon-btn"
-                      title={isPanelMaximized ? "Restore Panel Size" : "Maximize Panel Size"}
-                      onClick={() => {
-                        if (isPanelMaximized) {
-                          setPanelHeight(240);
-                          setIsPanelMaximized(false);
-                        } else {
-                          setPanelHeight(Math.min(window.innerHeight * 0.75, 600));
-                          setIsPanelMaximized(true);
-                        }
-                      }}
-                    >
-                      {isPanelMaximized ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
-                    </button>
-                    <button
-                      className="icon-btn"
-                      title="Close Panel"
-                      onClick={() => setPanelVisible(false)}
-                    >
-                      <X size={13} />
-                    </button>
+                  <div
+                    className={`panel-tab ${activePanelTab === "preview" ? "active" : ""}`}
+                    onClick={() => setActivePanelTab("preview")}
+                  >
+                    Live Preview
                   </div>
                 </div>
 
-                <div className="panel-content">
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <button
+                    className="icon-btn"
+                    title={isPanelMaximized ? "Restore Panel Size" : "Maximize Panel Size"}
+                    onClick={() => {
+                      if (isPanelMaximized) {
+                        setPanelHeight(240);
+                        setIsPanelMaximized(false);
+                      } else {
+                        setPanelHeight(Math.min(window.innerHeight * 0.75, 600));
+                        setIsPanelMaximized(true);
+                      }
+                    }}
+                  >
+                    {isPanelMaximized ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+                  </button>
+                  <button
+                    className="icon-btn"
+                    title="Close Panel"
+                    onClick={() => setPanelVisible(false)}
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="panel-content">
+                <div
+                  style={{
+                    display: activePanelTab === "terminal" ? "flex" : "none",
+                    height: "100%",
+                    width: "100%",
+                  }}
+                >
                   <Suspense
                     fallback={
                       <div style={{ padding: "12px", color: "#888", fontSize: "12px" }}>
-                        Loading panel...
+                        Loading terminal...
                       </div>
                     }
                   >
-                    {activePanelTab === "terminal" ? (
-                      <TerminalPanel
-                        sessionId={ptySessionId}
-                        workspacePath={workspacePath}
-                        onEnsureSession={ensurePtySession}
-                      />
-                    ) : (
-                      <PreviewPanel
-                        openFiles={openFiles}
-                        activeFilePath={activeFilePath}
-                      />
-                    )}
+                    <TerminalPanel
+                      sessionId={ptySessionId}
+                      workspacePath={workspacePath}
+                      onEnsureSession={ensurePtySession}
+                    />
+                  </Suspense>
+                </div>
+
+                <div
+                  style={{
+                    display: activePanelTab === "preview" ? "flex" : "none",
+                    height: "100%",
+                    width: "100%",
+                  }}
+                >
+                  <Suspense
+                    fallback={
+                      <div style={{ padding: "12px", color: "#888", fontSize: "12px" }}>
+                        Loading preview...
+                      </div>
+                    }
+                  >
+                    <PreviewPanel
+                      openFiles={openFiles}
+                      activeFilePath={activeFilePath}
+                    />
                   </Suspense>
                 </div>
               </div>
-            </>
-          )}
+            </div>
+          </>
         </div>
       </div>
 
@@ -722,6 +778,98 @@ export function App() {
           />
         </Suspense>
       )}
+
+      {/* In-app New File Modal (fixes F11 platform prompt failure) */}
+      {newFileModalOpen && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.6)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+          }}
+          onClick={() => setNewFileModalOpen(false)}
+        >
+          <div
+            style={{
+              background: "#252526",
+              border: "1px solid #3c3c3c",
+              borderRadius: 6,
+              padding: 20,
+              maxWidth: 380,
+              width: "90%",
+              boxShadow: "0 8px 24px rgba(0, 0, 0, 0.5)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: "0 0 12px 0", fontSize: 15, color: "#ffffff" }}>
+              New File
+            </h3>
+            <form onSubmit={handleConfirmNewFile}>
+              <input
+                autoFocus
+                type="text"
+                placeholder="e.g. main.py, Main.java, index.c"
+                value={newFileNameInput}
+                onChange={(e) => setNewFileNameInput(e.target.value)}
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  background: "#3c3c3c",
+                  border: "1px solid #555555",
+                  color: "#ffffff",
+                  padding: "8px 10px",
+                  borderRadius: 4,
+                  fontSize: 13,
+                  marginBottom: 16,
+                  outline: "none",
+                }}
+              />
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                <button
+                  type="button"
+                  style={{
+                    background: "#3c3c3c",
+                    border: "none",
+                    color: "#ffffff",
+                    padding: "6px 14px",
+                    borderRadius: 4,
+                    fontSize: 12,
+                    cursor: "pointer",
+                  }}
+                  onClick={() => setNewFileModalOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  style={{
+                    background: "#0e639c",
+                    border: "none",
+                    color: "#ffffff",
+                    padding: "6px 14px",
+                    borderRadius: 4,
+                    fontSize: 12,
+                    cursor: "pointer",
+                    fontWeight: 600,
+                  }}
+                >
+                  Create
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Global Notifications / Toasts */}
+      <Toasts />
     </div>
   );
 }
