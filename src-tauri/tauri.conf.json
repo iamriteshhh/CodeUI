@@ -1,0 +1,82 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "CodeUI",
+  "version": "0.1.0",
+  "identifier": "dev.codeui.editor",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "CodeUI",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 1024,
+        "minHeight": 700,
+        "resizable": true,
+        "decorations": false,
+        "zoomHotkeysEnabled": false,
+        "theme": "Dark"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost https:; frame-src 'self' data: about:"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/64x64.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.png",
+      "icons/icon.ico",
+      "icons/icon.icns"
+    ],
+    "publisher": "CodeUI",
+    "copyright": "Copyright © 2026 CodeUI Contributors",
+    "category": "DeveloperTool",
+    "shortDescription": "Modern lightweight code editor & IDE",
+    "longDescription": "A fast, lightweight code editor with integrated terminal, Monaco editor, and multi-language toolchain support.",
+    "windows": {
+      "nsis": {
+        "installMode": "both",
+        "installerIcon": "icons/icon.ico"
+      },
+      "webviewInstallMode": {
+        "type": "embedBootstrapper"
+      }
+    },
+    "linux": {
+      "deb": {
+        "depends": []
+      },
+      "appimage": {
+        "bundleMediaFramework": false
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "10.13",
+      "dmg": {
+        "windowSize": {
+          "width": 660,
+          "height": 400
+        },
+        "appPosition": {
+          "x": 180,
+          "y": 170
+        },
+        "applicationFolderPosition": {
+          "x": 420,
+          "y": 170
+        }
+      }
+    }
+  }
+}

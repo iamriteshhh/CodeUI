@@ -44,7 +44,14 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
     return { name, path: folderPath };
   };
 
+<<<<<<< HEAD:CodeUI-main/src/components/welcome/WelcomeView.tsx
   const recents = (recentFolders || []).slice(0, 6).map(formatRecent);
+=======
+  const recents = (recentFolders && recentFolders.length > 0
+    ? recentFolders
+    : ["D:\\JAVA", "C:\\Users\\sahil\\CodeUI"]
+  ).slice(0, 6).map(formatRecent);
+>>>>>>> 66b6de40caf85349a094aaf1377b064cfc6d6bf6:src/components/welcome/WelcomeView.tsx
 
   return (
     <div className="welcome-container">
@@ -102,6 +109,7 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
             <div className="welcome-section" style={{ marginTop: 24 }}>
               <h2 className="welcome-section-heading">Recent</h2>
               <div className="welcome-recent-list">
+<<<<<<< HEAD:CodeUI-main/src/components/welcome/WelcomeView.tsx
                 {recents.length === 0 ? (
                   <div
                     className="welcome-recent-item"
@@ -123,6 +131,19 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
                     </div>
                   ))
                 )}
+=======
+                {recents.map((item, idx) => (
+                  <div
+                    key={idx}
+                    className="welcome-recent-item"
+                    onClick={() => onOpenRecentFolder(item.path)}
+                    title={`Open workspace: ${item.path}`}
+                  >
+                    <span className="welcome-recent-name">{item.name}</span>
+                    <span className="welcome-recent-path">{item.path}</span>
+                  </div>
+                ))}
+>>>>>>> 66b6de40caf85349a094aaf1377b064cfc6d6bf6:src/components/welcome/WelcomeView.tsx
                 <button className="welcome-more-btn" onClick={onOpenFolder}>
                   More...
                 </button>

@@ -60,11 +60,16 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_OPTIONS: "--max-old-space-size=6144"
         with:
+<<<<<<< HEAD:CodeUI-main/.github/workflows/release.yml
           tagName: ${{ github.ref_name }}
+=======
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || format('v0.1.0-{0}', github.run_number) }}
+>>>>>>> 66b6de40caf85349a094aaf1377b064cfc6d6bf6:.github/workflows/release.yml
           releaseName: 'CodeUI v__VERSION__'
           releaseBody: |
             ## CodeUI Release v__VERSION__
             
+<<<<<<< HEAD:CodeUI-main/.github/workflows/release.yml
             Lightweight, lab-safe code editor with Monaco Editor, integrated terminal emulator, and multi-language toolchain runners.
             
             ### Downloads
@@ -72,6 +77,15 @@ jobs:
             - **Linux**: `CodeUI___VERSION___amd64.AppImage` or `CodeUI___VERSION___amd64.deb`
             - **macOS**: `CodeUI___VERSION____x64.dmg` or `CodeUI___VERSION____aarch64.dmg`
           releaseDraft: true
+=======
+            Lightweight, high-performance code editor with Monaco Editor, integrated terminal emulator, and multi-language toolchain runners.
+            
+            ### Downloads
+            - **Windows**: `CodeUI___VERSION___x64-setup.exe` (User / System Setup Wizard) or `.msi`
+            - **Linux**: `codeui___VERSION___amd64.AppImage` or `.deb`
+            - **macOS**: `CodeUI___VERSION____x64.dmg`
+          releaseDraft: false
+>>>>>>> 66b6de40caf85349a094aaf1377b064cfc6d6bf6:.github/workflows/release.yml
           prerelease: false
           args: ${{ matrix.args }}
 
