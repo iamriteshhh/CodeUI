@@ -108,16 +108,8 @@ pub fn detect_tools() -> Vec<ToolStatus> {
     let mut out: Vec<ToolStatus> = TOOLS
         .iter()
         .map(|spec| {
-<<<<<<< HEAD:CodeUI-main/src-tauri/src/commands/env_detect.rs
             let path = crate::proc::resolve_tool(spec.candidates)
                 .map(|p| p.to_string_lossy().into_owned());
-=======
-            let path = spec.candidates.iter().find_map(|&cand| {
-                which::which(cand)
-                    .ok()
-                    .map(|p| p.to_string_lossy().into_owned())
-            });
->>>>>>> 66b6de40caf85349a094aaf1377b064cfc6d6bf6:src-tauri/src/commands/env_detect.rs
             ToolStatus {
                 name: spec.name.to_string(),
                 available: path.is_some(),

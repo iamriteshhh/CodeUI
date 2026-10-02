@@ -28,10 +28,6 @@ impl LanguageRunner for PythonRunner {
         }
         args.push(ctx.source_str());
 
-        Ok(CommandSpec::new(
-            resolved,
-            args,
-            ctx.workdir.clone(),
-        ))
+        Ok(CommandSpec::new(resolved, args, ctx.workdir.clone()))
     }
 }

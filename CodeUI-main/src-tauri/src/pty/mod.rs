@@ -315,7 +315,6 @@ mod tests {
             "Did not receive expected output with \\r"
         );
         let _ = mgr.kill(&id);
-<<<<<<< HEAD:CodeUI-main/src-tauri/src/pty/mod.rs
     }
 
     #[test]
@@ -347,7 +346,5 @@ mod tests {
         );
         assert!(matches!(res2, Err(PtyError::AlreadyExists(_))));
         let _ = mgr.kill("dup-session");
-=======
->>>>>>> 66b6de40caf85349a094aaf1377b064cfc6d6bf6:src-tauri/src/pty/mod.rs
     }
 }

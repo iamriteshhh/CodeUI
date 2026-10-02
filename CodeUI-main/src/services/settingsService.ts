@@ -17,11 +17,7 @@ const defaultSettings: UserSettings = {
   shellPath: null,
   runTimeoutSecs: 12,
   lastFolder: null,
-<<<<<<< HEAD:CodeUI-main/src/services/settingsService.ts
   recentFolders: [],
-=======
-  recentFolders: ["D:\\JAVA", "C:\\Users\\sahil\\CodeUI"],
->>>>>>> 66b6de40caf85349a094aaf1377b064cfc6d6bf6:src/services/settingsService.ts
   showWelcomeOnStartup: true,
 };
 

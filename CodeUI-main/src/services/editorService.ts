@@ -50,7 +50,6 @@ export const editorService = {
     return activeEditorInstance;
   },
 
-<<<<<<< HEAD:CodeUI-main/src/services/editorService.ts
   getText(path: string): string | null {
     if (!monacoInstance) return null;
     try {
@@ -74,9 +73,6 @@ export const editorService = {
       activeEditorInstance.layout();
     }
   },
-
-=======
->>>>>>> 66b6de40caf85349a094aaf1377b064cfc6d6bf6:src/services/editorService.ts
   undo() {
     if (!activeEditorInstance) return;
     activeEditorInstance.trigger("titlebar", "undo", null);
@@ -190,8 +186,6 @@ export const editorService = {
       // ignore URI parsing errors
     }
   },
-<<<<<<< HEAD:CodeUI-main/src/services/editorService.ts
-
   setMarkers(path: string, diagnostics: Array<{ line: number; column?: number; message: string; severity: "error" | "warning" | "info" }>) {
     if (!monacoInstance) return;
     try {
@@ -231,8 +225,6 @@ export const editorService = {
       }
     } catch {}
   },
-=======
->>>>>>> 66b6de40caf85349a094aaf1377b064cfc6d6bf6:src/services/editorService.ts
 };
 
 export function getNormalizedUri(filePath: string): string {

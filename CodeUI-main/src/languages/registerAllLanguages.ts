@@ -129,7 +129,6 @@ const zigMonarch: monaco.languages.IMonarchLanguage = {
   },
 };
 
-<<<<<<< HEAD:CodeUI-main/src/languages/registerAllLanguages.ts
 let hasRegistered = false;
 
 export function registerAllEagerLanguages(monacoInstance: typeof monaco): {
@@ -151,14 +150,6 @@ export function registerAllEagerLanguages(monacoInstance: typeof monaco): {
   } catch (err: any) {
     console.error("[registerAllEagerLanguages] Failed to register Salivo:", err);
     failed.push({ id: "salivo", error: String(err) });
-=======
-export function registerAllEagerLanguages(monacoInstance: typeof monaco) {
-  try {
-    // 1. Salivo language registration
-    registerSalivoLanguage(monacoInstance);
-  } catch (err) {
-    console.error("[registerAllEagerLanguages] Failed to register Salivo:", err);
->>>>>>> 66b6de40caf85349a094aaf1377b064cfc6d6bf6:src/languages/registerAllLanguages.ts
   }
 
   // 2. Synchronous list of all core languages
@@ -207,7 +198,6 @@ export function registerAllEagerLanguages(monacoInstance: typeof monaco) {
         if (def.language) {
           monacoInstance.languages.setMonarchTokensProvider(def.id, def.language);
         }
-<<<<<<< HEAD:CodeUI-main/src/languages/registerAllLanguages.ts
         registered.push(def.id);
       } catch (innerErr: any) {
         console.warn(`[registerAllEagerLanguages] Failed to register tokens for ${def.id}:`, innerErr);
@@ -219,13 +209,4 @@ export function registerAllEagerLanguages(monacoInstance: typeof monaco) {
   }
 
   return { registered, failed };
-=======
-      } catch (innerErr) {
-        console.warn(`[registerAllEagerLanguages] Failed to register tokens for ${def.id}:`, innerErr);
-      }
-    }
-  } catch (outerErr) {
-    console.error("[registerAllEagerLanguages] Unexpected error registering languages:", outerErr);
-  }
->>>>>>> 66b6de40caf85349a094aaf1377b064cfc6d6bf6:src/languages/registerAllLanguages.ts
 }

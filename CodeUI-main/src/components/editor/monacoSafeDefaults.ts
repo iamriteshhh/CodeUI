@@ -45,20 +45,13 @@ export const MONACO_LAB_SAFE_OPTIONS: NonNullable<EditorProps["options"]> = {
   tabCompletion: "off",
   snippetSuggestions: "none",
 
-<<<<<<< HEAD:CodeUI-main/src/components/editor/monacoSafeDefaults.ts
   hover: { enabled: "off" },
   codeLens: false,
 
   // Visual ergonomics & stability
   fontSize: 14,
   lineHeight: 21,
-  fontFamily: "'CodeUI Mono', Consolas, 'Cascadia Mono', 'DejaVu Sans Mono', 'Liberation Mono', monospace",
-=======
-  // Visual ergonomics & stability
-  fontSize: 14,
-  lineHeight: 21,
-  fontFamily: "Consolas, 'Courier New', monospace",
->>>>>>> 66b6de40caf85349a094aaf1377b064cfc6d6bf6:src/components/editor/monacoSafeDefaults.ts
+  fontFamily: '"CodeUI Mono", Consolas, "Courier New", monospace',
   lineNumbers: "on",
   glyphMargin: false,
   folding: false,

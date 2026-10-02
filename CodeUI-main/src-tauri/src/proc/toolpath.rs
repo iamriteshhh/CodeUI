@@ -46,7 +46,13 @@ pub fn augmented_path() -> OsString {
         if let Ok(user_profile) = std::env::var("USERPROFILE") {
             paths.push(PathBuf::from(&user_profile).join(".cargo").join("bin"));
             paths.push(PathBuf::from(&user_profile).join(".salivo").join("bin"));
-            paths.push(PathBuf::from(&user_profile).join("AppData").join("Local").join("Programs").join("Python"));
+            paths.push(
+                PathBuf::from(&user_profile)
+                    .join("AppData")
+                    .join("Local")
+                    .join("Programs")
+                    .join("Python"),
+            );
         }
         if let Ok(java_home) = std::env::var("JAVA_HOME") {
             paths.push(PathBuf::from(java_home).join("bin"));
