@@ -32,11 +32,10 @@ interface ExtensionsPanelProps {
 
 export const ExtensionsPanel: React.FC<ExtensionsPanelProps> = ({
   extensions,
+  tools = [],
   isSyncing = false,
   selectedExtensionId,
   onSelectExtension,
-  onToggleInstall,
-  onOpenSettings,
   onRefresh,
 }) => {
   const [query, setQuery] = useState("");
@@ -231,15 +230,15 @@ export const ExtensionsPanel: React.FC<ExtensionsPanelProps> = ({
 
                       {!tool.available && (
                         <div style={{ color: "#d29922", fontSize: 10, marginTop: 2 }}>
-                          {tool.install_hint}
+                          {tool.installHint}
                         </div>
                       )}
                     </div>
 
-                    {!tool.available && tool.install_hint && (
+                    {!tool.available && tool.installHint && (
                       <button
                         className="icon-btn"
-                        onClick={() => handleCopyHint(tool.name, tool.install_hint)}
+                        onClick={() => handleCopyHint(tool.name, tool.installHint!)}
                         title="Copy install command"
                         style={{
                           padding: "2px 6px",

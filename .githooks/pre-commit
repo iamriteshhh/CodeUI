@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+
+echo "[pre-commit] Checking for merge conflict markers..."
+cargo run -p xtask -- check-conflicts
+
+echo "[pre-commit] Checking for forbidden Python files..."
+cargo run -p xtask -- audit-no-python
+
+echo "[pre-commit] Checking manifest version synchronization..."
+cargo run -p xtask -- version-sync

@@ -19,6 +19,7 @@ fn main() -> ExitCode {
             None => Err("usage: cargo run -p xtask -- bump <version>".into()),
         },
         "audit-no-python" => audit_no_python(),
+        "check-conflicts" => check_conflicts(),
         _ => {
             print_help();
             Ok(())
@@ -39,6 +40,7 @@ fn print_help() {
     println!("  version-sync       Align package.json and tauri.conf.json with Cargo.toml");
     println!("  bump <version>     Set the workspace version everywhere");
     println!("  audit-no-python    Fail if any .py file is tracked in the repository");
+    println!("  check-conflicts    Fail if any merge conflict markers exist in source files");
 }
 
 fn repo_root() -> PathBuf {
@@ -158,6 +160,61 @@ fn scan_for_python(dir: &Path, out: &mut Vec<PathBuf>) -> Task {
             }
         } else if path.extension().is_some_and(|e| e == "py") {
             out.push(path);
+        }
+    }
+    Ok(())
+}
+
+fn check_conflicts() -> Task {
+    let root = repo_root();
+    let mut offenders = Vec::new();
+    scan_for_conflicts(&root, &mut offenders)?;
+
+    if offenders.is_empty() {
+        println!("No merge conflict markers found. Repository is clean.");
+        return Ok(());
+    }
+
+    for (path, line_num, marker) in &offenders {
+        eprintln!("  conflict: {}:{}: {}", path.display(), line_num, marker);
+    }
+    Err(format!(
+        "{} merge conflict marker(s) found in repository",
+        offenders.len()
+    )
+    .into())
+}
+
+fn scan_for_conflicts(dir: &Path, out: &mut Vec<(PathBuf, usize, String)>) -> Task {
+    const SKIP_DIRS: [&str; 6] = ["target", "node_modules", ".git", "dist", ".venv", "artifacts"];
+    const SKIP_EXTENSIONS: [&str; 4] = ["md", "png", "ttf", "exe"];
+
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().into_owned();
+
+        if path.is_dir() {
+            if !SKIP_DIRS.contains(&name.as_str()) {
+                scan_for_conflicts(&path, out)?;
+            }
+        } else {
+            if let Some(ext) = path.extension() {
+                if SKIP_EXTENSIONS.contains(&ext.to_string_lossy().as_ref()) {
+                    continue;
+                }
+            }
+            if let Ok(content) = std::fs::read_to_string(&path) {
+                for (idx, line) in content.lines().enumerate() {
+                    let trimmed = line.trim_start();
+                    if trimmed.starts_with("<<<<<<< ")
+                        || trimmed == "======="
+                        || trimmed.starts_with(">>>>>>> ")
+                    {
+                        out.push((path.clone(), idx + 1, trimmed.to_string()));
+                    }
+                }
+            }
         }
     }
     Ok(())

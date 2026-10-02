@@ -5,35 +5,35 @@ import { registerSalivoLanguage } from "./salivoMonaco";
 // This guarantees instant, reliable syntax highlighting in both dev and packaged production WebViews
 // without relying on lazy, dynamic network chunk loading.
 // @ts-ignore
-import * as cppLang from "../../node_modules/monaco-editor/esm/vs/languages/definitions/cpp/cpp.js";
+import * as cppLang from "monaco-editor/languages/definitions/cpp/cpp.js";
 // @ts-ignore
-import * as pythonLang from "../../node_modules/monaco-editor/esm/vs/languages/definitions/python/python.js";
+import * as pythonLang from "monaco-editor/languages/definitions/python/python.js";
 // @ts-ignore
-import * as javaLang from "../../node_modules/monaco-editor/esm/vs/languages/definitions/java/java.js";
+import * as javaLang from "monaco-editor/languages/definitions/java/java.js";
 // @ts-ignore
-import * as rustLang from "../../node_modules/monaco-editor/esm/vs/languages/definitions/rust/rust.js";
+import * as rustLang from "monaco-editor/languages/definitions/rust/rust.js";
 // @ts-ignore
-import * as goLang from "../../node_modules/monaco-editor/esm/vs/languages/definitions/go/go.js";
+import * as goLang from "monaco-editor/languages/definitions/go/go.js";
 // @ts-ignore
-import * as csharpLang from "../../node_modules/monaco-editor/esm/vs/languages/definitions/csharp/csharp.js";
+import * as csharpLang from "monaco-editor/languages/definitions/csharp/csharp.js";
 // @ts-ignore
-import * as shellLang from "../../node_modules/monaco-editor/esm/vs/languages/definitions/shell/shell.js";
+import * as shellLang from "monaco-editor/languages/definitions/shell/shell.js";
 // @ts-ignore
-import * as powershellLang from "../../node_modules/monaco-editor/esm/vs/languages/definitions/powershell/powershell.js";
+import * as powershellLang from "monaco-editor/languages/definitions/powershell/powershell.js";
 // @ts-ignore
-import * as markdownLang from "../../node_modules/monaco-editor/esm/vs/languages/definitions/markdown/markdown.js";
+import * as markdownLang from "monaco-editor/languages/definitions/markdown/markdown.js";
 // @ts-ignore
-import * as htmlLang from "../../node_modules/monaco-editor/esm/vs/languages/definitions/html/html.js";
+import * as htmlLang from "monaco-editor/languages/definitions/html/html.js";
 // @ts-ignore
-import * as cssLang from "../../node_modules/monaco-editor/esm/vs/languages/definitions/css/css.js";
+import * as cssLang from "monaco-editor/languages/definitions/css/css.js";
 // @ts-ignore
-import * as yamlLang from "../../node_modules/monaco-editor/esm/vs/languages/definitions/yaml/yaml.js";
+import * as yamlLang from "monaco-editor/languages/definitions/yaml/yaml.js";
 // @ts-ignore
-import * as sqlLang from "../../node_modules/monaco-editor/esm/vs/languages/definitions/sql/sql.js";
+import * as sqlLang from "monaco-editor/languages/definitions/sql/sql.js";
 // @ts-ignore
-import * as phpLang from "../../node_modules/monaco-editor/esm/vs/languages/definitions/php/php.js";
+import * as phpLang from "monaco-editor/languages/definitions/php/php.js";
 // @ts-ignore
-import * as rubyLang from "../../node_modules/monaco-editor/esm/vs/languages/definitions/ruby/ruby.js";
+import * as rubyLang from "monaco-editor/languages/definitions/ruby/ruby.js";
 
 // Native Monarch definition for Zig
 const zigConfiguration: monaco.languages.LanguageConfiguration = {

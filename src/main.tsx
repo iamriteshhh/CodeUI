@@ -10,11 +10,11 @@ import "./index.css";
 // Import Monaco workers directly using Vite ?worker syntax.
 // This bundles workers into self-contained classic scripts compatible with
 // Tauri's custom URI schemes and WebView2 without failing module-worker restrictions.
-import editorWorker from "../node_modules/monaco-editor/esm/vs/editor/editor.worker.js?worker";
-import jsonWorker from "../node_modules/monaco-editor/esm/vs/language/json/json.worker.js?worker";
-import cssWorker from "../node_modules/monaco-editor/esm/vs/language/css/css.worker.js?worker";
-import htmlWorker from "../node_modules/monaco-editor/esm/vs/language/html/html.worker.js?worker";
-import tsWorker from "../node_modules/monaco-editor/esm/vs/language/typescript/ts.worker.js?worker";
+import editorWorker from "monaco-editor/editor/editor.worker.js?worker";
+import jsonWorker from "monaco-editor/language/json/json.worker.js?worker";
+import cssWorker from "monaco-editor/language/css/css.worker.js?worker";
+import htmlWorker from "monaco-editor/language/html/html.worker.js?worker";
+import tsWorker from "monaco-editor/language/typescript/ts.worker.js?worker";
 
 // Register all core languages and tokenizers eagerly
 try {
@@ -125,6 +125,33 @@ if (import.meta.env.PROD) {
 
 // Ensure Monaco line and character measurements match after font readiness
 async function initApp() {
+  // Desktop Application Guard (Y8):
+  // CodeUI is strictly a desktop application. If running a production build outside of
+  // Tauri's native webview container, display a fatal desktop-required notice.
+  const isDesktopRuntime =
+    typeof window !== "undefined" &&
+    ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
+
+  if (import.meta.env.PROD && !isDesktopRuntime) {
+    const rootEl = document.getElementById("root");
+    if (rootEl) {
+      rootEl.innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#181818;color:#f0f6fc;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;padding:32px;text-align:center;">
+          <div style="font-size:44px;margin-bottom:16px;">🖥️</div>
+          <h1 style="font-size:20px;font-weight:600;margin-bottom:12px;color:#f85149;">Desktop Application Required</h1>
+          <p style="max-width:520px;line-height:1.6;color:#8c8c8c;font-size:13px;margin-bottom:24px;">
+            CodeUI is an offline, lab-safe code editor engineered exclusively for native desktop execution.
+            Standalone web browser access is disabled in production because browser sandboxes cannot access native toolchains or supervised execution PTYs.
+          </p>
+          <div style="background:#202020;border:1px solid #333;padding:10px 18px;border-radius:6px;font-family:monospace;font-size:12px;color:#4ec9b0;">
+            Launch CodeUI from your desktop or start via: npm run tauri dev
+          </div>
+        </div>
+      `;
+    }
+    return;
+  }
+
   await ensureMonacoFontsReady(monaco);
 
   // Remeasure fonts if devicePixelRatio / monitor DPI changes

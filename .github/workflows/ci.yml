@@ -62,6 +62,12 @@ jobs:
       - name: Formatting
         run: cargo fmt --all --check
 
+      - name: Verify manifest versions are in sync
+        run: cargo run -p xtask -- version-sync
+
+      - name: Verify no conflict markers in source tree
+        run: cargo run -p xtask -- check-conflicts
+
       - name: Clippy (0 warnings permitted)
         run: cargo clippy --workspace --all-targets -- -D warnings
 

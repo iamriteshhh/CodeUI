@@ -27,6 +27,9 @@ export const settingsService = {
     if (invoke) {
       return await invoke<UserSettings>("load_settings");
     }
+    if (import.meta.env.PROD) {
+      throw new Error("Settings service is only available inside the Tauri desktop application.");
+    }
     const saved = localStorage.getItem("codeui_settings");
     if (saved) {
       try {

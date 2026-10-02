@@ -65,6 +65,10 @@ export const ptyService = {
       });
     }
 
+    if (import.meta.env.PROD) {
+      throw new Error("PTY spawn is only supported within the Tauri desktop application.");
+    }
+
     // Interactive mock terminal session for browser testing
     const mockId = options?.sessionId || "pty-" + Math.random().toString(36).substring(2, 9);
     const fallbackCwd = options?.cwd || "~";
