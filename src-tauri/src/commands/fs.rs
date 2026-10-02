@@ -148,10 +148,25 @@ pub fn write_file(path: String, contents: String) -> Result<(), FsError> {
         let _ = std::fs::set_permissions(&tmp, meta.permissions());
     }
 
-    std::fs::rename(&tmp, &p).map_err(|e| {
+    // Rename temporary file over target with backoff retries (Y2).
+    // Mitigates transient Windows Defender / filesystem sharing violations.
+    let mut rename_result = std::fs::rename(&tmp, &p);
+    let mut backoff_ms = 10;
+    for _ in 0..5 {
+        if rename_result.is_ok() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(backoff_ms));
+        backoff_ms *= 2;
+        rename_result = std::fs::rename(&tmp, &p);
+    }
+
+    if let Err(e) = rename_result {
         let _ = std::fs::remove_file(&tmp);
-        FsError::from_io(e, &p)
-    })
+        return Err(FsError::from_io(e, &p));
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -722,5 +737,26 @@ mod tests {
 
         let del_err = delete_file("/etc".to_string());
         assert!(matches!(del_err, Err(FsError::PermissionDenied(_))));
+    }
+
+    #[test]
+    fn rapid_repeated_writes_succeed_atomically() {
+        let dir = tmp();
+        let file = dir.path().join("rapid.txt");
+        let path_str = file.to_string_lossy().into_owned();
+
+        for i in 0..25 {
+            let content = format!("rapid save version {i}");
+            write_file(path_str.clone(), content.clone()).unwrap();
+            assert_eq!(read_file(path_str.clone()).unwrap(), content);
+        }
+
+        // Ensure no leftover temp files
+        let tmp_files: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().contains(".codeui-tmp"))
+            .collect();
+        assert!(tmp_files.is_empty());
     }
 }

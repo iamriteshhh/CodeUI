@@ -14,6 +14,9 @@ async function getInvoke() {
 // In-memory fallback workspace for testing outside Tauri webview
 const mockFs = new Map<string, string>();
 
+// In-flight save locks to prevent race conditions during rapid saves (Y2)
+const activeSavePromises = new Map<string, Promise<void>>();
+
 export const fsService = {
   async readFile(path: string): Promise<string> {
     const invoke = await getInvoke();
@@ -28,11 +31,32 @@ export const fsService = {
   },
 
   async writeFile(path: string, contents: string): Promise<void> {
-    const invoke = await getInvoke();
-    if (invoke) {
-      return await invoke<void>("write_file", { path, contents });
+    // If a save is already in-flight for this path, chain behind it
+    const existing = activeSavePromises.get(path);
+    if (existing) {
+      try {
+        await existing;
+      } catch {
+        // Ignore prior save failure so subsequent save can proceed
+      }
     }
-    mockFs.set(path, contents);
+
+    const savePromise = (async () => {
+      const invoke = await getInvoke();
+      if (invoke) {
+        return await invoke<void>("write_file", { path, contents });
+      }
+      mockFs.set(path, contents);
+    })();
+
+    activeSavePromises.set(path, savePromise);
+    try {
+      await savePromise;
+    } finally {
+      if (activeSavePromises.get(path) === savePromise) {
+        activeSavePromises.delete(path);
+      }
+    }
   },
 
   async listDir(path: string): Promise<FileEntry[]> {
