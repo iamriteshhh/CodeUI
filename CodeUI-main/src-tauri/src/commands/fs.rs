@@ -55,6 +55,58 @@ fn validate(path: &str) -> Result<PathBuf, FsError> {
     Ok(PathBuf::from(path))
 }
 
+/// Identifies filesystem roots and critical OS paths to guard against destructive mutations.
+pub fn is_dangerous_system_path(path: &Path) -> bool {
+    let components: Vec<_> = path.components().collect();
+    if components.is_empty() {
+        return true;
+    }
+    // Check if path is solely a root or drive prefix (e.g. "/" or "C:\")
+    if components.len() == 1 {
+        match components[0] {
+            std::path::Component::RootDir | std::path::Component::Prefix(_) => return true,
+            _ => {}
+        }
+    }
+    if components.len() == 2
+        && matches!(components[0], std::path::Component::Prefix(_))
+        && matches!(components[1], std::path::Component::RootDir)
+    {
+        return true;
+    }
+
+    let normalized = path.to_string_lossy().to_lowercase().replace('\\', "/");
+    let trimmed = normalized.trim_end_matches('/');
+
+    // Windows drive roots and system directories
+    if trimmed.len() == 2 && trimmed.ends_with(':') {
+        return true;
+    }
+    let win_sys = [
+        "c:/windows",
+        "c:/program files",
+        "c:/program files (x86)",
+        "c:/programdata",
+    ];
+    for sys in win_sys {
+        if trimmed == sys || trimmed.starts_with(&format!("{sys}/")) {
+            return true;
+        }
+    }
+
+    // Unix system directories
+    let unix_sys = [
+        "/etc", "/bin", "/sbin", "/usr", "/boot", "/dev", "/proc", "/sys", "/lib", "/lib64",
+    ];
+    for sys in unix_sys {
+        if trimmed == sys || trimmed.starts_with(&format!("{sys}/")) {
+            return true;
+        }
+    }
+
+    false
+}
+
 #[tauri::command]
 pub fn read_file(path: String) -> Result<String, FsError> {
     let p = validate(&path)?;
@@ -69,6 +121,11 @@ pub fn read_file(path: String) -> Result<String, FsError> {
 #[tauri::command]
 pub fn write_file(path: String, contents: String) -> Result<(), FsError> {
     let p = validate(&path)?;
+    if is_dangerous_system_path(&p) {
+        return Err(FsError::PermissionDenied(format!(
+            "Refusing to write to protected system path: {path}"
+        )));
+    }
     let parent = p.parent().ok_or(FsError::InvalidPath)?;
     let name = p.file_name().ok_or(FsError::InvalidPath)?.to_string_lossy();
 
@@ -138,6 +195,11 @@ pub fn list_dir(path: String) -> Result<Vec<FileEntry>, FsError> {
 #[tauri::command]
 pub fn create_file(path: String) -> Result<(), FsError> {
     let p = validate(&path)?;
+    if is_dangerous_system_path(&p) {
+        return Err(FsError::PermissionDenied(format!(
+            "Refusing to create file in protected system path: {path}"
+        )));
+    }
     if p.exists() {
         return Err(FsError::AlreadyExists(p.display().to_string()));
     }
@@ -150,6 +212,11 @@ pub fn create_file(path: String) -> Result<(), FsError> {
 #[tauri::command]
 pub fn create_dir(path: String) -> Result<(), FsError> {
     let p = validate(&path)?;
+    if is_dangerous_system_path(&p) {
+        return Err(FsError::PermissionDenied(format!(
+            "Refusing to create directory in protected system path: {path}"
+        )));
+    }
     if p.exists() {
         return Err(FsError::AlreadyExists(p.display().to_string()));
     }
@@ -160,6 +227,11 @@ pub fn create_dir(path: String) -> Result<(), FsError> {
 pub fn rename_file(old_path: String, new_path: String) -> Result<(), FsError> {
     let from = validate(&old_path)?;
     let to = validate(&new_path)?;
+    if is_dangerous_system_path(&from) || is_dangerous_system_path(&to) {
+        return Err(FsError::PermissionDenied(
+            "Cannot rename protected system or root paths".into(),
+        ));
+    }
     if !from.exists() {
         return Err(FsError::NotFound(from.display().to_string()));
     }
@@ -173,6 +245,11 @@ pub fn rename_file(old_path: String, new_path: String) -> Result<(), FsError> {
 #[tauri::command]
 pub fn delete_file(path: String) -> Result<(), FsError> {
     let p = validate(&path)?;
+    if is_dangerous_system_path(&p) {
+        return Err(FsError::PermissionDenied(format!(
+            "Refusing to delete protected system path: {path}"
+        )));
+    }
     let meta = std::fs::symlink_metadata(&p).map_err(|e| FsError::from_io(e, &p))?;
     if meta.is_dir() {
         std::fs::remove_dir_all(&p).map_err(|e| FsError::from_io(e, &p))
@@ -623,5 +700,27 @@ mod tests {
             assert!(matches!(result, Err(FsError::PermissionDenied(_))));
         }
         let _ = std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o644));
+    }
+
+    #[test]
+    fn dangerous_system_path_detection() {
+        assert!(is_dangerous_system_path(Path::new("/")));
+        assert!(is_dangerous_system_path(Path::new("C:\\")));
+        assert!(is_dangerous_system_path(Path::new("C:/Windows")));
+        assert!(is_dangerous_system_path(Path::new("C:/Program Files/test")));
+        assert!(is_dangerous_system_path(Path::new("/etc/passwd")));
+        assert!(is_dangerous_system_path(Path::new("/usr/bin")));
+
+        assert!(!is_dangerous_system_path(Path::new("D:/projects/student/main.rs")));
+        assert!(!is_dangerous_system_path(Path::new("/home/user/project/file.c")));
+    }
+
+    #[test]
+    fn write_and_delete_refuse_system_path() {
+        let err = write_file("C:/Windows/system32/cmd.exe".to_string(), "bad".to_string());
+        assert!(matches!(err, Err(FsError::PermissionDenied(_))));
+
+        let del_err = delete_file("/etc".to_string());
+        assert!(matches!(del_err, Err(FsError::PermissionDenied(_))));
     }
 }

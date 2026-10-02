@@ -14,6 +14,7 @@ import { marked } from "marked";
 import { ExtensionItem } from "../../types";
 import { ExtensionIcon } from "./ExtensionIcon";
 import { fetchLiveExtensionDetails, isAiExtension } from "../../services/extensionService";
+import { sanitizeHtml } from "../../utils/sanitizeHtml";
 
 marked.setOptions({
   gfm: true,
@@ -61,9 +62,10 @@ export const ExtensionDetailView: React.FC<ExtensionDetailViewProps> = ({
   const renderedHtml = useMemo(() => {
     if (!rawMarkdown.trim()) return "";
     try {
-      return marked.parse(rawMarkdown) as string;
+      const parsed = marked.parse(rawMarkdown) as string;
+      return sanitizeHtml(parsed);
     } catch {
-      return `<p>${rawMarkdown}</p>`;
+      return `<p>${sanitizeHtml(rawMarkdown)}</p>`;
     }
   }, [rawMarkdown]);
 

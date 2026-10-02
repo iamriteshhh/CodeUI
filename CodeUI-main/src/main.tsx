@@ -147,6 +147,26 @@ window.addEventListener("gesturestart", (e) => e.preventDefault());
 window.addEventListener("gesturechange", (e) => e.preventDefault());
 window.addEventListener("gestureend", (e) => e.preventDefault());
 
+// In production builds, disable right-click inspect and DevTools shortcuts (R5)
+if (import.meta.env.PROD) {
+  window.addEventListener("contextmenu", (e) => {
+    const target = e.target as HTMLElement | null;
+    if (!target?.closest("input, textarea, [contenteditable='true']")) {
+      e.preventDefault();
+    }
+  });
+
+  window.addEventListener("keydown", (e) => {
+    if (
+      e.key === "F12" ||
+      ((e.ctrlKey || e.metaKey) && e.shiftKey && ["I", "i", "J", "j", "C", "c"].includes(e.key)) ||
+      ((e.ctrlKey || e.metaKey) && ["U", "u"].includes(e.key))
+    ) {
+      e.preventDefault();
+    }
+  });
+}
+
 // Ensure Monaco line and character measurements match after font readiness
 async function initApp() {
   await ensureMonacoFontsReady(monaco);
