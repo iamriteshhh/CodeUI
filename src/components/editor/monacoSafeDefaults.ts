@@ -47,6 +47,17 @@ export const MONACO_LAB_SAFE_OPTIONS: NonNullable<EditorProps["options"]> = {
 
   hover: { enabled: "off" },
   codeLens: false,
+  formatOnType: false,
+  formatOnPaste: false,
+  autoClosingBrackets: "never",
+  autoClosingQuotes: "never",
+  autoClosingDelete: "never",
+  autoClosingOvertype: "never",
+  autoSurround: "never",
+  linkedEditing: false,
+  renameOnType: false,
+  definitionLinkOpensInPeek: false,
+  inlayHints: { enabled: "off" },
 
   // Visual ergonomics & stability
   fontSize: 14,
@@ -77,3 +88,79 @@ export const MONACO_LAB_SAFE_OPTIONS: NonNullable<EditorProps["options"]> = {
   matchBrackets: "always",
   contextmenu: true,
 };
+
+/**
+ * Strict lab-safe lockdown (Y1): Neutralizes all language-service providers
+ * (completions, hovers, code actions/lightbulbs, definitions, renames) across all languages,
+ * ensuring students write code purely from knowledge. Monarch syntax highlighting remains active.
+ */
+export function applyZeroSuggestionsLockdown(monacoInstance: any) {
+  if (!monacoInstance || !monacoInstance.languages) return;
+
+  const dummyDisposable = { dispose: () => {} };
+
+  // Intercept and neutralize provider registration
+  monacoInstance.languages.registerCompletionItemProvider = () => dummyDisposable;
+  monacoInstance.languages.registerHoverProvider = () => dummyDisposable;
+  monacoInstance.languages.registerCodeActionProvider = () => dummyDisposable;
+  monacoInstance.languages.registerDefinitionProvider = () => dummyDisposable;
+  monacoInstance.languages.registerReferenceProvider = () => dummyDisposable;
+  monacoInstance.languages.registerRenameProvider = () => dummyDisposable;
+  monacoInstance.languages.registerSignatureHelpProvider = () => dummyDisposable;
+  monacoInstance.languages.registerInlayHintsProvider = () => dummyDisposable;
+  monacoInstance.languages.registerCodeLensProvider = () => dummyDisposable;
+
+  // Strict mode configuration for built-in worker languages
+  const noAssistance = {
+    completionItems: false,
+    hovers: false,
+    documentHighlights: false,
+    definitions: false,
+    referenceProviders: false,
+    documentSymbols: false,
+    signatureHelp: false,
+    rename: false,
+    colors: false,
+    folding: false,
+    selectionRanges: false,
+    documentFormattingEdits: false,
+    documentRangeFormattingEdits: false,
+    onTypeFormattingEdits: false,
+    codeActions: false,
+    inlayHints: false,
+    diagnostics: false,
+  };
+
+  try {
+    monacoInstance.languages.typescript?.typescriptDefaults?.setModeConfiguration(noAssistance);
+    monacoInstance.languages.typescript?.javascriptDefaults?.setModeConfiguration(noAssistance);
+    monacoInstance.languages.css?.cssDefaults?.setModeConfiguration(noAssistance);
+    monacoInstance.languages.html?.htmlDefaults?.setModeConfiguration(noAssistance);
+    monacoInstance.languages.json?.jsonDefaults?.setModeConfiguration(noAssistance);
+  } catch (err) {
+    console.warn("Failed to apply mode configuration lockdown:", err);
+  }
+}
+
+/**
+ * Binds no-op handlers to all manual completion/hint shortcuts on the editor instance (Y1).
+ */
+export function blockManualSuggestionShortcuts(editor: any, monacoInstance: any) {
+  if (!editor || !monacoInstance) return;
+
+  const blocked = [
+    monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.Space,
+    monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyMod.Shift | monacoInstance.KeyCode.Space,
+    monacoInstance.KeyMod.Alt | monacoInstance.KeyCode.Enter,
+    monacoInstance.KeyCode.F12,
+    monacoInstance.KeyMod.Alt | monacoInstance.KeyCode.F12,
+    monacoInstance.KeyMod.Shift | monacoInstance.KeyCode.F12,
+    monacoInstance.KeyCode.F2,
+  ];
+
+  for (const shortcut of blocked) {
+    editor.addCommand(shortcut, () => {
+      // Zero suggestions tenet: strictly no-op
+    });
+  }
+}

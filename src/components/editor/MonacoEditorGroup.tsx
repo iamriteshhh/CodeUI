@@ -1,6 +1,6 @@
 import React from "react";
 import Editor from "@monaco-editor/react";
-import { MONACO_LAB_SAFE_OPTIONS } from "./monacoSafeDefaults";
+import { MONACO_LAB_SAFE_OPTIONS, blockManualSuggestionShortcuts } from "./monacoSafeDefaults";
 import { OpenFile } from "../../types";
 import { ChevronRight } from "lucide-react";
 import { FileIcon } from "../icons/FileIcon";
@@ -128,6 +128,9 @@ const MonacoEditorGroupComponent: React.FC<MonacoEditorGroupProps> = ({
             monaco.editor.setTheme("codeui-dark");
             editorService.setActiveEditor(editor);
             editorService.setMonaco(monaco);
+
+            // Y1: Block all manual completion/hint shortcuts on the editor instance
+            blockManualSuggestionShortcuts(editor, monaco);
 
             // R3: Guarantee character metrics match font before rendering
             monaco.editor.remeasureFonts();

@@ -4,6 +4,7 @@ import * as monaco from "monaco-editor";
 import { registerAllEagerLanguages } from "./languages/registerAllLanguages";
 import { App } from "./App";
 import { ensureMonacoFontsReady } from "./utils/fontCheck";
+import { applyZeroSuggestionsLockdown } from "./components/editor/monacoSafeDefaults";
 import "./index.css";
 
 // Import Monaco workers directly using Vite ?worker syntax.
@@ -22,56 +23,11 @@ try {
   console.error("Failed to register eager languages:", e);
 }
 
-// Strict lab-safe lockdown: disable all built-in completion, hover, and suggestion engines (F14)
+// Strict lab-safe lockdown: neutralize all completion, hover, and suggestion engines (Y1)
 try {
-  const noAssistance = {
-    completionItems: false,
-    hovers: false,
-    documentHighlights: false,
-    definitions: false,
-    referenceProviders: false,
-    documentSymbols: false,
-    signatureHelp: false,
-    rename: false,
-    colors: false,
-    folding: false,
-    selectionRanges: false,
-    documentFormattingEdits: false,
-    documentRangeFormattingEdits: false,
-    onTypeFormattingEdits: false,
-    codeActions: false,
-    inlayHints: false,
-    diagnostics: false,
-  };
-  (monaco.languages as any).typescript?.typescriptDefaults?.setModeConfiguration(noAssistance);
-  (monaco.languages as any).typescript?.javascriptDefaults?.setModeConfiguration(noAssistance);
-  (monaco.languages as any).css?.cssDefaults?.setModeConfiguration({
-    completionItems: false,
-    hovers: false,
-    documentHighlights: false,
-    documentSymbols: false,
-    colors: false,
-    folding: false,
-    diagnostics: false,
-  });
-  (monaco.languages as any).html?.htmlDefaults?.setModeConfiguration({
-    completionItems: false,
-    hovers: false,
-    documentHighlights: false,
-    documentSymbols: false,
-    colors: false,
-    folding: false,
-  });
-  (monaco.languages as any).json?.jsonDefaults?.setModeConfiguration({
-    completionItems: false,
-    hovers: false,
-    documentSymbols: false,
-    colors: false,
-    folding: false,
-    diagnostics: false,
-  });
+  applyZeroSuggestionsLockdown(monaco);
 } catch (err) {
-  console.warn("Failed to apply lab-safe mode configuration:", err);
+  console.warn("Failed to apply zero-suggestions lockdown:", err);
 }
 
 // Define vibrant high-contrast dark theme with guaranteed token colors
