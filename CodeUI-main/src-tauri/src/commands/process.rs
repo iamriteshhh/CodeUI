@@ -7,10 +7,13 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 
-use crate::proc::{crash_hint, detach_process_group, kill_tree, take_utf8, DEFAULT_TIMEOUT_SECS};
+use crate::proc::{
+    crash_hint, detach_process_group, kill_tree, kill_tree_by_pid, take_utf8, DEFAULT_TIMEOUT_SECS,
+};
 use crate::runners::{runner_for_path, CommandSpec, RunContext, RunnerError};
 
 #[derive(Debug, thiserror::Error, Serialize)]
@@ -70,10 +73,26 @@ pub enum RunStatus {
     Failed { message: String },
 }
 
+#[derive(Clone)]
+enum ActiveChild {
+    Piped(Arc<Mutex<Child>>),
+    Pty {
+        child: Arc<Mutex<Box<dyn portable_pty::Child + Send + Sync>>>,
+        pid: u32,
+    },
+}
+
+#[derive(Clone)]
+enum ActiveStdin {
+    Piped(Arc<Mutex<Option<ChildStdin>>>),
+    Pty(Arc<Mutex<Option<Box<dyn Write + Send>>>>),
+}
+
 struct ActiveRun {
-    child: Arc<Mutex<Child>>,
-    stdin: Arc<Mutex<Option<ChildStdin>>>,
+    child: ActiveChild,
+    stdin: ActiveStdin,
     stopped_by_user: Arc<AtomicBool>,
+    last_input: Arc<Mutex<Instant>>,
 }
 
 #[derive(Default)]
@@ -90,30 +109,132 @@ impl RunRegistry {
         self.runs.lock().expect("run registry").remove(id);
     }
 
-    /// Hands out a child handle so the caller can act on it without holding the
-    /// registry lock. Both killing and writing to stdin can block for a long
-    /// time, and holding the lock across either would stall every other run.
-    fn handle_of(&self, id: &str) -> Option<(Arc<Mutex<Child>>, Arc<AtomicBool>)> {
-        let runs = self.runs.lock().expect("run registry");
-        let run = runs.get(id)?;
-        Some((Arc::clone(&run.child), Arc::clone(&run.stopped_by_user)))
+    pub fn stop(&self, id: &str) -> Result<(), RunError> {
+        let (child, stdin, stopped_by_user) = {
+            let runs = self.runs.lock().expect("run registry");
+            let run = runs
+                .get(id)
+                .ok_or_else(|| RunError::UnknownRun(id.to_string()))?;
+            (
+                run.child.clone(),
+                run.stdin.clone(),
+                Arc::clone(&run.stopped_by_user),
+            )
+        };
+
+        stopped_by_user.store(true, Ordering::SeqCst);
+
+        match child {
+            ActiveChild::Piped(child) => {
+                let mut child = child.lock().expect("child");
+                kill_tree(&mut child).map_err(|e| RunError::Io(e.to_string()))?;
+            }
+            ActiveChild::Pty { child, pid } => {
+                if let ActiveStdin::Pty(writer) = stdin {
+                    if let Ok(mut guard) = writer.lock() {
+                        if let Some(w) = guard.as_mut() {
+                            let _ = w.write_all(b"\x03");
+                            let _ = w.flush();
+                        }
+                    }
+                }
+                std::thread::sleep(Duration::from_millis(100));
+                let mut child = child.lock().expect("pty child");
+                let _ = child.kill();
+                if pid > 0 {
+                    kill_tree_by_pid(pid);
+                }
+            }
+        }
+        Ok(())
     }
 
-    fn stdin_of(&self, id: &str) -> Option<Arc<Mutex<Option<ChildStdin>>>> {
-        let runs = self.runs.lock().expect("run registry");
-        Some(Arc::clone(&runs.get(id)?.stdin))
+    pub fn write_stdin(&self, id: &str, data: &str) -> Result<(), RunError> {
+        let (stdin, last_input) = {
+            let runs = self.runs.lock().expect("run registry");
+            let run = runs
+                .get(id)
+                .ok_or_else(|| RunError::UnknownRun(id.to_string()))?;
+            (run.stdin.clone(), Arc::clone(&run.last_input))
+        };
+
+        if let Ok(mut ts) = last_input.lock() {
+            *ts = Instant::now();
+        }
+
+        match stdin {
+            ActiveStdin::Piped(stdin) => {
+                let mut guard = stdin.lock().expect("stdin");
+                match guard.as_mut() {
+                    Some(pipe) => pipe
+                        .write_all(data.as_bytes())
+                        .and_then(|_| pipe.flush())
+                        .map_err(|e| RunError::Io(e.to_string())),
+                    None => Err(RunError::Io("program is not accepting input".into())),
+                }
+            }
+            ActiveStdin::Pty(writer) => {
+                let mut guard = writer.lock().expect("pty writer");
+                match guard.as_mut() {
+                    Some(w) => w
+                        .write_all(data.as_bytes())
+                        .and_then(|_| w.flush())
+                        .map_err(|e| RunError::Io(e.to_string())),
+                    None => Err(RunError::Io("program is not accepting input".into())),
+                }
+            }
+        }
+    }
+
+    pub fn close_stdin(&self, id: &str) -> Result<(), RunError> {
+        let stdin = {
+            let runs = self.runs.lock().expect("run registry");
+            let run = runs
+                .get(id)
+                .ok_or_else(|| RunError::UnknownRun(id.to_string()))?;
+            run.stdin.clone()
+        };
+
+        match stdin {
+            ActiveStdin::Piped(stdin) => {
+                stdin.lock().expect("stdin").take();
+            }
+            ActiveStdin::Pty(writer) => {
+                let mut guard = writer.lock().expect("pty writer");
+                if let Some(w) = guard.as_mut() {
+                    #[cfg(windows)]
+                    let _ = w.write_all(b"\x1a\r\n");
+                    #[cfg(not(windows))]
+                    let _ = w.write_all(b"\x04");
+                    let _ = w.flush();
+                }
+                guard.take();
+            }
+        }
+        Ok(())
     }
 
     /// Kills every live run. Called on window close so nothing survives the app.
     pub fn shutdown_all(&self) {
-        // Drain first so the killing happens outside the lock.
-        let children: Vec<Arc<Mutex<Child>>> = {
+        let runs: Vec<ActiveRun> = {
             let mut runs = self.runs.lock().expect("run registry");
-            runs.drain().map(|(_, run)| run.child).collect()
+            runs.drain().map(|(_, run)| run).collect()
         };
-        for child in children {
-            if let Ok(mut child) = child.lock() {
-                let _ = kill_tree(&mut child);
+        for run in runs {
+            match run.child {
+                ActiveChild::Piped(child) => {
+                    if let Ok(mut child) = child.lock() {
+                        let _ = kill_tree(&mut child);
+                    }
+                }
+                ActiveChild::Pty { child, pid } => {
+                    if let Ok(mut child) = child.lock() {
+                        let _ = child.kill();
+                    }
+                    if pid > 0 {
+                        kill_tree_by_pid(pid);
+                    }
+                }
             }
         }
     }
@@ -275,14 +396,13 @@ pub fn run_file(
             );
         };
 
-        let outcome = supervise(
+        let outcome = supervise_pty(
             &app_bg,
             &id_bg,
             exec_spec,
             timeout,
             &budget,
             &stopped_by_user,
-            true,
             announce,
         );
 
@@ -292,7 +412,7 @@ pub fn run_file(
                 let stopped = stopped_by_user.load(Ordering::SeqCst);
                 let hint = if outcome.timed_out {
                     Some(format!(
-                        "Program ran longer than {} seconds and was stopped.",
+                        "Program was inactive (no user input) for {} seconds and was stopped.",
                         timeout.as_secs()
                     ))
                 } else if stopped {
@@ -313,6 +433,163 @@ pub fn run_file(
     });
 
     Ok(run_id)
+}
+
+/// Runs the execution phase in its own dedicated pseudo-terminal (PTY).
+///
+/// A real PTY provides line buffering, real-time unbuffered stdout for prompts
+/// like `printf("Enter: ")`, interactive terminal stdin (`scanf`, `cin`, `input()`),
+/// and clean signals without shell script injection.
+fn supervise_pty(
+    app: &AppHandle,
+    run_id: &str,
+    spec: CommandSpec,
+    timeout: Duration,
+    budget: &Arc<OutputBudget>,
+    stopped_by_user: &Arc<AtomicBool>,
+    on_spawn: impl FnOnce(u32),
+) -> Result<Outcome, String> {
+    let pair = native_pty_system()
+        .openpty(PtySize {
+            rows: 24,
+            cols: 80,
+            pixel_width: 0,
+            pixel_height: 0,
+        })
+        .map_err(|e| format!("could not open pseudo-terminal: {e}"))?;
+
+    let mut builder = CommandBuilder::new(&spec.program);
+    builder.args(&spec.args);
+    builder.cwd(&spec.cwd);
+    builder.env("TERM", "xterm-256color");
+    builder.env("PATH", crate::proc::augmented_path());
+
+    let child = pair
+        .slave
+        .spawn_command(builder)
+        .map_err(|e| format!("could not start {}: {e}", spec.program))?;
+
+    let pid = child.process_id().unwrap_or(0);
+    on_spawn(pid);
+
+    let reader = pair
+        .master
+        .try_clone_reader()
+        .map_err(|e| format!("could not read from pty: {e}"))?;
+    let writer = pair
+        .master
+        .take_writer()
+        .map_err(|e| format!("could not take pty writer: {e}"))?;
+
+    #[cfg(windows)]
+    let _slave_holder = Some(pair.slave);
+    #[cfg(not(windows))]
+    let _slave_holder: Option<()> = {
+        drop(pair.slave);
+        None
+    };
+
+    let last_input = Arc::new(Mutex::new(Instant::now()));
+    let child = Arc::new(Mutex::new(child));
+    let writer = Arc::new(Mutex::new(Some(writer)));
+
+    app.state::<RunRegistry>().insert(
+        run_id.to_string(),
+        ActiveRun {
+            child: ActiveChild::Pty {
+                child: Arc::clone(&child),
+                pid,
+            },
+            stdin: ActiveStdin::Pty(Arc::clone(&writer)),
+            stopped_by_user: Arc::clone(stopped_by_user),
+            last_input: Arc::clone(&last_input),
+        },
+    );
+
+    let (done_tx, done_rx) = std::sync::mpsc::channel();
+    spawn_pump(
+        app.clone(),
+        run_id.to_string(),
+        "stdout",
+        reader,
+        Arc::clone(budget),
+        done_tx,
+    );
+
+    let started = Instant::now();
+    let hard_ceiling = Duration::from_secs(300);
+    let mut timed_out = false;
+
+    let poll = || -> Result<Option<Option<i32>>, String> {
+        let mut guard = child.lock().map_err(|e| e.to_string())?;
+        match guard.try_wait() {
+            Ok(Some(status)) => {
+                let code = if status.success() {
+                    0
+                } else {
+                    status.exit_code() as i32
+                };
+                Ok(Some(Some(code)))
+            }
+            Ok(None) => Ok(None),
+            Err(e) => Err(e.to_string()),
+        }
+    };
+
+    let exit_code = loop {
+        let state = match poll() {
+            Ok(state) => state,
+            Err(e) => {
+                app.state::<RunRegistry>().remove(run_id);
+                return Err(e);
+            }
+        };
+
+        if let Some(code) = state {
+            break code;
+        }
+
+        if stopped_by_user.load(Ordering::SeqCst) {
+            let mut guard = child.lock().expect("pty child");
+            let _ = guard.kill();
+            if pid > 0 {
+                kill_tree_by_pid(pid);
+            }
+            break Some(137);
+        }
+
+        let now = Instant::now();
+        let inactive = now.duration_since(*last_input.lock().unwrap());
+        if inactive >= timeout {
+            timed_out = true;
+            let mut guard = child.lock().expect("pty child");
+            let _ = guard.kill();
+            if pid > 0 {
+                kill_tree_by_pid(pid);
+            }
+            break Some(124);
+        }
+
+        if now.duration_since(started) >= hard_ceiling {
+            timed_out = true;
+            let mut guard = child.lock().expect("pty child");
+            let _ = guard.kill();
+            if pid > 0 {
+                kill_tree_by_pid(pid);
+            }
+            break Some(124);
+        }
+
+        std::thread::sleep(Duration::from_millis(15));
+    };
+
+    let _ = done_rx.recv_timeout(DRAIN_GRACE);
+    app.state::<RunRegistry>().remove(run_id);
+
+    Ok(Outcome {
+        exit_code,
+        timed_out,
+    })
 }
 
 /// Runs one child to completion under a timeout, streaming its output.
@@ -362,9 +639,10 @@ fn supervise(
     app.state::<RunRegistry>().insert(
         run_id.to_string(),
         ActiveRun {
-            child: Arc::clone(&child),
-            stdin: Arc::new(Mutex::new(stdin)),
+            child: ActiveChild::Piped(Arc::clone(&child)),
+            stdin: ActiveStdin::Piped(Arc::new(Mutex::new(stdin))),
             stopped_by_user: Arc::clone(stopped_by_user),
+            last_input: Arc::new(Mutex::new(Instant::now())),
         },
     );
 
@@ -571,14 +849,7 @@ fn restrict_scratch(path: &std::path::Path) {
 /// Stops a run through the same escalation path as the timeout watchdog.
 #[tauri::command]
 pub fn stop_run(registry: State<'_, RunRegistry>, run_id: String) -> Result<(), RunError> {
-    let (child, stopped_by_user) = registry
-        .handle_of(&run_id)
-        .ok_or(RunError::UnknownRun(run_id))?;
-
-    stopped_by_user.store(true, Ordering::SeqCst);
-    let mut child = child.lock().expect("child");
-    kill_tree(&mut child).map_err(|e| RunError::Io(e.to_string()))?;
-    Ok(())
+    registry.stop(&run_id)
 }
 
 /// Feeds a line to a program waiting on `scanf` / `input()`.
@@ -588,21 +859,7 @@ pub fn write_run_stdin(
     run_id: String,
     data: String,
 ) -> Result<(), RunError> {
-    // Taken out of the registry first: if the program has stopped reading, its
-    // pipe fills and this write blocks. Holding the registry lock through that
-    // would deadlock every other run command, including Stop.
-    let stdin = registry
-        .stdin_of(&run_id)
-        .ok_or(RunError::UnknownRun(run_id))?;
-
-    let mut guard = stdin.lock().expect("stdin");
-    match guard.as_mut() {
-        Some(pipe) => pipe
-            .write_all(data.as_bytes())
-            .and_then(|_| pipe.flush())
-            .map_err(|e| RunError::Io(e.to_string())),
-        None => Err(RunError::Io("program is not accepting input".into())),
-    }
+    registry.write_stdin(&run_id, &data)
 }
 
 /// Signals end-of-input.
@@ -611,13 +868,7 @@ pub fn write_run_stdin(
 /// never terminate otherwise, because the pipe stays open for the whole run.
 #[tauri::command]
 pub fn close_run_stdin(registry: State<'_, RunRegistry>, run_id: String) -> Result<(), RunError> {
-    let stdin = registry
-        .stdin_of(&run_id)
-        .ok_or(RunError::UnknownRun(run_id))?;
-
-    // Dropping the writer is what the child sees as EOF.
-    stdin.lock().expect("stdin").take();
-    Ok(())
+    registry.close_stdin(&run_id)
 }
 
 #[cfg(test)]

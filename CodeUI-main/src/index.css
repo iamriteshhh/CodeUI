@@ -783,11 +783,25 @@ textarea,
   gap: 6px;
   font-size: 11px;
   font-weight: 500;
-  color: #cccccc;
-  background-color: #282828;
-  padding: 2px 8px;
+  color: #8c8c8c;
+  background-color: transparent;
+  padding: 3px 10px;
   border-radius: 3px;
-  border: 1px solid #383838;
+  border: 1px solid transparent;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+}
+
+.terminal-tab-pill:hover {
+  color: #cccccc;
+  background-color: #252526;
+}
+
+.terminal-tab-pill.active {
+  color: #ffffff;
+  background-color: #282828;
+  border-color: #383838;
 }
 
 .terminal-toolbar-right {

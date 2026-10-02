@@ -8,14 +8,14 @@ use std::process::Command;
 pub mod kill;
 pub mod toolpath;
 
-pub use kill::{kill_tree, KillOutcome};
+pub use kill::{kill_tree, kill_tree_by_pid, KillOutcome};
 pub use toolpath::{augmented_path, resolve_tool};
 
 /// Grace period between SIGTERM and SIGKILL.
 pub const TERM_GRACE_MS: u64 = 500;
 
-/// Default wall-clock budget for a student program.
-pub const DEFAULT_TIMEOUT_SECS: u64 = 12;
+/// Default wall-clock budget for a student program (R4: raised to 30s for interactive use).
+pub const DEFAULT_TIMEOUT_SECS: u64 = 30;
 
 /// Places `cmd` in a fresh process group so the whole tree can be signalled at once.
 pub fn detach_process_group(cmd: &mut Command) {

@@ -13,7 +13,9 @@ impl LanguageRunner for CRunner {
 
     fn compile(&self, ctx: &RunContext) -> Result<Option<CommandSpec>, RunnerError> {
         require_tool("gcc")?;
-        let out = ctx.scratch.join(ctx.stem());
+        let out = ctx
+            .scratch
+            .join(format!("{}{}", ctx.stem(), std::env::consts::EXE_SUFFIX));
         Ok(Some(CommandSpec::new(
             "gcc",
             vec![
@@ -28,7 +30,9 @@ impl LanguageRunner for CRunner {
     }
 
     fn execute(&self, ctx: &RunContext) -> Result<CommandSpec, RunnerError> {
-        let bin = ctx.scratch.join(ctx.stem());
+        let bin = ctx
+            .scratch
+            .join(format!("{}{}", ctx.stem(), std::env::consts::EXE_SUFFIX));
         Ok(CommandSpec::new(
             bin.to_string_lossy().into_owned(),
             vec![],

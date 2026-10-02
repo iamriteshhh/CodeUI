@@ -176,7 +176,7 @@ mod tests {
         let s = Settings::default();
         assert_eq!(s.font_size, 14);
         assert_eq!(s.tab_width, 4);
-        assert_eq!(s.run_timeout_secs, 12);
+        assert_eq!(s.run_timeout_secs, crate::proc::DEFAULT_TIMEOUT_SECS);
     }
 
     #[test]

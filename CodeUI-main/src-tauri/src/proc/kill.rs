@@ -41,6 +41,13 @@ pub fn kill_tree(child: &mut Child) -> std::io::Result<KillOutcome> {
     Ok(KillOutcome::Killed)
 }
 
+/// Terminates a process tree by PID (used when managing PTY children).
+pub fn kill_tree_by_pid(pid: u32) {
+    signal_group(pid, Signal::Term);
+    std::thread::sleep(Duration::from_millis(150));
+    signal_group(pid, Signal::Kill);
+}
+
 #[derive(Clone, Copy)]
 enum Signal {
     Term,

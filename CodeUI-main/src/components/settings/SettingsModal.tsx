@@ -18,7 +18,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [theme, setTheme] = useState<"dark" | "light">(settings.theme || "dark");
   const [fontSize, setFontSize] = useState<number>(settings.fontSize || 14);
   const [tabWidth, setTabWidth] = useState<number>(settings.tabWidth || 4);
-  const [runTimeoutSecs, setRunTimeoutSecs] = useState<number>(settings.runTimeoutSecs || 12);
+  const [runTimeoutSecs, setRunTimeoutSecs] = useState<number>(settings.runTimeoutSecs || 30);
   const [shellPath, setShellPath] = useState<string>(settings.shellPath || "");
   const [showWelcome, setShowWelcome] = useState<boolean>(
     settings.showWelcomeOnStartup !== undefined ? settings.showWelcomeOnStartup : true

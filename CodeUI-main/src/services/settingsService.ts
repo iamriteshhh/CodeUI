@@ -15,7 +15,7 @@ const defaultSettings: UserSettings = {
   fontSize: 14,
   tabWidth: 4,
   shellPath: null,
-  runTimeoutSecs: 12,
+  runTimeoutSecs: 30,
   lastFolder: null,
   recentFolders: [],
   showWelcomeOnStartup: true,

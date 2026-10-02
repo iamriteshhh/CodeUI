@@ -141,7 +141,7 @@ export function useWorkspace() {
     theme: "dark",
     fontSize: 14,
     tabWidth: 4,
-    runTimeoutSecs: 12,
+    runTimeoutSecs: 30,
     recentFolders: [],
     showWelcomeOnStartup: true,
   });
@@ -614,31 +614,23 @@ export function useWorkspace() {
     // 3. Clear previous compiler markers on active file
     editorService.clearMarkers(active.path);
 
-    // 4. Open terminal panel and connect canonical PTY session
+    // 4. Open terminal panel
     setPanelVisible(true);
     setActivePanelTab("terminal");
-    const sessionId = await ensurePtySession();
-    if (!sessionId) return;
 
-    // 5. Generate run ID and wire stream listeners before invoking runner
+    // 5. Generate run ID
     const runId = "run-" + Math.random().toString(36).substring(2, 10);
     let compileStderr = "";
 
+    // Stream listeners: capture stderr for Monaco squiggles and handle global notifications
     const unOutput = await processService.onRunOutput(runId, (chunk) => {
-      ptyService.writePty(sessionId, chunk.chunk);
       if (chunk.stream === "stderr") {
         compileStderr += chunk.chunk;
       }
     });
 
     const unStatus = await processService.onRunStatus(runId, (status) => {
-      if (status.phase === "compiling") {
-        ptyService.writePty(sessionId, `\r\n\x1b[36m[Compiling ${status.language}...]\x1b[0m\r\n`);
-      } else if (status.phase === "compileFailed") {
-        ptyService.writePty(
-          sessionId,
-          `\r\n\x1b[31m[Compilation failed (exit code ${status.exitCode ?? 1})]\x1b[0m\r\n`
-        );
+      if (status.phase === "compileFailed") {
         // Parse compiler errors and attach red squiggles in Monaco
         const diagnostics = parseCompilerDiagnostics(active.language, compileStderr, active.path);
         if (diagnostics.length > 0) {
@@ -646,43 +638,37 @@ export function useWorkspace() {
         }
         unOutput();
         unStatus();
-      } else if (status.phase === "running") {
-        ptyService.writePty(
-          sessionId,
-          `\x1b[32m[Running ${active.name} (PID: ${status.pid})]\x1b[0m\r\n`
-        );
       } else if (status.phase === "finished") {
-        const dur = status.durationMs ?? 0;
-        ptyService.writePty(
-          sessionId,
-          `\r\n\x1b[90m[Process finished in ${dur}ms with exit code ${status.exitCode ?? 0}]\x1b[0m\r\n`
-        );
-        if (status.hint) {
-          ptyService.writePty(sessionId, `\x1b[33m[Hint: ${status.hint}]\x1b[0m\r\n`);
-        }
         unOutput();
         unStatus();
       } else if (status.phase === "failed") {
-        ptyService.writePty(sessionId, `\r\n\x1b[31m[Execution Failed: ${status.message}]\x1b[0m\r\n`);
         notify.error("Run Error", status.message);
         unOutput();
         unStatus();
       }
     });
 
-    // 6. Invoke Rust runner with caller-provided runId and configured timeout
+    // 6. Notify TerminalPanel to bind to this run in the dedicated Run tab
+    window.dispatchEvent(
+      new CustomEvent("codeui-run-start", {
+        detail: {
+          runId,
+          name: active.name,
+          language: active.language,
+          path: active.path,
+        },
+      })
+    );
+
+    // 7. Invoke Rust supervised runner (executes in its own dedicated PTY, completely separate from shell)
     try {
       await processService.runFile(active.path, runId, settings.runTimeoutSecs);
     } catch (err: any) {
-      ptyService.writePty(sessionId, `\r\n\x1b[31m[Error: ${err?.message || err}]\x1b[0m\r\n`);
       notify.error("Run Error", formatError(err));
       unOutput();
       unStatus();
     }
-
-    // 7. Focus terminal
-    window.dispatchEvent(new CustomEvent("focus-terminal"));
-  }, [saveFile, ensurePtySession, settings.runTimeoutSecs]);
+  }, [saveFile, settings.runTimeoutSecs]);
 
   return {
     workspacePath,
