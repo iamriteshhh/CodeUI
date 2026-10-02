@@ -3,6 +3,7 @@ import { loader } from "@monaco-editor/react";
 import * as monaco from "monaco-editor";
 import { registerAllEagerLanguages } from "./languages/registerAllLanguages";
 import { App } from "./App";
+import { ensureMonacoFontsReady } from "./utils/fontCheck";
 import "./index.css";
 
 // Import Monaco workers directly using Vite ?worker syntax.
@@ -148,17 +149,7 @@ window.addEventListener("gestureend", (e) => e.preventDefault());
 
 // Ensure Monaco line and character measurements match after font readiness
 async function initApp() {
-  if (document.fonts && document.fonts.load) {
-    try {
-      await Promise.race([
-        document.fonts.load('14px "CodeUI Mono"'),
-        new Promise((resolve) => setTimeout(resolve, 500)),
-      ]);
-    } catch (err) {
-      console.warn("Font pre-load warning:", err);
-    }
-    monaco.editor.remeasureFonts();
-  }
+  await ensureMonacoFontsReady(monaco);
 
   // Remeasure fonts if devicePixelRatio / monitor DPI changes
   if (window.matchMedia) {

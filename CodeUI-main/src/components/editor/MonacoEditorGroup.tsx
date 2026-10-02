@@ -129,6 +129,15 @@ const MonacoEditorGroupComponent: React.FC<MonacoEditorGroupProps> = ({
             editorService.setActiveEditor(editor);
             editorService.setMonaco(monaco);
 
+            // R3: Guarantee character metrics match font before rendering
+            monaco.editor.remeasureFonts();
+            if (typeof document !== "undefined" && document.fonts?.ready) {
+              document.fonts.ready.then(() => {
+                monaco.editor.remeasureFonts();
+                editor.layout();
+              });
+            }
+
             const model = editor.getModel();
             if (model && fileRef.current?.language) {
               monaco.editor.setModelLanguage(model, fileRef.current.language);

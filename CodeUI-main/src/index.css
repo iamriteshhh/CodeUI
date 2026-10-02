@@ -48,7 +48,7 @@
   --accent-yellow: #cca700;
 
   --font-ui: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
-  --font-mono: "CodeUI Mono", "Cascadia Mono", Consolas, "Courier New", monospace;
+  --font-mono: "CodeUI Mono", Consolas, "Courier New", monospace;
 
   --titlebar-height: 35px;
   --activitybar-width: 48px;
@@ -96,7 +96,7 @@ textarea,
 
 /* Monaco Editor line numbers and margin styling */
 .monaco-editor .margin-view-overlays .line-numbers {
-  font-family: Consolas, 'Courier New', monospace;
+  font-family: var(--font-mono);
   color: #858585 !important;
   visibility: visible !important;
   opacity: 1 !important;
