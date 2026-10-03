@@ -186,7 +186,14 @@ fn check_conflicts() -> Task {
 }
 
 fn scan_for_conflicts(dir: &Path, out: &mut Vec<(PathBuf, usize, String)>) -> Task {
-    const SKIP_DIRS: [&str; 6] = ["target", "node_modules", ".git", "dist", ".venv", "artifacts"];
+    const SKIP_DIRS: [&str; 6] = [
+        "target",
+        "node_modules",
+        ".git",
+        "dist",
+        ".venv",
+        "artifacts",
+    ];
     const SKIP_EXTENSIONS: [&str; 4] = ["md", "png", "ttf", "exe"];
 
     for entry in std::fs::read_dir(dir)? {

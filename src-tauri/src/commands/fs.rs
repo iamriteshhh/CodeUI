@@ -793,8 +793,12 @@ mod tests {
         assert!(is_dangerous_system_path(Path::new("/etc/passwd")));
         assert!(is_dangerous_system_path(Path::new("/usr/bin")));
 
-        assert!(!is_dangerous_system_path(Path::new("D:/projects/student/main.rs")));
-        assert!(!is_dangerous_system_path(Path::new("/home/user/project/file.c")));
+        assert!(!is_dangerous_system_path(Path::new(
+            "D:/projects/student/main.rs"
+        )));
+        assert!(!is_dangerous_system_path(Path::new(
+            "/home/user/project/file.c"
+        )));
     }
 
     #[test]
