@@ -50,6 +50,10 @@ jobs:
             libssl-dev \
             libfuse2 \
             build-essential
+          # The bundled Salivo compiler links libLLVM-16; linuxdeploy must be able to resolve it.
+          wget -q https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 16
 
       - name: Install frontend dependencies
         run: npm ci
@@ -76,7 +80,21 @@ jobs:
           esac
           sdk=$(ls -d sdk-extract/*/)
           cp -R "$sdk"bin "$sdk"std "$sdk"lib "$sdk"stage3 "$sdk"LICENSE src-tauri/resources/salivo-sdk/
-          ls src-tauri/resources/salivo-sdk/bin
+          # sf links LLVM dynamically on Linux and macOS; ship the library so users need no LLVM install.
+          case "${{ matrix.platform }}" in
+            ubuntu-*)
+              cp -L /usr/lib/llvm-16/lib/libLLVM-16.so.1 src-tauri/resources/salivo-sdk/lib/
+              ;;
+            macos-*)
+              brew install llvm@16 dylibbundler
+              cd src-tauri/resources/salivo-sdk
+              dylibbundler -od -b -x bin/sf -d lib/ -p @executable_path/../lib/
+              codesign -f -s - bin/sf lib/*.dylib
+              otool -L bin/sf
+              cd -
+              ;;
+          esac
+          ls src-tauri/resources/salivo-sdk/bin src-tauri/resources/salivo-sdk/lib
 
       - name: Build and release Tauri application
         uses: tauri-apps/tauri-action@v0

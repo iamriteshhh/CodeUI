@@ -16,9 +16,21 @@ pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
             if let Ok(dir) = app.path().resource_dir() {
-                let bin = dir.join("resources").join("salivo-sdk").join("bin");
-                if bin.is_dir() {
-                    proc::set_bundled_bin(bin);
+                let sdk = dir.join("resources").join("salivo-sdk");
+                if sdk.join("bin").is_dir() {
+                    proc::set_bundled_bin(sdk.join("bin"));
+                }
+                // Linux: the bundled sf links the libLLVM shipped next to it.
+                // Children (Run, terminal) inherit this.
+                #[cfg(target_os = "linux")]
+                if sdk.join("lib").is_dir() {
+                    let mut paths = vec![sdk.join("lib")];
+                    if let Some(old) = std::env::var_os("LD_LIBRARY_PATH") {
+                        paths.extend(std::env::split_paths(&old));
+                    }
+                    if let Ok(joined) = std::env::join_paths(paths) {
+                        std::env::set_var("LD_LIBRARY_PATH", joined);
+                    }
                 }
             }
             Ok(())
