@@ -80,7 +80,7 @@ fn normalize(text: &str) -> String {
 pub fn ai_block_reason(id: &str, text: &str) -> Option<String> {
     let p = policy();
     let id_lower = id.to_lowercase();
-    if p.blocked_ids.iter().any(|b| *b == id_lower) {
+    if p.blocked_ids.contains(&id_lower) {
         return Some(format!("{id} is an AI extension"));
     }
     let norm = normalize(&format!("{id} {text}"));
