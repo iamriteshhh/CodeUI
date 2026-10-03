@@ -43,3 +43,7 @@ installers/
 
 # Salivo SDK binaries are bundled by CI (release.yml), never committed
 src-tauri/resources/salivo-sdk/
+
+# Installers are committed with Git LFS (see .gitattributes); the AppImage exceeds GitHub's 100 MB file limit.
+!installer/dist/
+!installer/dist/*

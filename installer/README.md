@@ -1,6 +1,6 @@
 # CodeUI Installers
 
-Official standalone release packages for CodeUI across all major platforms are distributed through GitHub Releases. Binaries are not committed directly to the repository to keep clone sizes minimal and ensure reproducible builds.
+Release packages for every platform are committed in `installer/dist/` (stored with Git LFS, so run `git lfs pull` after cloning) and are also published on GitHub Releases. `SHA256SUMS.txt` lists their checksums.
 
 ### Official Releases & Downloads
 
