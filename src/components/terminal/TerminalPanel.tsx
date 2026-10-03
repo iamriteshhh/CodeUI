@@ -4,6 +4,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import { ptyService } from "../../services/ptyService";
 import { processService } from "../../services/processService";
+import { markTerminalReady } from "../../services/terminalReady";
 import { Trash2, RotateCw, Terminal as TerminalIcon, Plus, Play, Square } from "lucide-react";
 
 interface TerminalPanelProps {
@@ -274,6 +275,7 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
     };
 
     window.addEventListener("codeui-run-start", handleRunStart);
+    markTerminalReady();
     window.addEventListener("focus-terminal", handleFocusTerminal);
 
     // Resize observer

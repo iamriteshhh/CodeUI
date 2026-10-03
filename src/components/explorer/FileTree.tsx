@@ -310,6 +310,14 @@ export const FileTree: React.FC<FileTreeProps> = ({
     }
   };
 
+  // Indent guides: one vertical line per ancestor level, centered under that ancestor's chevron.
+  const INDENT = 12;
+  const rowPad = (level: number) => 8 + level * INDENT;
+  const indentGuides = (level: number) =>
+    Array.from({ length: level }, (_, i) => (
+      <span key={i} className="tree-indent-guide" style={{ left: rowPad(i) + 7 }} />
+    ));
+
   // Recursive Tree Node Renderer with Tree Indentation Guide Lines
   const renderTreeNodes = (nodes: FileEntry[], parentPath: string, level: number = 0) => {
     return nodes.map((entry) => {
@@ -344,12 +352,13 @@ export const FileTree: React.FC<FileTreeProps> = ({
             }}
             className="file-tree-item"
             style={{
+              position: "relative",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
               paddingTop: 3,
               paddingBottom: 3,
-              paddingLeft: level === 0 ? 8 : 4,
+              paddingLeft: rowPad(level),
               paddingRight: 8,
               cursor: "pointer",
               backgroundColor: isActive ? "#37373d" : "transparent",
@@ -358,6 +367,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
               userSelect: "none",
             }}
           >
+            {indentGuides(level)}
             {/* Left: Chevron / Folder / File Icon & Name */}
             <div
               style={{
@@ -439,7 +449,8 @@ export const FileTree: React.FC<FileTreeProps> = ({
           {/* Inline creation input directly under this folder */}
           {isDir && isExpanded && isCreatingHere && (
             <div className="tree-indent-group">
-              <div style={{ paddingTop: 2, paddingBottom: 2 }}>
+              <div style={{ position: "relative", paddingTop: 2, paddingBottom: 2, paddingLeft: rowPad(level + 1) + 19 }}>
+                {indentGuides(level + 1)}
                 <form onSubmit={handleCreateSubmit} style={{ display: "flex", alignItems: "center", gap: 4 }}>
                   {creatingUnder.type === "file" ? (
                     <FileIcon fileName={newItemName || "file.java"} size={14} />
@@ -482,12 +493,15 @@ export const FileTree: React.FC<FileTreeProps> = ({
             <div className="tree-indent-group">
               <div
                 style={{
+                  position: "relative",
                   fontSize: 11,
                   color: "#666",
                   paddingTop: 2,
                   paddingBottom: 2,
+                  paddingLeft: rowPad(level + 1) + 19,
                 }}
               >
+                {indentGuides(level + 1)}
                 (empty)
               </div>
             </div>

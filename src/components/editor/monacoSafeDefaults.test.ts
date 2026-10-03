@@ -96,3 +96,28 @@ describe("Zero Suggestions & Lab-Safe Lockdown (Y1)", () => {
     }
   });
 });
+
+describe("Lockdown on Monaco >= 0.55 layout", () => {
+  it("blocks inline (ghost-text) completions and reaches top-level language-service namespaces", () => {
+    const real = vi.fn();
+    const topTs = {
+      typescriptDefaults: { setModeConfiguration: vi.fn() },
+      javascriptDefaults: { setModeConfiguration: vi.fn() },
+    };
+    const topHtml = { htmlDefaults: { setModeConfiguration: vi.fn() } };
+    const mockMonaco: any = {
+      typescript: topTs,
+      html: topHtml,
+      languages: { registerInlineCompletionsProvider: real },
+    };
+
+    applyZeroSuggestionsLockdown(mockMonaco);
+
+    const result = mockMonaco.languages.registerInlineCompletionsProvider("c", {});
+    expect(typeof result.dispose).toBe("function");
+    expect(real).not.toHaveBeenCalled();
+    for (const d of [topTs.typescriptDefaults, topTs.javascriptDefaults, topHtml.htmlDefaults]) {
+      expect(d.setModeConfiguration).toHaveBeenCalledWith(expect.objectContaining({ completionItems: false }));
+    }
+  });
+});

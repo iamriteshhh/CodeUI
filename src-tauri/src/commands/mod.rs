@@ -5,6 +5,7 @@
 
 pub mod diagnostics;
 pub mod env_detect;
+pub mod extensions;
 pub mod fs;
 pub mod process;
 pub mod settings;

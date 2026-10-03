@@ -1,6 +1,8 @@
 import React from "react";
 import Editor from "@monaco-editor/react";
+import "../../editorRuntime";
 import { MONACO_LAB_SAFE_OPTIONS, blockManualSuggestionShortcuts } from "./monacoSafeDefaults";
+import { getEditorTheme } from "../../services/extensionHost";
 import { OpenFile } from "../../types";
 import { ChevronRight } from "lucide-react";
 import { FileIcon } from "../icons/FileIcon";
@@ -112,7 +114,7 @@ const MonacoEditorGroupComponent: React.FC<MonacoEditorGroupProps> = ({
           path={getNormalizedUri(file.path)}
           language={file.language}
           defaultValue={file.content}
-          theme="codeui-dark"
+          theme={getEditorTheme()}
           keepCurrentModel={true}
           saveViewState={true}
           loading={<div style={{ height: "100%", width: "100%", background: "#1e1e1e" }} />}
@@ -125,7 +127,7 @@ const MonacoEditorGroupComponent: React.FC<MonacoEditorGroupProps> = ({
           onMount={(editor, monaco) => {
             editorRef.current = editor;
             monacoRef.current = monaco;
-            monaco.editor.setTheme("codeui-dark");
+            monaco.editor.setTheme(getEditorTheme());
             editorService.setActiveEditor(editor);
             editorService.setMonaco(monaco);
 

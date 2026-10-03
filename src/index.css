@@ -2316,3 +2316,6 @@ textarea,
 }
 
 
+
+/* Explorer indent guides (positioned per level by FileTree) */
+.tree-indent-guide { position: absolute; top: 0; bottom: 0; width: 1px; background: #585858; pointer-events: none; }

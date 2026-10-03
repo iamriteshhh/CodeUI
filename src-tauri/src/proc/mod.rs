@@ -9,7 +9,7 @@ pub mod kill;
 pub mod toolpath;
 
 pub use kill::{kill_tree, kill_tree_by_pid, KillOutcome};
-pub use toolpath::{augmented_path, resolve_tool};
+pub use toolpath::{augmented_path, resolve_tool, set_bundled_bin};
 
 /// Grace period between SIGTERM and SIGKILL.
 pub const TERM_GRACE_MS: u64 = 500;

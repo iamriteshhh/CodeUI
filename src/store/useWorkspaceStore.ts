@@ -8,6 +8,8 @@ import { processService } from "../services/processService";
 import { editorService } from "../services/editorService";
 import { notify, formatError } from "../services/notify";
 import { parseCompilerDiagnostics } from "../services/diagnostics";
+import { extensionLanguageFor } from "../languages/extLanguageMap";
+import { terminalReady } from "../services/terminalReady";
 import { join, dirname, basename, isInside, rebase, validateName } from "../utils/path";
 
 export function detectLanguage(fileName: string): string {
@@ -103,7 +105,7 @@ export function detectLanguage(fileName: string): string {
     case "swift":
       return "swift";
     default:
-      return "plaintext";
+      return extensionLanguageFor(fileName) ?? "plaintext";
   }
 }
 
@@ -649,6 +651,7 @@ export function useWorkspace() {
     });
 
     // 6. Notify TerminalPanel to bind to this run in the dedicated Run tab
+    await terminalReady;
     window.dispatchEvent(
       new CustomEvent("codeui-run-start", {
         detail: {

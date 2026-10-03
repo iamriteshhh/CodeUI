@@ -3,6 +3,15 @@ import { Play, SplitSquareVertical, Globe } from "lucide-react";
 import { OpenFile, ExtensionItem } from "../../types";
 import { TabStrip } from "./TabStrip";
 
+const RUN_LABELS: Record<string, string> = {
+  salivo: "Run Salivo",
+  java: "Run Java",
+  python: "Run Python",
+  c: "Run C",
+  cpp: "Run C++",
+  html: "Live Preview",
+};
+
 interface RunDebugBarProps {
   openFiles: OpenFile[];
   activeFilePath: string | null;
@@ -40,42 +49,8 @@ export const RunDebugBar: React.FC<RunDebugBarProps> = ({
 }) => {
   const activeFile = openFiles.find((f) => f.path === activeFilePath);
 
-  let runLabel = "Run";
-  if (activeFile) {
-    switch (activeFile.language) {
-      case "salivo":
-        runLabel = "Run Salivo";
-        break;
-      case "java":
-        runLabel = "Run Java";
-        break;
-      case "python":
-        runLabel = "Run Python";
-        break;
-      case "c":
-        runLabel = "Run C";
-        break;
-      case "cpp":
-        runLabel = "Run C++";
-        break;
-      case "rust":
-        runLabel = "Run Rust";
-        break;
-      case "zig":
-        runLabel = "Run Zig";
-        break;
-      case "go":
-        runLabel = "Run Go";
-        break;
-      case "javascript":
-      case "typescript":
-        runLabel = "Run JS/TS";
-        break;
-      case "html":
-        runLabel = "Live Preview";
-        break;
-    }
-  }
+  // Only languages with a backend runner (src-tauri/src/runners) get a Run button.
+  const runLabel = activeFile ? RUN_LABELS[activeFile.language] : undefined;
 
   const isHtml = activeFile?.language === "html";
 
@@ -96,14 +71,16 @@ export const RunDebugBar: React.FC<RunDebugBarProps> = ({
 
       {activeFile && (
         <div className="editor-actions-toolbar">
-          <button
-            className="run-action-btn"
-            title={runLabel}
-            onClick={isHtml ? onTogglePreview : onRunFile}
-          >
-            {isHtml ? <Globe size={13} /> : <Play size={13} fill="#ffffff" />}
-            <span>{runLabel}</span>
-          </button>
+          {runLabel && (
+            <button
+              className="run-action-btn"
+              title={runLabel}
+              onClick={isHtml ? onTogglePreview : onRunFile}
+            >
+              {isHtml ? <Globe size={13} /> : <Play size={13} fill="#ffffff" />}
+              <span>{runLabel}</span>
+            </button>
+          )}
 
           {isHtml && (
             <button

@@ -119,6 +119,8 @@ impl PtyManager {
         }
         // Tells the shell and its children that a capable terminal is attached.
         builder.env("TERM", "xterm-256color");
+        // Same PATH the Run button uses, so `sf`, gcc, etc. resolve identically in the terminal.
+        builder.env("PATH", crate::proc::augmented_path());
 
         let mut child = pair
             .slave

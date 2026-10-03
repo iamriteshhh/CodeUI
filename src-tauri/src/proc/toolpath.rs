@@ -4,6 +4,15 @@
 
 use std::ffi::OsString;
 use std::path::PathBuf;
+use std::sync::OnceLock;
+
+static BUNDLED_BIN: OnceLock<PathBuf> = OnceLock::new();
+
+/// Registers the `bin` folder of the Salivo SDK shipped inside the app bundle.
+/// It goes first on PATH so the bundled compiler wins over older user installs.
+pub fn set_bundled_bin(dir: PathBuf) {
+    let _ = BUNDLED_BIN.set(dir);
+}
 
 /// Constructs an augmented PATH combining current PATH with standard toolchain locations.
 pub fn augmented_path() -> OsString {
@@ -57,6 +66,10 @@ pub fn augmented_path() -> OsString {
         if let Ok(java_home) = std::env::var("JAVA_HOME") {
             paths.push(PathBuf::from(java_home).join("bin"));
         }
+    }
+
+    if let Some(bundled) = BUNDLED_BIN.get() {
+        paths.insert(0, bundled.clone());
     }
 
     std::env::join_paths(paths).unwrap_or_default()

@@ -109,6 +109,8 @@ export function applyZeroSuggestionsLockdown(monacoInstance: any) {
   monacoInstance.languages.registerSignatureHelpProvider = () => dummyDisposable;
   monacoInstance.languages.registerInlayHintsProvider = () => dummyDisposable;
   monacoInstance.languages.registerCodeLensProvider = () => dummyDisposable;
+  monacoInstance.languages.registerInlineCompletionsProvider = () => dummyDisposable;
+  monacoInstance.languages.registerNewSymbolNameProvider = () => dummyDisposable;
 
   // Strict mode configuration for built-in worker languages
   const noAssistance = {
@@ -131,14 +133,25 @@ export function applyZeroSuggestionsLockdown(monacoInstance: any) {
     diagnostics: false,
   };
 
-  try {
-    monacoInstance.languages.typescript?.typescriptDefaults?.setModeConfiguration(noAssistance);
-    monacoInstance.languages.typescript?.javascriptDefaults?.setModeConfiguration(noAssistance);
-    monacoInstance.languages.css?.cssDefaults?.setModeConfiguration(noAssistance);
-    monacoInstance.languages.html?.htmlDefaults?.setModeConfiguration(noAssistance);
-    monacoInstance.languages.json?.jsonDefaults?.setModeConfiguration(noAssistance);
-  } catch (err) {
-    console.warn("Failed to apply mode configuration lockdown:", err);
+  // Monaco >= 0.55 exposes these at the top level (monaco.typescript); older builds under monaco.languages.
+  const ns = (name: string) => monacoInstance[name] ?? monacoInstance.languages[name];
+  const defaults = [
+    ns("typescript")?.typescriptDefaults,
+    ns("typescript")?.javascriptDefaults,
+    ns("css")?.cssDefaults,
+    ns("css")?.scssDefaults,
+    ns("css")?.lessDefaults,
+    ns("html")?.htmlDefaults,
+    ns("html")?.handlebarDefaults,
+    ns("html")?.razorDefaults,
+    ns("json")?.jsonDefaults,
+  ];
+  for (const d of defaults) {
+    try {
+      d?.setModeConfiguration(noAssistance);
+    } catch (err) {
+      console.warn("Failed to apply mode configuration lockdown:", err);
+    }
   }
 }
 

@@ -1,4 +1,6 @@
-import { ExtensionItem } from "../types";
+import { invoke } from "@tauri-apps/api/core";
+import { ExtensionItem, InstalledExtension } from "../types";
+import { aiBlockReason } from "./aiPolicy";
 
 export const EXTENSION_REGISTRY_MAP: Record<string, string> = {
   "anthropic.claude-code": "Anthropic/claude-code",
@@ -83,7 +85,7 @@ export async function fetchLiveExtensionDetails(id: string): Promise<Partial<Ext
       version: data.version || undefined,
       description: data.description || undefined,
       downloads: typeof data.downloadCount === "number" ? data.downloadCount.toLocaleString() : undefined,
-      rating: typeof data.averageRating === "number" ? Math.round(data.averageRating * 10) / 10 : 5.0,
+      rating: typeof data.averageRating === "number" ? Math.round(data.averageRating * 10) / 10 : 0,
       ratingCount: typeof data.reviewCount === "number" ? data.reviewCount : 0,
       lastUpdated: formatTimestamp(data.timestamp),
       repositoryUrl: data.repository || undefined,
@@ -166,8 +168,8 @@ export async function syncAllExtensionsLive(
 }
 
 /**
- * Security Rule: Enterprise Policy - AI Extensions Prohibited
- * Checks if an extension is an AI assistant/code generator.
+ * Lab policy: AI assistants and AI code completion are never installable.
+ * The Rust installer enforces the same rules (src-tauri/ai-policy.json); this only drives the UI.
  */
 export function isAiExtension(ext: {
   id?: string;
@@ -177,38 +179,19 @@ export function isAiExtension(ext: {
   publisher?: string;
   categories?: string[];
 }): boolean {
-  const combined = [
-    ext.id || "",
-    ext.name || "",
-    ext.displayName || "",
-    ext.description || "",
-    ext.publisher || "",
-    ...(ext.categories || []),
-  ]
-    .join(" ")
-    .toLowerCase();
+  return aiReason(ext) !== null;
+}
 
-  const aiPatterns = [
-    /\bcopilot\b/i,
-    /\bclaude\b/i,
-    /\bchatgpt\b/i,
-    /\bgpt-?[345]\b/i,
-    /\btabnine\b/i,
-    /\bcodeium\b/i,
-    /\bcody\b/i,
-    /\bcursor\b/i,
-    /\bdeepseek\b/i,
-    /\bopenai\b/i,
-    /\banthropic\b/i,
-    /\bgenerative ai\b/i,
-    /\bai assistant\b/i,
-    /\bai code\b/i,
-    /\bai autocomplete\b/i,
-    /\bai-powered\b/i,
-    /\bllm\b/i,
-  ];
-
-  return aiPatterns.some((pattern) => pattern.test(combined));
+export function aiReason(ext: {
+  id?: string;
+  name?: string;
+  displayName?: string;
+  description?: string;
+  publisher?: string;
+  categories?: string[];
+}): string | null {
+  const text = [ext.name, ext.displayName, ext.description, ext.publisher, ...(ext.categories || [])].join(" ");
+  return aiBlockReason(ext.id || "", text);
 }
 
 /**
@@ -252,7 +235,7 @@ export async function searchOpenVsxMarketplace(query: string): Promise<Extension
         version: item.version || "1.0.0",
         description,
         downloads: typeof item.downloadCount === "number" ? item.downloadCount.toLocaleString() : "0",
-        rating: typeof item.averageRating === "number" ? Math.round(item.averageRating * 10) / 10 : 5.0,
+        rating: typeof item.averageRating === "number" ? Math.round(item.averageRating * 10) / 10 : 0,
         ratingCount: typeof item.reviewCount === "number" ? item.reviewCount : 0,
         installed: false,
         enabled: !blocked,
@@ -270,3 +253,12 @@ export async function searchOpenVsxMarketplace(query: string): Promise<Extension
     return [];
   }
 }
+
+// --- Real installs (Rust backend: src-tauri/src/commands/extensions.rs) ---
+
+export const listInstalledExtensions = () => invoke<InstalledExtension[]>("list_extensions");
+export const installExtension = (id: string) => invoke<InstalledExtension>("install_extension", { id });
+export const uninstallExtension = (id: string) => invoke<void>("uninstall_extension", { id });
+export const setExtensionEnabled = (id: string, enabled: boolean) =>
+  invoke<void>("set_extension_enabled", { id, enabled });
+export const readExtensionFile = (id: string, path: string) => invoke<string>("read_extension_file", { id, path });

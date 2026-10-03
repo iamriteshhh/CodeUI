@@ -100,4 +100,50 @@ export interface ExtensionItem {
   systemToolPath?: string;
   blockedByPolicy?: boolean;
   blockReason?: string;
+  /** Set while a real install/uninstall is running. */
+  busy?: boolean;
+  /** What CodeUI actually loaded from the installed package. */
+  installedInfo?: InstalledExtension;
+}
+
+/** An extension on disk, as reported by the backend (list_extensions). */
+export interface InstalledExtension {
+  id: string;
+  version: string;
+  displayName: string;
+  publisher: string;
+  description: string;
+  builtin: boolean;
+  enabled: boolean;
+  contributes: {
+    languages?: ExtLanguage[] | null;
+    grammars?: ExtGrammar[] | null;
+    themes?: ExtTheme[] | null;
+  };
+  /** The publisher's package contains code (language server, commands) that CodeUI does not run. */
+  hasCode: boolean;
+}
+
+export interface ExtLanguage {
+  id: string;
+  aliases?: string[];
+  extensions?: string[];
+  filenames?: string[];
+  firstLine?: string;
+  configuration?: string;
+}
+
+export interface ExtGrammar {
+  language?: string;
+  scopeName: string;
+  path: string;
+  embeddedLanguages?: Record<string, string>;
+  injectTo?: string[];
+}
+
+export interface ExtTheme {
+  id?: string;
+  label: string;
+  uiTheme: string;
+  path: string;
 }

@@ -40,3 +40,6 @@ installers/
 *.deb
 *.dmg
 *.AppImage
+
+# Salivo SDK binaries are bundled by CI (release.yml), never committed
+src-tauri/resources/salivo-sdk/

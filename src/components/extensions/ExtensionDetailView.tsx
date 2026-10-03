@@ -1,19 +1,11 @@
 import React, { useState, useEffect, useMemo } from "react";
-import {
-  Download,
-  Settings,
-  ChevronDown,
-  ExternalLink,
-  Check,
-  Loader2,
-  FileText,
-  History,
-  Shield,
-} from "lucide-react";
+import { Download, ExternalLink, Loader2, FileText, History, Shield, Palette, Info } from "lucide-react";
 import { marked } from "marked";
 import { ExtensionItem } from "../../types";
 import { ExtensionIcon } from "./ExtensionIcon";
-import { fetchLiveExtensionDetails, isAiExtension } from "../../services/extensionService";
+import { fetchLiveExtensionDetails, isAiExtension, readExtensionFile } from "../../services/extensionService";
+import { applyColorTheme, getEditorTheme, themeId } from "../../services/extensionHost";
+import { notify, formatError } from "../../services/notify";
 import { sanitizeHtml } from "../../utils/sanitizeHtml";
 
 marked.setOptions({
@@ -33,14 +25,23 @@ export const ExtensionDetailView: React.FC<ExtensionDetailViewProps> = ({
   onToggleInstalled,
 }) => {
   const [activeTab, setActiveTab] = useState<"DETAILS" | "CHANGELOG">("DETAILS");
-  const [autoUpdate, setAutoUpdate] = useState(true);
+  const [, setThemeTick] = useState(0);
   const [liveReadme, setLiveReadme] = useState<string | null>(null);
   const [loadingReadme, setLoadingReadme] = useState(false);
 
+  const installedId = extension.installedInfo?.id;
   useEffect(() => {
     setLiveReadme(null);
+    // Installed (and built-in) extensions show the README shipped in their own package.
+    if (installedId) {
+      setLoadingReadme(true);
+      readExtensionFile(installedId, "README.md")
+        .then((text) => setLiveReadme(text))
+        .catch(() => {})
+        .finally(() => setLoadingReadme(false));
+      return;
+    }
     const needsReadme =
-      extension.id !== "salivo.salivo-tools" &&
       (!extension.overviewMarkdown ||
         extension.overviewMarkdown.trim().length < 150 ||
         extension.overviewMarkdown === extension.description);
@@ -55,7 +56,7 @@ export const ExtensionDetailView: React.FC<ExtensionDetailViewProps> = ({
         })
         .finally(() => setLoadingReadme(false));
     }
-  }, [extension.id, extension.overviewMarkdown, extension.description]);
+  }, [extension.id, extension.overviewMarkdown, extension.description, installedId]);
 
   const rawMarkdown = liveReadme || extension.overviewMarkdown || "";
 
@@ -88,7 +89,19 @@ export const ExtensionDetailView: React.FC<ExtensionDetailViewProps> = ({
     ? extension.repositoryUrl.replace(/\.git$/, "")
     : null;
 
-  const isBuiltin = extension.id === "salivo.salivo-tools";
+  const info = extension.installedInfo;
+  const isBuiltin = !!info?.builtin;
+  const themes = info?.contributes.themes ?? [];
+  const busy = !!extension.busy;
+
+  const chooseTheme = async (theme: (typeof themes)[number] | null) => {
+    try {
+      await applyColorTheme(theme ? extension.id : null, theme);
+      setThemeTick((t) => t + 1);
+    } catch (err) {
+      notify.error("Theme could not be applied", formatError(err));
+    }
+  };
 
   return (
     <div className="extension-detail-container">
@@ -215,61 +228,85 @@ export const ExtensionDetailView: React.FC<ExtensionDetailViewProps> = ({
                 <Shield size={12} />
                 Restricted by Policy
               </button>
-            ) : isBuiltin ? (
-              <div className="btn-group">
-                <button
-                  className="extension-btn primary"
-                  onClick={() => onToggleEnabled?.(extension.id)}
-                >
-                  {extension.enabled ? "Disable" : "Enable"}
-                </button>
-              </div>
+            ) : busy ? (
+              <button className="extension-btn primary" disabled style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <Loader2 size={12} className="spin" />
+                {extension.installed ? "Working..." : "Installing..."}
+              </button>
             ) : extension.installed ? (
               <>
-                <div className="btn-group">
-                  <button
-                    className="extension-btn primary"
-                    onClick={() => onToggleEnabled?.(extension.id)}
-                  >
-                    {extension.enabled ? "Disable" : "Enable"}
-                  </button>
-                  <button className="extension-btn primary icon-dropdown" title="Options">
-                    <ChevronDown size={12} />
-                  </button>
-                </div>
-
-                <button
-                  className="extension-btn secondary"
-                  onClick={() => onToggleInstalled?.(extension.id)}
-                >
-                  Uninstall
+                <button className="extension-btn primary" onClick={() => onToggleEnabled?.(extension.id)}>
+                  {extension.enabled ? "Disable" : "Enable"}
                 </button>
+                {!isBuiltin && (
+                  <button className="extension-btn secondary" onClick={() => onToggleInstalled?.(extension.id)}>
+                    Uninstall
+                  </button>
+                )}
               </>
             ) : (
-              <button
-                className="extension-btn install"
-                onClick={() => onToggleInstalled?.(extension.id)}
-              >
+              <button className="extension-btn install" onClick={() => onToggleInstalled?.(extension.id)}>
                 Install
               </button>
             )}
-
-            {extension.installed && (
-              <label className="extension-auto-update-toggle">
-                <input
-                  type="checkbox"
-                  checked={autoUpdate}
-                  onChange={(e) => setAutoUpdate(e.target.checked)}
-                />
-                <Check size={12} className="check-icon" />
-                <span>Auto Update</span>
-              </label>
-            )}
-
-            <button className="extension-settings-btn" title="Extension Settings">
-              <Settings size={15} />
-            </button>
           </div>
+
+          {/* What CodeUI actually loaded from the package */}
+          {info && (
+            <div
+              style={{
+                margin: "10px 0 0 0",
+                padding: "8px 12px",
+                background: "#1e1e1e",
+                border: "1px solid #2d2d2d",
+                borderLeft: "3px solid #007acc",
+                borderRadius: 2,
+                fontSize: 11,
+                lineHeight: 1.5,
+                color: "#a0a0a0",
+                maxWidth: 640,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#cccccc", fontWeight: 600 }}>
+                <Info size={12} style={{ color: "#007acc" }} />
+                <span>In CodeUI</span>
+              </div>
+              <div>
+                {[
+                  info.contributes.languages?.length ? `${info.contributes.languages.length} language(s)` : "",
+                  info.contributes.grammars?.length ? `${info.contributes.grammars.length} syntax grammar(s)` : "",
+                  themes.length ? `${themes.length} color theme(s)` : "",
+                ]
+                  .filter(Boolean)
+                  .join(" · ") || "Nothing CodeUI can load (no grammars, language settings or themes)."}
+              </div>
+              {info.hasCode && (
+                <div>
+                  This package also contains extension code (language server, commands, debugger). CodeUI does not run
+                  extension code, so those features are not available.
+                </div>
+              )}
+              {themes.length > 0 && extension.enabled && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+                  {themes.map((t) => {
+                    const active = getEditorTheme() === themeId(extension.id, t);
+                    return (
+                      <button
+                        key={t.path}
+                        className="extension-btn secondary"
+                        onClick={() => chooseTheme(active ? null : t)}
+                        style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11 }}
+                        title={active ? "Return to the default CodeUI theme" : "Use this color theme in the editor"}
+                      >
+                        <Palette size={12} />
+                        {active ? `${t.label} (active)` : t.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -410,7 +447,7 @@ export const ExtensionDetailView: React.FC<ExtensionDetailViewProps> = ({
             <div className="sidebar-meta-row">
               <span className="sidebar-meta-label">Registry</span>
               <span className="sidebar-meta-value">
-                {isBuiltin ? "Built-in (CodeUI Core)" : "Open VSX Registry"}
+                {isBuiltin ? "Bundled with CodeUI" : "Open VSX Registry"}
               </span>
             </div>
           </div>

@@ -2,7 +2,9 @@ import React, { Suspense } from "react";
 import { WelcomeView } from "../welcome/WelcomeView";
 import { OpenFile, ExtensionItem } from "../../types";
 
-import { MonacoEditorGroup } from "./MonacoEditorGroup";
+const MonacoEditorGroup = React.lazy(() =>
+  import("./MonacoEditorGroup").then((m) => ({ default: m.MonacoEditorGroup }))
+);
 
 const ExtensionDetailView = React.lazy(() =>
   import("../extensions/ExtensionDetailView").then((m) => ({

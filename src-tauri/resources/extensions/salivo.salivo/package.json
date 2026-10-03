@@ -1,0 +1,66 @@
+{
+  "name": "salivo",
+  "displayName": "Salivo",
+  "description": "Official high-performance language support for Salivo: sub-30ms warm execution caching (ExecCache), exclusive stream header syntax (><), postfix try operator (?), RAII Drop cleanup, modern camelCase stdlib, syntax highlighting, formatting, linting, checking, testing, and native execution.",
+  "version": "1.0.16",
+  "license": "BSL-1.1",
+  "publisher": "salivo",
+  "icon": "icons/salivo.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Serion89/salivo"
+  },
+  "keywords": [
+    "salivo",
+    "sal",
+    "programming language",
+    "systems language",
+    "compiler",
+    "llvm",
+    "stream import",
+    "syntax highlighting",
+    "modifiers",
+    "snippets",
+    "formatter",
+    "linter",
+    "raii",
+    "drop"
+  ],
+  "categories": [
+    "Programming Languages",
+    "Snippets",
+    "Themes",
+    "Formatters",
+    "Linters"
+  ],
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "salivo",
+        "aliases": [
+          "Salivo",
+          "salivo"
+        ],
+        "extensions": [
+          ".sal",
+          ".sf"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/salivo.svg",
+          "dark": "./icons/salivo.svg"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "salivo",
+        "scopeName": "source.salivo",
+        "path": "./syntaxes/salivo.tmLanguage.json"
+      }
+    ]
+  }
+}

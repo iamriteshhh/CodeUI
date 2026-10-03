@@ -75,6 +75,9 @@ fn signal_group(pid: u32, sig: Signal) {
     if matches!(sig, Signal::Kill) {
         cmd.arg("/F");
     }
+    // Release builds are GUI-subsystem; without this, taskkill flashes a console window.
+    use std::os::windows::process::CommandExt;
+    cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
     let _ = cmd.output();
 }
 

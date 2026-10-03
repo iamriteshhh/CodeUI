@@ -1,4 +1,4 @@
-import * as monaco from "monaco-editor";
+import * as monaco from "../monaco";
 import { registerSalivoLanguage } from "./salivoMonaco";
 
 // Synchronous, eager imports of built-in Monaco Monarch definitions

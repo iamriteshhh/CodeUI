@@ -54,6 +54,30 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      # The Salivo SDK (compiler binaries + std, no compiler sources) ships inside the app.
+      # Archives come from Salivo's SDK workflow and are attached to the release below.
+      - name: Bundle Salivo SDK
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SALIVO_SDK_TAG: salivo-sdk-v1.0.16
+        run: |
+          case "${{ matrix.platform }}" in
+            windows-*) pattern='*-windows-x64.zip' ;;
+            ubuntu-*)  pattern='*-linux-x64.tar.gz' ;;
+            macos-*)   pattern='*-macos-arm64.tar.gz' ;;
+          esac
+          gh release download "$SALIVO_SDK_TAG" -R "$GITHUB_REPOSITORY" -p "$pattern" -D sdk-download
+          mkdir -p sdk-extract src-tauri/resources/salivo-sdk
+          archive=$(ls sdk-download/*)
+          case "$archive" in
+            *.zip) unzip -q "$archive" -d sdk-extract ;;
+            *)     tar -xzf "$archive" -C sdk-extract ;;
+          esac
+          sdk=$(ls -d sdk-extract/*/)
+          cp -R "$sdk"bin "$sdk"std "$sdk"lib "$sdk"stage3 "$sdk"LICENSE src-tauri/resources/salivo-sdk/
+          ls src-tauri/resources/salivo-sdk/bin
+
       - name: Build and release Tauri application
         uses: tauri-apps/tauri-action@v0
         env:

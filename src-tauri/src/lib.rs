@@ -14,6 +14,15 @@ use pty::PtyManager;
 
 pub fn run() {
     tauri::Builder::default()
+        .setup(|app| {
+            if let Ok(dir) = app.path().resource_dir() {
+                let bin = dir.join("resources").join("salivo-sdk").join("bin");
+                if bin.is_dir() {
+                    proc::set_bundled_bin(bin);
+                }
+            }
+            Ok(())
+        })
         .manage(RunRegistry::default())
         .manage(PtyManager::default())
         .manage(SettingsStore::load())
@@ -48,6 +57,11 @@ pub fn run() {
             commands::settings::flush_settings,
             commands::settings::settings_file_path,
             commands::diagnostics::get_diagnostics,
+            commands::extensions::list_extensions,
+            commands::extensions::install_extension,
+            commands::extensions::uninstall_extension,
+            commands::extensions::set_extension_enabled,
+            commands::extensions::read_extension_file,
         ])
         .on_window_event(|window, event| {
             // Closing the window must not leave student processes or shells

@@ -12,13 +12,40 @@ import { editorService } from "./services/editorService";
 import { ptyService } from "./services/ptyService";
 import { X, Maximize2, Minimize2 } from "lucide-react";
 import { EXTENSIONS_DATA } from "./data/extensionsData";
-import { ExtensionItem } from "./types";
+import { ExtensionItem, InstalledExtension } from "./types";
 import {
   getStoredLiveExtensions,
   syncAllExtensionsLive,
   fetchLiveExtensionDetails,
-  isAiExtension,
+  aiReason,
+  listInstalledExtensions,
+  installExtension,
+  uninstallExtension,
+  setExtensionEnabled,
 } from "./services/extensionService";
+import { notify, formatError } from "./services/notify";
+
+/** Catalog entry for an extension that is on disk but not in the curated list. */
+function itemFromInstalled(info: InstalledExtension): ExtensionItem {
+  return {
+    id: info.id,
+    name: info.id.split(".")[1] ?? info.id,
+    displayName: info.displayName,
+    publisher: info.publisher,
+    version: info.version,
+    description: info.description,
+    downloads: "",
+    rating: 0,
+    ratingCount: 0,
+    iconType: info.id === "salivo.salivo" ? "salivo" : undefined,
+    installed: true,
+    enabled: info.enabled,
+    lastUpdated: "",
+    categories: [],
+    overviewMarkdown: "",
+    installedInfo: info,
+  };
+}
 
 const TerminalPanel = lazy(() =>
   import("./components/terminal/TerminalPanel").then((m) => ({
@@ -47,6 +74,8 @@ export function App() {
   const [warningCount, setWarningCount] = useState(0);
   const [tabSize, setTabSize] = useState(4);
   const [isPanelMaximized, setIsPanelMaximized] = useState(false);
+  // Terminal (xterm + a shell process) and preview load on first open, not at startup.
+  const [panelMounted, setPanelMounted] = useState(false);
   const [extensionsList, setExtensionsList] = useState<ExtensionItem[]>(() => {
     const cached = getStoredLiveExtensions();
     return EXTENSIONS_DATA.map((ext) => {
@@ -56,6 +85,30 @@ export function App() {
   });
   const [isSyncingExtensions, setIsSyncingExtensions] = useState(false);
   const [selectedExtensionId, setSelectedExtensionId] = useState<string | null>(null);
+
+  // Installed state always comes from disk (backend), never from the UI.
+  const applyInstalled = useCallback((list: InstalledExtension[]) => {
+    setExtensionsList((prev) => {
+      const byId = new Map(list.map((i) => [i.id, i]));
+      const merged = prev.map((e) => {
+        const info = byId.get(e.id.toLowerCase());
+        byId.delete(e.id.toLowerCase());
+        return info
+          ? { ...e, installed: true, enabled: info.enabled, version: info.version || e.version, installedInfo: info }
+          : { ...e, installed: false, installedInfo: undefined };
+      });
+      return [...merged, ...[...byId.values()].map(itemFromInstalled)];
+    });
+  }, []);
+
+  useEffect(() => {
+    listInstalledExtensions()
+      .then((list) => {
+        applyInstalled(list);
+        return import("./services/extensionHost").then((h) => h.activateExtensions(list));
+      })
+      .catch((err) => console.warn("Extensions not loaded:", err));
+  }, [applyInstalled]);
   const {
     workspacePath,
     fileTree,
@@ -114,6 +167,10 @@ export function App() {
     refreshTools,
   } = useWorkspace();
 
+  useEffect(() => {
+    if (panelVisible) setPanelMounted(true);
+  }, [panelVisible]);
+
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
   const [isResizingPanel, setIsResizingPanel] = useState(false);
   const [newFileModalOpen, setNewFileModalOpen] = useState(false);
@@ -163,14 +220,14 @@ export function App() {
           systemTool = findTool(["git"]);
         } else if (ext.id === "ziglang.vscode-zig") {
           systemTool = findTool(["zig"]);
-        } else if (ext.id === "salivo.salivo-tools") {
+        } else if (ext.id === "salivo.salivo") {
           systemTool = findTool(["sf"]);
         }
 
+        // A compiler on PATH is not an installed extension; only flag it.
         if (systemTool && systemTool.available) {
           return {
             ...ext,
-            installed: true,
             systemDetected: true,
             systemToolPath: systemTool.path || "System Path Detected",
           };
@@ -202,7 +259,7 @@ export function App() {
     const item = extItem || extensionsList.find((e) => e.id === id);
     if (
       item &&
-      item.id !== "salivo.salivo-tools" &&
+      !item.installedInfo?.builtin &&
       (!item.overviewMarkdown || item.overviewMarkdown === item.description)
     ) {
       fetchLiveExtensionDetails(id).then((live) => {
@@ -225,28 +282,59 @@ export function App() {
     }
   };
 
-  const handleToggleExtensionEnabled = (id: string) => {
-    setExtensionsList((prev) =>
-      prev.map((ext) => (ext.id === id ? { ...ext, enabled: !ext.enabled } : ext))
-    );
+  const setBusy = (id: string, busy: boolean) =>
+    setExtensionsList((prev) => prev.map((e) => (e.id === id ? { ...e, busy } : e)));
+
+  const handleToggleExtensionEnabled = async (id: string) => {
+    const item = extensionsList.find((e) => e.id === id);
+    if (!item?.installed) return;
+    const enabled = !item.enabled;
+    try {
+      await setExtensionEnabled(id, enabled);
+      const list = await listInstalledExtensions();
+      applyInstalled(list);
+      const info = list.find((i) => i.id === id.toLowerCase());
+      if (enabled && info) await (await import("./services/extensionHost")).activateExtension(info);
+      else notify.info("Extension disabled", "Its grammars and themes unload after CodeUI restarts.");
+    } catch (err) {
+      notify.error("Could not change extension", formatError(err));
+    }
   };
 
-  const handleToggleExtensionInstalled = (id: string, extItem?: ExtensionItem) => {
+  const handleToggleExtensionInstalled = async (id: string, extItem?: ExtensionItem) => {
     const item = extItem || extensionsList.find((e) => e.id === id);
-    if (item?.blockedByPolicy || (item && isAiExtension(item))) {
-      alert("Installation Blocked: AI extensions are restricted by enterprise security policy.");
+    const reason = item ? aiReason(item) : null;
+    if (item?.blockedByPolicy || reason) {
+      notify.error("Installation blocked", `AI extensions are not allowed in CodeUI (${reason ?? "AI assistant"}).`);
       return;
     }
-
-    setExtensionsList((prev) => {
-      const exists = prev.some((e) => e.id === id);
-      if (!exists && extItem) {
-        return [...prev, { ...extItem, installed: true }];
+    if (extItem && !extensionsList.some((e) => e.id === id)) {
+      setExtensionsList((prev) => [...prev, extItem]);
+    }
+    setBusy(id, true);
+    try {
+      if (item?.installed) {
+        await uninstallExtension(id);
+        notify.info("Extension uninstalled", "Its grammars and themes unload after CodeUI restarts.");
+      } else {
+        const info = await installExtension(id);
+        await (await import("./services/extensionHost")).activateExtension(info);
+        const loaded = [
+          info.contributes.grammars?.length ? `${info.contributes.grammars.length} grammar(s)` : "",
+          info.contributes.themes?.length ? `${info.contributes.themes.length} theme(s)` : "",
+          info.contributes.languages?.length ? `${info.contributes.languages.length} language(s)` : "",
+        ].filter(Boolean);
+        notify.success(
+          `Installed ${info.displayName}`,
+          loaded.length ? `Loaded ${loaded.join(", ")}.` : "This package has no grammars or themes CodeUI can load."
+        );
       }
-      return prev.map((ext) =>
-        ext.id === id ? { ...ext, installed: !ext.installed } : ext
-      );
-    });
+      applyInstalled(await listInstalledExtensions());
+    } catch (err) {
+      notify.error(item?.installed ? "Uninstall failed" : "Install failed", formatError(err));
+    } finally {
+      setBusy(id, false);
+    }
   };
 
   // Send install command into terminal
@@ -702,11 +790,13 @@ export function App() {
                       </div>
                     }
                   >
-                    <TerminalPanel
-                      sessionId={ptySessionId}
-                      workspacePath={workspacePath}
-                      onEnsureSession={ensurePtySession}
-                    />
+                    {panelMounted && (
+                      <TerminalPanel
+                        sessionId={ptySessionId}
+                        workspacePath={workspacePath}
+                        onEnsureSession={ensurePtySession}
+                      />
+                    )}
                   </Suspense>
                 </div>
 
@@ -724,10 +814,12 @@ export function App() {
                       </div>
                     }
                   >
-                    <PreviewPanel
-                      openFiles={openFiles}
-                      activeFilePath={activeFilePath}
-                    />
+                    {panelMounted && (
+                      <PreviewPanel
+                        openFiles={openFiles}
+                        activeFilePath={activeFilePath}
+                      />
+                    )}
                   </Suspense>
                 </div>
               </div>

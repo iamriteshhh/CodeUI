@@ -27,3 +27,5 @@ declare module "*monaco-editor/esm/vs/languages/definitions/*" {
   export const language: any;
 }
 
+
+declare module "monaco-esm/*";

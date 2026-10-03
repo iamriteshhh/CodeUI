@@ -39,7 +39,7 @@ export const ExtensionsPanel: React.FC<ExtensionsPanelProps> = ({
   onRefresh,
 }) => {
   const [query, setQuery] = useState("");
-  const [toolchainsOpen, setToolchainsOpen] = useState(true);
+  const [toolchainsOpen, setToolchainsOpen] = useState(false);
   const [copiedTool, setCopiedTool] = useState<string | null>(null);
   const [installedOpen, setInstalledOpen] = useState(true);
   const [recommendedOpen, setRecommendedOpen] = useState(false);
@@ -156,12 +156,12 @@ export const ExtensionsPanel: React.FC<ExtensionsPanelProps> = ({
             <span>Security Policy</span>
           </div>
           <div style={{ color: "#858585", fontSize: 10.5, marginTop: 2 }}>
-            AI code extensions are restricted by workspace policy.
+            AI extensions and AI code completion cannot be installed.
           </div>
         </div>
 
         <div className="extensions-marketplace-note">
-          CodeUI provides direct execution via native toolchains and bundled syntax grammars. External VSIX extension runtime is not loaded in practical laboratory mode.
+          Installing adds an extension's syntax highlighting, language settings and color themes. Extension code (language servers, debuggers, commands) and snippets are not run.
         </div>
       </div>
 
@@ -301,7 +301,9 @@ export const ExtensionsPanel: React.FC<ExtensionsPanelProps> = ({
                           <span style={{ fontSize: 10.5, color: "#777777", marginLeft: 4 }}>
                             v{ext.version}
                           </span>
-                          {ext.id === "salivo.salivo-tools" ? (
+                          {!ext.enabled ? (
+                            <span style={{ fontSize: 10, color: "#e5c07b", marginLeft: 6 }}>• Disabled</span>
+                          ) : ext.installedInfo?.builtin ? (
                             <span style={{ fontSize: 10, color: "#4ec9b0", marginLeft: 6 }}>
                               • Built-in
                             </span>

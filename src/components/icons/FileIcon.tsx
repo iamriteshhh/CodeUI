@@ -21,8 +21,7 @@ export const FileIcon: React.FC<FileIconProps> = ({ fileName, size = 15, classNa
   if (lower === "package.json") {
     return (
       <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className={className}>
-        <rect x="1.5" y="1.5" width="13" height="13" rx="2" fill="#CB3837" />
-        <path d="M4 4h8v8H4V4zm2 2v4h4V6H6z" fill="#ffffff" />
+        <path d="M2.5 2.5h11v11h-11V2.5zm3 3v5h5v-5h-5z" fill="#CB3837" />
       </svg>
     );
   }
@@ -131,8 +130,7 @@ export const FileIcon: React.FC<FileIconProps> = ({ fileName, size = 15, classNa
     case "cjs":
       return (
         <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className={className}>
-          <rect x="1" y="1" width="14" height="14" rx="2" fill="#F7DF1E" />
-          <path d="M4.5 11.2c.3.5.7.8 1.4.8.7 0 1.1-.3 1.1-.9v-3.6H8.2v3.6c0 1.2-.8 1.8-2.2 1.8-1.2 0-2-.6-2.4-1.5l.9-.4zm4.8-.4c.4.6 1 1 1.9 1 .8 0 1.3-.4 1.3-.9 0-.6-.5-.8-1.4-1.2-.9-.4-2-.8-2-2 0-1.1.9-1.9 2.2-1.9 1 0 1.6.4 2.1 1.1l-.8.5c-.3-.5-.7-.7-1.3-.7-.6 0-1 .3-1 .8 0 .5.4.7 1.3 1.1 1.1.5 2.1.9 2.1 2.1 0 1.2-.9 2-2.4 2-1.3 0-2.1-.6-2.6-1.5l.9-.4z" fill="#000000" />
+          <path d="M4.5 11.2c.3.5.7.8 1.4.8.7 0 1.1-.3 1.1-.9v-3.6H8.2v3.6c0 1.2-.8 1.8-2.2 1.8-1.2 0-2-.6-2.4-1.5l.9-.4zm4.8-.4c.4.6 1 1 1.9 1 .8 0 1.3-.4 1.3-.9 0-.6-.5-.8-1.4-1.2-.9-.4-2-.8-2-2 0-1.1.9-1.9 2.2-1.9 1 0 1.6.4 2.1 1.1l-.8.5c-.3-.5-.7-.7-1.3-.7-.6 0-1 .3-1 .8 0 .5.4.7 1.3 1.1 1.1.5 2.1.9 2.1 2.1 0 1.2-.9 2-2.4 2-1.3 0-2.1-.6-2.6-1.5l.9-.4z" fill="#F7DF1E" />
         </svg>
       );
 
@@ -142,8 +140,7 @@ export const FileIcon: React.FC<FileIconProps> = ({ fileName, size = 15, classNa
     case "cts":
       return (
         <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className={className}>
-          <rect x="1" y="1" width="14" height="14" rx="2" fill="#3178C6" />
-          <path d="M3.5 5.8h4.5v1.2H6.4v5.5H5.1V7H3.5V5.8zm5.5 5c.4.6 1 1 1.9 1 .8 0 1.3-.4 1.3-.9 0-.6-.5-.8-1.4-1.2-.9-.4-2-.8-2-2 0-1.1.9-1.9 2.2-1.9 1 0 1.6.4 2.1 1.1l-.9.6c-.3-.4-.7-.6-1.2-.6-.6 0-1 .3-1 .7 0 .5.4.7 1.2 1.1 1.1.5 2.2.9 2.2 2.1 0 1.2-.9 2-2.4 2-1.3 0-2.1-.6-2.6-1.5l.8-.5z" fill="#ffffff" />
+          <path d="M3.5 5.8h4.5v1.2H6.4v5.5H5.1V7H3.5V5.8zm5.5 5c.4.6 1 1 1.9 1 .8 0 1.3-.4 1.3-.9 0-.6-.5-.8-1.4-1.2-.9-.4-2-.8-2-2 0-1.1.9-1.9 2.2-1.9 1 0 1.6.4 2.1 1.1l-.9.6c-.3-.4-.7-.6-1.2-.6-.6 0-1 .3-1 .7 0 .5.4.7 1.2 1.1 1.1.5 2.2.9 2.2 2.1 0 1.2-.9 2-2.4 2-1.3 0-2.1-.6-2.6-1.5l.8-.5z" fill="#3178C6" />
         </svg>
       );
 
@@ -189,8 +186,7 @@ export const FileIcon: React.FC<FileIconProps> = ({ fileName, size = 15, classNa
     case "json5":
       return (
         <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className={className}>
-          <rect x="1.5" y="1.5" width="13" height="13" rx="2" fill="#292929" stroke="#F4A261" strokeWidth="1" />
-          <text x="8" y="11.5" textAnchor="middle" fill="#F4A261" fontSize="10" fontWeight="bold" fontFamily="monospace">{"{}"}</text>
+          <text x="8" y="11.5" textAnchor="middle" fill="#F4A261" fontSize="11" fontWeight="bold" fontFamily="monospace">{"{}"}</text>
         </svg>
       );
 
@@ -208,7 +204,6 @@ export const FileIcon: React.FC<FileIconProps> = ({ fileName, size = 15, classNa
     case "toml":
       return (
         <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className={className}>
-          <rect x="1.5" y="1.5" width="13" height="13" rx="2" fill="#2D2D2D" stroke="#9C59B6" strokeWidth="1" />
           <text x="8" y="11" textAnchor="middle" fill="#9C59B6" fontSize="7" fontWeight="bold" fontFamily="monospace">TOML</text>
         </svg>
       );
@@ -218,8 +213,7 @@ export const FileIcon: React.FC<FileIconProps> = ({ fileName, size = 15, classNa
     case "yml":
       return (
         <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className={className}>
-          <rect x="1.5" y="1.5" width="13" height="13" rx="2" fill="#CB171E" />
-          <text x="8" y="11" textAnchor="middle" fill="#ffffff" fontSize="7" fontWeight="bold" fontFamily="sans-serif">YML</text>
+          <text x="8" y="11" textAnchor="middle" fill="#CB171E" fontSize="7" fontWeight="bold" fontFamily="sans-serif">YML</text>
         </svg>
       );
 
@@ -240,7 +234,6 @@ export const FileIcon: React.FC<FileIconProps> = ({ fileName, size = 15, classNa
               <stop offset="100%" stopColor="#222226" />
             </linearGradient>
           </defs>
-          <rect width="512" height="512" rx="88" fill="#08080A" />
           <polygon
             points="200,76 456,76 366,150 232,150 144,226 284,354 196,354 68,226"
             fill="url(#salivoCrimson)"
@@ -256,7 +249,6 @@ export const FileIcon: React.FC<FileIconProps> = ({ fileName, size = 15, classNa
     case "zig":
       return (
         <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className={className}>
-          <rect x="1.5" y="1.5" width="13" height="13" rx="2" fill="#1C1814" stroke="#F7A41D" strokeWidth="1" />
           <path d="M3.5 5h9L4.5 11H12.5" stroke="#F7A41D" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       );
@@ -270,8 +262,7 @@ export const FileIcon: React.FC<FileIconProps> = ({ fileName, size = 15, classNa
     case "ps1":
       return (
         <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className={className}>
-          <rect x="1.5" y="2" width="13" height="12" rx="2" fill="#1E1E1E" stroke="#4EC9B0" strokeWidth="1" />
-          <path d="M4 6l2.5 2L4 10m3.5 0h3.5" stroke="#4EC9B0" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M3 5l3 3-3 3m4.5 0H13" stroke="#4EC9B0" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       );
 
@@ -291,8 +282,7 @@ export const FileIcon: React.FC<FileIconProps> = ({ fileName, size = 15, classNa
     case "go":
       return (
         <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className={className}>
-          <rect x="1.5" y="2" width="13" height="12" rx="3" fill="#00ADD8" />
-          <path d="M4 6.5h3.2v1.5H5.7v1.8h2.3V11H4V6.5zm4.8 2.2c0-1.3.8-2.3 2.1-2.3s2.1 1 2.1 2.3-.8 2.3-2.1 2.3-2.1-1-2.1-2.3zm2.8 0c0-.6-.3-1.1-.7-1.1s-.7.5-.7 1.1.3 1.1.7 1.1.7-.5.7-1.1z" fill="#ffffff" />
+          <path d="M4 6.5h3.2v1.5H5.7v1.8h2.3V11H4V6.5zm4.8 2.2c0-1.3.8-2.3 2.1-2.3s2.1 1 2.1 2.3-.8 2.3-2.1 2.3-2.1-1-2.1-2.3zm2.8 0c0-.6-.3-1.1-.7-1.1s-.7.5-.7 1.1.3 1.1.7 1.1.7-.5.7-1.1z" fill="#00ADD8" />
         </svg>
       );
 
@@ -331,8 +321,7 @@ export const FileIcon: React.FC<FileIconProps> = ({ fileName, size = 15, classNa
     case "swift":
       return (
         <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className={className}>
-          <rect x="1.5" y="1.5" width="13" height="13" rx="3" fill="#F05138" />
-          <path d="M4 12.5c2.8 0 5-1.5 6-3.8-.8.3-1.8.4-2.8.2 2-.8 3.3-2.5 3.8-4.4-.7.6-1.6 1.1-2.5 1.2.9-1.2 1.2-2.8.8-4.2-.6 1.5-1.8 2.8-3.3 3.5-.8.4-1.7.5-2.6.4.4.6 1 1.1 1.7 1.4-1.2.1-2.4-.4-3.3-1.3.4 1.8 1.8 3.2 3.5 3.8-1.4.1-2.8-.4-3.7-1.3.6 1.8 2.3 3 4.2 3.1-1.3.9-2.9 1.4-4.5 1.4-.4 0-.8 0-1.2-.1z" fill="#ffffff" />
+          <path d="M4 12.5c2.8 0 5-1.5 6-3.8-.8.3-1.8.4-2.8.2 2-.8 3.3-2.5 3.8-4.4-.7.6-1.6 1.1-2.5 1.2.9-1.2 1.2-2.8.8-4.2-.6 1.5-1.8 2.8-3.3 3.5-.8.4-1.7.5-2.6.4.4.6 1 1.1 1.7 1.4-1.2.1-2.4-.4-3.3-1.3.4 1.8 1.8 3.2 3.5 3.8-1.4.1-2.8-.4-3.7-1.3.6 1.8 2.3 3 4.2 3.1-1.3.9-2.9 1.4-4.5 1.4-.4 0-.8 0-1.2-.1z" fill="#F05138" />
         </svg>
       );
 
@@ -363,8 +352,7 @@ export const FileIcon: React.FC<FileIconProps> = ({ fileName, size = 15, classNa
     case "xml":
       return (
         <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className={className}>
-          <rect x="1.5" y="1.5" width="13" height="13" rx="2" fill="#E34C26" />
-          <path d="M4.5 5.5L2 8l2.5 2.5m7-5L14 8l-2.5 2.5m-3.5-6l-2 7" stroke="#ffffff" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M4.5 5.5L2 8l2.5 2.5m7-5L14 8l-2.5 2.5m-3.5-6l-2 7" stroke="#E34C26" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       );
 
@@ -378,9 +366,9 @@ export const FileIcon: React.FC<FileIconProps> = ({ fileName, size = 15, classNa
     case "svg":
       return (
         <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className={className}>
-          <rect x="2" y="2" width="12" height="12" rx="2" fill="#2E7D32" />
-          <circle cx="5.5" cy="5.5" r="1.5" fill="#FFE082" />
-          <path d="M2.5 12l3.5-4.5 2.5 3 2-2.5 3 4H2.5z" fill="#ffffff" />
+          <rect x="2" y="2.5" width="12" height="11" rx="1.5" stroke="#4CAF50" strokeWidth="1.1" />
+          <circle cx="5.5" cy="6" r="1.3" fill="#FFE082" />
+          <path d="M3 12.5l3-4 2.5 2.8 1.8-2.2 2.7 3.4H3z" fill="#4CAF50" />
         </svg>
       );
 
@@ -406,110 +394,49 @@ export const FileIcon: React.FC<FileIconProps> = ({ fileName, size = 15, classNa
   }
 };
 
+// Outline folders (VS Code style). Well-known folders keep their color as a small corner badge.
+const FOLDER_BADGES: Record<string, string> = {
+  ".git": "#F05032",
+  ".github": "#8B949E",
+  ".vscode": "#007ACC",
+  src: "#61DAFB",
+  components: "#007ACC",
+  component: "#007ACC",
+  test: "#4CAF50",
+  tests: "#4CAF50",
+  assets: "#D97706",
+  images: "#D97706",
+  icons: "#D97706",
+  public: "#A855F7",
+  build: "#A855F7",
+  crates: "#A855F7",
+  target: "#A855F7",
+  dist: "#A855F7",
+  release: "#A855F7",
+  node_modules: "#22C55E",
+  docs: "#4EA8DE",
+};
+
 export const FolderIcon: React.FC<FolderIconProps> = ({
   folderName,
   isExpanded,
   size = 15,
   className = "",
 }) => {
-  const lower = folderName.toLowerCase();
-
-  // Special Git folder
-  if (lower === ".git") {
-    return (
-      <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className={className}>
-        <rect x="8" y="1" width="9" height="9" rx="1.5" transform="rotate(45 8 1)" fill="#F05032" />
-        <circle cx="6" cy="8" r="1" fill="#ffffff" />
-        <circle cx="10" cy="6" r="1" fill="#ffffff" />
-        <circle cx="10" cy="10" r="1" fill="#ffffff" />
-        <path d="M6 8h1.5a1.5 1.5 0 0 1 1.5 1.5V10m0-4v4" stroke="#ffffff" strokeWidth="0.9" />
-      </svg>
-    );
-  }
-
-  // Special GitHub folder
-  if (lower === ".github") {
-    return (
-      <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className={className}>
-        <circle cx="8" cy="8" r="7" fill="#24292E" />
-        <path d="M8 2a6 6 0 0 0-1.9 11.7c.3.1.4-.1.4-.3v-1.1c-1.7.4-2- your-2-your-.8-1-1-1.3-.5-.3 0-.3.3 0 .7.6 1.2 1.8 1.4 2.2 1.4.3 0 .7-.1 1-.2.1-.8.4-1.3.8-1.6-1.3-.1-2.7-.7-2.7-3 0-.7.2-1.2.6-1.7 0-.2-.3-.8.1-1.6 0 0 .5-.2 1.7.6a5.8 5.8 0 0 1 3.1 0c1.2-.8 1.7-.6 1.7-.6.4.8.1 1.4.1 1.6.4.5.6 1 .6 1.7 0 2.3-1.4 2.8-2.7 3 .4.4.8 1 .8 2v1.5c0 .2.1.4.4.3A6 6 0 0 0 8 2z" fill="#ffffff" />
-      </svg>
-    );
-  }
-
-  // Source code folder
-  if (lower === "src") {
-    return (
-      <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className={className}>
-        <path d="M1.5 3a1 1 0 0 1 1-1h3.5l1.5 1.5H13a1 1 0 0 1 1 1V13a1 1 0 0 1-1 1H2.5a1 1 0 0 1-1-1V3z" fill="#3A506B" />
-        <path d="M6 7L4.5 8.5 6 10M10 7l1.5 1.5L10 10" stroke="#61DAFB" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    );
-  }
-
-  // Components folder
-  if (lower === "components" || lower === "component") {
-    return (
-      <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className={className}>
-        <path d="M1.5 3a1 1 0 0 1 1-1h3.5l1.5 1.5H13a1 1 0 0 1 1 1V13a1 1 0 0 1-1 1H2.5a1 1 0 0 1-1-1V3z" fill="#007ACC" />
-        <rect x="5.5" y="6.5" width="5" height="5" rx="1" fill="#ffffff" />
-      </svg>
-    );
-  }
-
-  // Test folder
-  if (lower === "test" || lower === "tests") {
-    return (
-      <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className={className}>
-        <path d="M1.5 3a1 1 0 0 1 1-1h3.5l1.5 1.5H13a1 1 0 0 1 1 1V13a1 1 0 0 1-1 1H2.5a1 1 0 0 1-1-1V3z" fill="#2E7D32" />
-        <path d="M7 6v2l-1.5 3h5L9 8V6" stroke="#ffffff" strokeWidth="1" fill="none" />
-      </svg>
-    );
-  }
-
-  // Assets / Images folder
-  if (lower === "assets" || lower === "images" || lower === "icons") {
-    return (
-      <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className={className}>
-        <path d="M1.5 3a1 1 0 0 1 1-1h3.5l1.5 1.5H13a1 1 0 0 1 1 1V13a1 1 0 0 1-1 1H2.5a1 1 0 0 1-1-1V3z" fill="#D97706" />
-        <circle cx="8" cy="8.5" r="2.2" fill="#FFE082" />
-      </svg>
-    );
-  }
-
-  // Package / Crates / Build folder
-  if (lower === "crates" || lower === "build" || lower === "target" || lower === "dist" || lower === "release") {
-    return (
-      <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className={className}>
-        <path d="M1.5 3a1 1 0 0 1 1-1h3.5l1.5 1.5H13a1 1 0 0 1 1 1V13a1 1 0 0 1-1 1H2.5a1 1 0 0 1-1-1V3z" fill="#6B21A8" />
-        <path d="M6 7l2-1 2 1v2.5l-2 1-2-1V7z" fill="#D8B4FE" />
-      </svg>
-    );
-  }
-
-  // Node modules folder
-  if (lower === "node_modules") {
-    return (
-      <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className={className}>
-        <path d="M1.5 3a1 1 0 0 1 1-1h3.5l1.5 1.5H13a1 1 0 0 1 1 1V13a1 1 0 0 1-1 1H2.5a1 1 0 0 1-1-1V3z" fill="#15803D" />
-        <circle cx="8" cy="8.5" r="2" fill="#86EFAC" />
-      </svg>
-    );
-  }
-
-  // Default Folder - Classic Open / Closed
-  if (isExpanded) {
-    return (
-      <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className={className}>
-        <path d="M1.5 3a1 1 0 0 1 1-1h3.5l1.5 1.5H13a1 1 0 0 1 1 1v2H3.5a1 1 0 0 0-1 .8L1.5 12V3z" fill="#C59B27" />
-        <path d="M2.5 6.5h12l-1.8 6.5a1 1 0 0 1-1 .8H2.5a1 1 0 0 1-1-.8l1-6.5z" fill="#E5B942" />
-      </svg>
-    );
-  }
+  const badge = FOLDER_BADGES[folderName.toLowerCase()];
+  const stroke = { stroke: "#C5C5C5", strokeWidth: 1.1, strokeLinejoin: "round" as const };
 
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" className={className}>
-      <path d="M1.5 3a1 1 0 0 1 1-1h3.5l1.5 1.5H13a1 1 0 0 1 1 1V13a1 1 0 0 1-1 1H2.5a1 1 0 0 1-1-1V3z" fill="#E5B942" />
+      {isExpanded ? (
+        <>
+          <path d="M1.75 12.25V3.5a1 1 0 0 1 1-1h3.4l1.5 1.5h5.1a1 1 0 0 1 1 1v1.5" {...stroke} />
+          <path d="M1.75 12.25l1.6-5.1a1 1 0 0 1 .95-.7h9.9a.7.7 0 0 1 .67.9l-1.45 4.6a1 1 0 0 1-.95.7H2.75z" {...stroke} />
+        </>
+      ) : (
+        <path d="M1.75 3.5a1 1 0 0 1 1-1h3.4l1.5 1.5h5.6a1 1 0 0 1 1 1v7.25a1 1 0 0 1-1 1H2.75a1 1 0 0 1-1-1V3.5z" {...stroke} />
+      )}
+      {badge && <circle cx="12.5" cy="12" r="2.6" fill={badge} stroke="#181818" strokeWidth="1" />}
     </svg>
   );
 };
