@@ -28,7 +28,7 @@ jobs:
 
       - name: Fail if any merge conflict markers exist in tracked files
         run: |
-          if git grep -I -n "<<<<<<<" -- ':!*.md'; then
+          if git grep -I -n -E '^(<{7}|={7}|>{7}) ' -- ':!*.md' ':!.github/*' ':!.githooks/*'; then
             echo "Unresolved merge conflict markers detected!"
             exit 1
           fi

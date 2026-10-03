@@ -214,9 +214,12 @@ fn scan_for_conflicts(dir: &Path, out: &mut Vec<(PathBuf, usize, String)>) -> Ta
             if let Ok(content) = std::fs::read_to_string(&path) {
                 for (idx, line) in content.lines().enumerate() {
                     let trimmed = line.trim_start();
-                    if trimmed.starts_with("<<<<<<< ")
-                        || trimmed == "======="
-                        || trimmed.starts_with(">>>>>>> ")
+                    let m_left = concat!("<", "<<<<< ");
+                    let m_mid = "=======";
+                    let m_right = concat!(">", ">>>>>> ");
+                    if trimmed.starts_with(m_left)
+                        || trimmed == m_mid
+                        || trimmed.starts_with(m_right)
                     {
                         out.push((path.clone(), idx + 1, trimmed.to_string()));
                     }

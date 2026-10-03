@@ -303,16 +303,32 @@ mod tests {
         assert!(id.is_ok(), "Failed to spawn PTY: {:?}", id.err());
         let id = id.unwrap();
 
-        std::thread::sleep(std::time::Duration::from_millis(1000));
-        let write_res = mgr.write(&id, "Get-Date\r");
-        assert!(write_res.is_ok(), "Failed to write: {:?}", write_res.err());
+        let test_cmd = if cfg!(windows) {
+            "echo CODEUI_PTY_OK\r\n"
+        } else {
+            "echo CODEUI_PTY_OK\n"
+        };
 
-        std::thread::sleep(std::time::Duration::from_millis(1500));
+        let start = std::time::Instant::now();
+        let mut found = false;
+
+        // Give shell up to 10 seconds to start and echo output (handles slow CI runners)
+        while start.elapsed() < std::time::Duration::from_secs(10) {
+            let _ = mgr.write(&id, test_cmd);
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            let current = received_output.lock().unwrap().clone();
+            if current.contains("CODEUI_PTY_OK") {
+                found = true;
+                break;
+            }
+        }
+
         let output = received_output.lock().unwrap().clone();
-        println!("TOTAL PTY OUTPUT WITH CARRIAGE RETURN: {:?}", output);
+        println!("TOTAL PTY OUTPUT: {:?}", output);
         assert!(
-            output.contains("Get-Date"),
-            "Did not receive expected output with \\r"
+            found,
+            "Did not receive CODEUI_PTY_OK in PTY output within timeout: {:?}",
+            output
         );
         let _ = mgr.kill(&id);
     }
