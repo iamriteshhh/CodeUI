@@ -581,10 +581,15 @@ mod tests {
         assert!(ai_block_reason("github.copilot", "").is_some());
         assert!(ai_block_reason("foo.bar", "An AI-powered helper").is_some());
         assert!(ai_block_reason("foo.bar", "Uses GPT-4o for answers").is_some());
-        assert!(ai_block_reason("foo.bar", "Smart autocomplete for Rust").is_some());
+        assert!(ai_block_reason("tabnine.whatever", "AI code completion for Rust").is_some());
+        assert!(ai_block_reason("foo.bar", "Copilot-style inline suggestions").is_some());
+        // A language server that mentions autocomplete is not AI
+        assert!(ai_block_reason("meta.pyrefly", "Python autocomplete, typechecking, code navigation and more! Powered by Pyrefly, an open-source language server").is_none());
         let m = serde_json::json!({ "contributes": { "chatParticipants": [] } });
         assert!(manifest_block_reason("foo.bar", &m).is_some());
-        let m = serde_json::json!({ "enabledApiProposals": ["languageModelSystem"] });
+        let m = serde_json::json!({ "enabledApiProposals": ["chatParticipantPrivate"] });
+        assert!(manifest_block_reason("foo.bar", &m).is_some());
+        let m = serde_json::json!({ "contributes": { "languageModelChatProviders": [] } });
         assert!(manifest_block_reason("foo.bar", &m).is_some());
         let m = serde_json::json!({ "extensionDependencies": ["GitHub.copilot-chat"] });
         assert!(manifest_block_reason("foo.bar", &m).is_some());
@@ -606,6 +611,26 @@ mod tests {
         assert!(ai_block_reason("foo.bar", "Maintains a chain of trailing commas").is_none());
     }
 
+    /// Ordinary language extensions now ship optional hooks for AI tools. CodeUI never runs
+    /// extension code, so those hooks are inert and must not get Python & co. blocked.
+    #[test]
+    fn allows_language_extensions_with_ai_tool_hooks() {
+        let listing = "Python language support with extension access points for IntelliSense \
+                       (Pylance), Debugging (Python Debugger), linting, formatting, refactoring, \
+                       unit tests, and more. Programming Languages Debuggers Other Data Science \
+                       Machine Learning";
+        assert_eq!(ai_block_reason("ms-python.python", listing), None);
+        let m = serde_json::json!({
+            "displayName": "Python",
+            "keywords": ["python", "django", "unittest", "multi-root ready"],
+            "contributes": { "languageModelTools": [], "grammars": [] },
+            "enabledApiProposals": ["codeActionAI", "terminalDataWriteEvent"],
+            "activationEvents": ["onLanguageModelTool:install_python_packages"],
+            "extensionPack": ["ms-python.vscode-pylance", "ms-python.debugpy"]
+        });
+        assert_eq!(manifest_block_reason("ms-python.python", &m), None);
+    }
+
     /// Real download from Open VSX: `cargo test -- --ignored installs_a_real_theme`
     #[test]
     #[ignore]
@@ -624,6 +649,8 @@ mod tests {
             install_into(root.path(), "continue.continue"),
             Err(ExtError::Blocked(_))
         ));
+        let py = install_into(root.path(), "ms-python.python").unwrap();
+        assert_eq!(py.contributes["grammars"].as_array().unwrap().len(), 1);
     }
 
     #[test]

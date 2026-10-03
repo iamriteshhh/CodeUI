@@ -1,5 +1,5 @@
 {
-  "_comment": "Lab policy: AI assistants and AI code completion are never installable. Shared by the Rust installer (enforcement) and the UI (labels). Terms match whole words/phrases, case-insensitive; prefixes match the start of any word.",
+  "_comment": "Lab policy: extensions whose purpose is AI (assistants, chat, model providers, AI code completion) are never installable. Shared by the Rust installer (enforcement) and the UI (labels). Terms match whole words/phrases, case-insensitive; prefixes match the start of any word. Integration hooks that ordinary language extensions offer to AI tools (languageModelTools, MCP servers) are not blocked: CodeUI never runs extension code, so they are inert.",
   "terms": [
     "ai",
     "a i",
@@ -47,19 +47,17 @@
     "coding assistant",
     "code assistant",
     "pair programmer",
-    "autocomplete",
-    "auto complete",
-    "autocompletion",
-    "code completion",
-    "code completions",
     "inline completion",
     "inline completions",
-    "inline suggestions",
-    "code generation",
-    "generate code",
-    "machine learning"
+    "inline suggestions"
   ],
-  "prefixes": ["gpt", "copilot", "chatgpt", "openai", "llm"],
+  "prefixes": [
+    "gpt",
+    "copilot",
+    "chatgpt",
+    "openai",
+    "llm"
+  ],
   "blockedIds": [
     "github.copilot",
     "github.copilot-chat",
@@ -87,14 +85,18 @@
   ],
   "manifestKeys": [
     "chatParticipants",
-    "languageModelTools",
     "languageModels",
-    "languageModelChatProviders",
-    "mcpServerDefinitionProviders",
-    "chatInstructions",
-    "chatPromptFiles",
-    "chatModes"
+    "languageModelChatProviders"
   ],
-  "apiProposalPrefixes": ["chat", "languagemodel", "inlinecompletion", "ai", "mcp", "defaultchat"],
-  "activationEventPrefixes": ["onchatparticipant", "onlanguagemodel", "onmcp"]
+  "apiProposalPrefixes": [
+    "chatparticipant",
+    "chatprovider",
+    "languagemodelchat",
+    "inlinecompletion",
+    "defaultchat"
+  ],
+  "activationEventPrefixes": [
+    "onchatparticipant",
+    "onlanguagemodelchat"
+  ]
 }

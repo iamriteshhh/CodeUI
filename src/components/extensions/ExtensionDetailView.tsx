@@ -3,7 +3,7 @@ import { Download, ExternalLink, Loader2, FileText, History, Shield, Palette, In
 import { marked } from "marked";
 import { ExtensionItem } from "../../types";
 import { ExtensionIcon } from "./ExtensionIcon";
-import { fetchLiveExtensionDetails, isAiExtension, readExtensionFile } from "../../services/extensionService";
+import { fetchLiveExtensionDetails, isAiExtension, aiReason, readExtensionFile } from "../../services/extensionService";
 import { applyColorTheme, getEditorTheme, themeId } from "../../services/extensionHost";
 import { notify, formatError } from "../../services/notify";
 import { sanitizeHtml } from "../../utils/sanitizeHtml";
@@ -201,8 +201,8 @@ export const ExtensionDetailView: React.FC<ExtensionDetailViewProps> = ({
                 <span>Restricted by Policy</span>
               </div>
               <div style={{ color: "#858585", marginTop: 2 }}>
-                {extension.blockReason ||
-                  "Installation and execution of AI code extensions are restricted by workspace policy."}
+                AI extensions cannot be installed in CodeUI. Reason:{" "}
+                {aiReason(extension) ?? extension.blockReason ?? "AI assistant"}.
               </div>
             </div>
           )}
