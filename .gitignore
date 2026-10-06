@@ -47,3 +47,26 @@ src-tauri/resources/salivo-sdk/
 # Installers are committed with Git LFS (see .gitattributes); the AppImage exceeds GitHub's 100 MB file limit.
 !installer/dist/
 !installer/dist/*
+
+# Environment, secrets, private keys & credentials (never commit to public repo)
+.env
+.env.*
+*.env
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+*.secret
+credentials.json
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Presentation scripts & decks (repository policy enforces zero Python)
+*.py
+*.pptx

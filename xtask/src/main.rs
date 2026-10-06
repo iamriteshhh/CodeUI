@@ -147,7 +147,14 @@ fn audit_no_python() -> Task {
 }
 
 fn scan_for_python(dir: &Path, out: &mut Vec<PathBuf>) -> Task {
-    const SKIP: [&str; 5] = ["target", "node_modules", ".git", "dist", ".venv"];
+    const SKIP: [&str; 6] = [
+        "target",
+        "node_modules",
+        ".git",
+        "dist",
+        ".venv",
+        "artifacts",
+    ];
 
     for entry in std::fs::read_dir(dir)? {
         let entry = entry?;
@@ -159,7 +166,15 @@ fn scan_for_python(dir: &Path, out: &mut Vec<PathBuf>) -> Task {
                 scan_for_python(&path, out)?;
             }
         } else if path.extension().is_some_and(|e| e == "py") {
-            out.push(path);
+            let is_ignored = std::process::Command::new("git")
+                .args(["check-ignore", "-q"])
+                .arg(&path)
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false);
+            if !is_ignored {
+                out.push(path);
+            }
         }
     }
     Ok(())

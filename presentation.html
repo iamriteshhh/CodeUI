@@ -1,0 +1,1469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CodeUI — Academic Project Presentation & Viva Defense</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card-bg: #151d2f;
+      --card-bg-alt: #1c263b;
+      --card-border: #26354f;
+      --text-white: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --accent-indigo: #6366f1;
+      --accent-cyan: #06b6d4;
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-rose: #f43f5e;
+      --accent-purple: #a855f7;
+      --radius: 12px;
+      --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text-white);
+      font-family: var(--font-sans);
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+      user-select: none;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Top Progress Bar */
+    #progress-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--accent-indigo), var(--accent-cyan));
+      width: 0%;
+      transition: width 0.3s ease;
+      z-index: 1000;
+    }
+
+    /* Deck Container */
+    #presentation-container {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .slide {
+      position: absolute;
+      width: 90vw;
+      max-width: 1400px;
+      height: 84vh;
+      max-height: 820px;
+      background-color: #0f172a;
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 40px 48px;
+      display: flex;
+      flex-direction: column;
+      opacity: 0;
+      pointer-events: none;
+      transform: scale(0.97) translateY(12px);
+      transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1), transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.05);
+      overflow-y: auto;
+    }
+
+    .slide.active {
+      opacity: 1;
+      pointer-events: auto;
+      transform: scale(1) translateY(0);
+      z-index: 10;
+    }
+
+    /* Slide Header */
+    .slide-header {
+      margin-bottom: 24px;
+    }
+
+    .category-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      background-color: rgba(99, 102, 241, 0.15);
+      border: 1px solid rgba(99, 102, 241, 0.4);
+      border-radius: 9999px;
+      color: var(--accent-cyan);
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .slide-title {
+      font-size: 2rem;
+      font-weight: 800;
+      color: var(--text-white);
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+    }
+
+    .slide-subtitle {
+      font-size: 1rem;
+      color: var(--text-muted);
+      margin-top: 6px;
+      font-weight: 400;
+    }
+
+    /* Content Layouts */
+    .slide-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 24px;
+      height: 100%;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      height: 100%;
+    }
+
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      grid-template-rows: repeat(2, 1fr);
+      gap: 20px;
+      height: 100%;
+    }
+
+    /* Card Component */
+    .card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      transition: border-color 0.2s ease, transform 0.2s ease;
+    }
+
+    .card:hover {
+      border-color: rgba(99, 102, 241, 0.4);
+    }
+
+    .card-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-subtitle {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+      font-weight: 500;
+    }
+
+    .card-body {
+      font-size: 0.92rem;
+      color: var(--text-white);
+      line-height: 1.6;
+      flex: 1;
+    }
+
+    .card-body ul {
+      list-style-type: none;
+    }
+
+    .card-body li {
+      margin-bottom: 8px;
+      position: relative;
+      padding-left: 18px;
+    }
+
+    .card-body li::before {
+      content: "•";
+      position: absolute;
+      left: 0;
+      color: var(--accent-cyan);
+      font-weight: bold;
+    }
+
+    /* Color accents */
+    .c-indigo { color: var(--accent-indigo); }
+    .c-cyan { color: var(--accent-cyan); }
+    .c-emerald { color: var(--accent-emerald); }
+    .c-amber { color: var(--accent-amber); }
+    .c-rose { color: var(--accent-rose); }
+
+    /* Metric Card */
+    .metric-number {
+      font-size: 2.8rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1;
+      margin: 10px 0;
+      font-family: var(--font-sans);
+    }
+
+    /* Table Styles */
+    .comparison-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      background-color: var(--card-bg);
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--card-border);
+    }
+
+    .comparison-table th {
+      background-color: #312e81;
+      color: var(--text-white);
+      padding: 12px 16px;
+      text-align: left;
+      font-weight: 700;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .comparison-table td {
+      padding: 11px 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      color: #e2e8f0;
+    }
+
+    .comparison-table tr:nth-child(even) {
+      background-color: rgba(255, 255, 255, 0.02);
+    }
+
+    .comparison-table td:first-child {
+      font-weight: 600;
+      color: var(--text-white);
+    }
+
+    .comparison-table td.highlight {
+      font-weight: 700;
+      color: var(--accent-cyan);
+      background-color: rgba(6, 182, 212, 0.08);
+    }
+
+    /* Title Slide Specifics */
+    .hero-title {
+      font-size: 3.2rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, #ffffff 30%, #94a3b8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+    }
+
+    .hero-sub {
+      font-size: 1.4rem;
+      color: var(--accent-cyan);
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    .hero-desc {
+      font-size: 1rem;
+      color: var(--text-muted);
+      max-width: 900px;
+      line-height: 1.6;
+      margin-bottom: 32px;
+    }
+
+    /* Fixed Navigation Controls */
+    #nav-controls {
+      position: fixed;
+      bottom: 24px;
+      right: 32px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(12px);
+      padding: 8px 16px;
+      border-radius: 9999px;
+      border: 1px solid var(--card-border);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+      z-index: 100;
+    }
+
+    .btn-nav {
+      background: var(--card-bg-alt);
+      border: 1px solid var(--card-border);
+      color: var(--text-white);
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      transition: all 0.2s ease;
+    }
+
+    .btn-nav:hover {
+      background: var(--accent-indigo);
+      border-color: var(--accent-indigo);
+      transform: scale(1.05);
+    }
+
+    #slide-indicator {
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      min-width: 60px;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .btn-tool {
+      background: transparent;
+      border: 1px solid var(--card-border);
+      color: var(--text-muted);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-tool:hover {
+      color: var(--text-white);
+      border-color: var(--accent-cyan);
+    }
+
+    /* Speaker Notes Overlay */
+    #speaker-notes-modal {
+      position: fixed;
+      bottom: 80px;
+      right: 32px;
+      width: 480px;
+      max-height: 340px;
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--accent-indigo);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8);
+      z-index: 101;
+      display: none;
+      flex-direction: column;
+      animation: fadeIn 0.2s ease;
+    }
+
+    #speaker-notes-modal.visible {
+      display: flex;
+    }
+
+    .notes-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 8px;
+    }
+
+    .notes-title {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--accent-cyan);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .notes-content {
+      font-size: 0.88rem;
+      color: #e2e8f0;
+      line-height: 1.6;
+      overflow-y: auto;
+      max-height: 240px;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Print Styles */
+    @media print {
+      body {
+        overflow: visible;
+        background: white;
+        color: black;
+      }
+      #progress-bar, #nav-controls, #speaker-notes-modal {
+        display: none !important;
+      }
+      .slide {
+        position: relative !important;
+        opacity: 1 !important;
+        transform: none !important;
+        page-break-after: always;
+        width: 100vw !important;
+        height: 100vh !important;
+        box-shadow: none !important;
+        border: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="progress-bar"></div>
+
+  <main id="presentation-container">
+
+    <!-- SLIDE 1: TITLE SLIDE -->
+    <section class="slide active" data-notes="Good morning/afternoon respected examiners. Today we present CodeUI, a lightweight, lab-safe desktop Integrated Development Environment engineered specifically for academic computer laboratories and practical programming exams. It solves the fundamental paradox between modern developer ergonomics and academic examination integrity using a high-performance Tauri and Rust architecture.">
+      <div class="category-badge">Academic Major Project Presentation</div>
+      <h1 class="hero-title">CodeUI: A Lab-Safe Desktop IDE</h1>
+      <h2 class="hero-sub">Purpose-Built for Academic Computer Laboratories & Practical Examinations</h2>
+      <p class="hero-desc">Bridging the critical gap between bare text editors and commercial IDEs: Guarantees zero autocomplete, zero suggestions, and strict AI blocking while delivering modern Monaco editing, an integrated PTY terminal, and Rust-powered process isolation.</p>
+      
+      <div class="grid-4" style="flex: 1;">
+        <div class="card">
+          <div class="card-title c-indigo">Core Architecture</div>
+          <div class="card-subtitle">Modern Systems Stack</div>
+          <div class="card-body">
+            • Tauri 2.x native desktop framework<br>
+            • High-performance Rust backend core<br>
+            • React 18 + TypeScript + Monaco Editor<br>
+            • Sub-80MB RAM footprint
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title c-cyan">Target Academic Domain</div>
+          <div class="card-subtitle">Colleges & Universities</div>
+          <div class="card-body">
+            • Undergraduate CS & Engineering labs<br>
+            • Polytechnic & vocational computer labs<br>
+            • Timed practical programming evaluations<br>
+            • Data structures & algorithms coursework
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title c-emerald">Pedagogical Commitment</div>
+          <div class="card-subtitle">Zero-Assistance Standard</div>
+          <div class="card-body">
+            • Permanent lockout of autocomplete<br>
+            • Irrevocable AI & Copilot blocking<br>
+            • 30-second watchdog execution limits<br>
+            • Detached process group isolation
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title c-amber">Open Source Distribution</div>
+          <div class="card-subtitle">Repository Metadata</div>
+          <div class="card-body">
+            • Repository: <code>iamriteshhh/CodeUI</code><br>
+            • License: MIT Open Source License<br>
+            • Primary Targets: Linux, Windows, macOS<br>
+            • Automated CI/CD via GitHub Actions
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 2: THE ACADEMIC LAB DILEMMA -->
+    <section class="slide" data-notes="Here we articulate the core problem. During laboratory practical exams, colleges want to test algorithmic logic from memory. Commercial IDEs like VS Code undermine this through auto-suggestions and AI plugins. But bare editors like Notepad punish students with terrible ergonomics and zero compiler guidance. CodeUI fills this exact gap.">
+      <div class="slide-header">
+        <div class="category-badge">Problem Statement & Motivation</div>
+        <h2 class="slide-title">The Academic Computer Laboratory Dilemma</h2>
+        <div class="slide-subtitle">Why commercial IDEs and bare text editors both fail during practical programming examinations</div>
+      </div>
+      <div class="grid-3 slide-content">
+        <div class="card" style="border-color: rgba(244, 63, 94, 0.4);">
+          <div class="card-title c-rose">Option A: Commercial IDEs</div>
+          <div class="card-subtitle">VS Code, JetBrains CLion, Eclipse</div>
+          <div class="card-body">
+            <ul>
+              <li><strong>Compromises Exam Integrity:</strong> IntelliSense, word completion, and snippet expansions solve syntax and logic on behalf of the student.</li>
+              <li><strong>Unchecked AI Plugins:</strong> GitHub Copilot and ChatGPT plugins synthesize full solutions in seconds.</li>
+              <li><strong>Heavy Memory Footprint:</strong> Consumes 300MB-800MB RAM idle, causing system lockups on older 4GB lab PCs.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="card" style="border-color: rgba(245, 158, 11, 0.4);">
+          <div class="card-title c-amber">Option B: Bare Editors</div>
+          <div class="card-subtitle">Notepad, gedit, nano</div>
+          <div class="card-body">
+            <ul>
+              <li><strong>Prevents Cheating:</strong> Zero automated code suggestions or AI plugins.</li>
+              <li><strong>Cripples Ergonomics:</strong> No integrated terminal—forces constant Alt-Tabbing back and forth to an external command prompt.</li>
+              <li><strong>Zero Diagnostics:</strong> No visual error markers; students get lost debugging cryptic raw compiler messages.</li>
+              <li><strong>No Project Views:</strong> Lacks multi-tab editing and visual directory tree management.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="card" style="border-color: rgba(16, 185, 129, 0.4);">
+          <div class="card-title c-emerald">The Solution: CodeUI</div>
+          <div class="card-subtitle">The Best of Both Worlds</div>
+          <div class="card-body">
+            <ul>
+              <li><strong>Guaranteed Zero Assistance:</strong> Irreversible, architectural lockdown of all autocomplete, hints, and AI extensions.</li>
+              <li><strong>Modern Developer Ergonomics:</strong> Multi-tab Monaco Editor, split views, and light/dark theme support.</li>
+              <li><strong>Real Integrated PTY:</strong> Built-in terminal supporting interactive <code>scanf</code>, <code>cin</code>, and Python <code>input()</code>.</li>
+              <li><strong>Visual Diagnostic Markers:</strong> Real-time compiler error squigglies with plain-English crash hints.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 3: OPERATIONAL VULNERABILITIES -->
+    <section class="slide" data-notes="Examiners frequently overlook the physical operational burden on college lab infrastructure. Shared lab PCs are used by multiple batches every day. Infinite loops leave orphaned processes behind, infinite print loops freeze terminals, and compiler binaries clutter assignment submissions. CodeUI solves all three.">
+      <div class="slide-header">
+        <div class="category-badge">Workstation Security & Stability</div>
+        <h2 class="slide-title">Operational Vulnerabilities on Shared Lab Workstations</h2>
+        <div class="slide-subtitle">Why unmanaged execution of student code degrades physical laboratory computers</div>
+      </div>
+      <div class="slide-content">
+        <div class="card">
+          <div class="card-title c-rose">1. Orphaned Background Processes (Zombies & Loops)</div>
+          <div class="card-body">
+            When student code enters an infinite loop or spawns background processes, closing an external terminal window often leaves the process running in the background. Over multiple student batches throughout the day, CPU cores become saturated and workstation fans run at 100%.<br>
+            <strong class="c-emerald">✔ CodeUI Defense:</strong> Detached OS process groups (<code>setsid</code> / Win32 process flags) + 30-second watchdog timers.
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title c-amber">2. Terminal Buffer Flooding (UI Freeze)</div>
+          <div class="card-body">
+            A novice student writing <code>while(1) printf("%d\n", i++);</code> outputs millions of lines per second. In standard web-based or pipe-based terminals, this floods the event queue, freezes the UI thread, and crashes the webview with Out-Of-Memory (OOM) errors.<br>
+            <strong class="c-emerald">✔ CodeUI Defense:</strong> Dual-cadence buffer throttling (30ms intervals or 8KB chunks) + 5MB hard memory cap.
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title c-cyan">3. Workspace Clutter & Polluted Submissions</div>
+          <div class="card-body">
+            Compilers (<code>gcc</code>, <code>javac</code>, <code>sf</code>) generate binary executables, object files, and bytecode (<code>.exe</code>, <code>.class</code>, <code>.o</code>) directly into the student's assignment folder. When submitting assignments via USB or portal, students zip clutter or submit the wrong files.<br>
+            <strong class="c-emerald">✔ CodeUI Defense:</strong> Automatic transient scratch directory sandboxing (clean student folders).
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 4: PROJECT OBJECTIVES -->
+    <section class="slide" data-notes="These four pillars define CodeUI's design philosophy. First, pedagogical integrity ensures no cheating is possible. Second, developer ergonomics gives students a professional Monaco editor experience. Third, lab-safe execution guarantees system stability through Rust process supervision. Fourth, native interactive PTY guarantees interactive stdin works just like a real operating system shell.">
+      <div class="slide-header">
+        <div class="category-badge">Project Goals</div>
+        <h2 class="slide-title">The Four Core Engineering Objectives</h2>
+        <div class="slide-subtitle">Architectural commitments governing every component of CodeUI</div>
+      </div>
+      <div class="grid-4 slide-content">
+        <div class="card">
+          <div class="card-title c-rose">Pillar 1: Pedagogical Integrity</div>
+          <div class="card-subtitle">Zero-Assistance Principle</div>
+          <div class="card-body">
+            • Permanent lockout of autocomplete engines<br>
+            • Disable word suggestions, parameter hints, snippets<br>
+            • Block completion triggers (<code>Ctrl+Space</code>, <code>F12</code>, <code>F2</code>)<br>
+            • Hardcoded blocklist against Copilot and AI extensions
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title c-indigo">Pillar 2: Developer Ergonomics</div>
+          <div class="card-subtitle">Professional Workspace</div>
+          <div class="card-body">
+            • High-performance Monaco Editor surface<br>
+            • Multi-tab editing with split view (vertical/horizontal)<br>
+            • Full visual directory tree & fuzzy text search<br>
+            • Interactive live HTML/CSS/JavaScript web preview
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title c-emerald">Pillar 3: Lab-Safe Execution</div>
+          <div class="card-subtitle">Supervised Process Sandbox</div>
+          <div class="card-body">
+            • Process group detachment (<code>setsid</code> / Win32 flags)<br>
+            • 30-second watchdog hard execution budget<br>
+            • Two-stage graceful-to-forceful process termination<br>
+            • Dual-cadence buffer throttling (30ms / 5MB cap)
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title c-cyan">Pillar 4: Native Interactive PTY</div>
+          <div class="card-subtitle">True Terminal Emulation</div>
+          <div class="card-body">
+            • Real pseudo-terminal master/slave allocation<br>
+            • Full support for interactive <code>scanf</code>, <code>cin</code>, <code>input()</code><br>
+            • Python unbuffered execution mode (<code>-u</code> flag)<br>
+            • Hardware-accelerated <code>xterm.js</code> rendering
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 5: SYSTEM ARCHITECTURE -->
+    <section class="slide" data-notes="Here is CodeUI's 3-tier architecture. Notice that unlike Electron, where Node.js can be dangerously exposed to the renderer, Tauri 2.x enforces an asynchronous, strictly typed IPC security boundary. The React frontend handles presentation, while the compiled Rust backend handles process execution, PTY allocation, and file operations with native performance and memory safety.">
+      <div class="slide-header">
+        <div class="category-badge">System Architecture</div>
+        <h2 class="slide-title">Three-Tier Desktop Architecture</h2>
+        <div class="slide-subtitle">Clean separation of presentation, IPC security boundary, and native systems core</div>
+      </div>
+      <div class="grid-3 slide-content">
+        <div class="card">
+          <div class="card-title c-cyan">1. Frontend Presentation Tier</div>
+          <div class="card-subtitle">React 18.3 + TypeScript + Monaco</div>
+          <div class="card-body">
+            <ul>
+              <li><strong>Monaco Editor:</strong> Customized code editing surface with zero-assistance lockdown applied on mount.</li>
+              <li><strong>xterm.js + WebGL:</strong> Hardware-accelerated terminal output with ANSI color sequencing.</li>
+              <li><strong>UI State Store:</strong> Zustand-like reactive store managing active tabs, file paths, and dirty buffers.</li>
+              <li><strong>HTML Preview Sandbox:</strong> Sandboxed iframe for web development coursework.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title c-indigo">2. Tauri 2.x IPC Bridge</div>
+          <div class="card-subtitle">Strongly-Typed Security Boundary</div>
+          <div class="card-body">
+            <ul>
+              <li><strong>Zero Node.js Runtime:</strong> Eliminates Node vulnerabilities and massive Electron overhead.</li>
+              <li><strong>Typed Rust Commands:</strong> Invocations like <code>run_file</code> and <code>save_file</code> validated with Serde.</li>
+              <li><strong>Asynchronous Event Bus:</strong> High-speed streaming for stdout, stderr, and PTY characters.</li>
+              <li><strong>Auditable Permissions:</strong> Granular capability file restricts unauthorized OS operations.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title c-emerald">3. Native Rust Backend</div>
+          <div class="card-subtitle">Systems Programming Core</div>
+          <div class="card-body">
+            <ul>
+              <li><strong>Process Supervisor:</strong> Manages child process groups, stdin pipes, and watchdog timers.</li>
+              <li><strong>PTY Manager:</strong> <code>portable-pty</code> allocates ConPTY on Windows and <code>/dev/pts</code> on Linux.</li>
+              <li><strong>Language Runners:</strong> Modular handlers for C, C++, Java, Python, and Salivo.</li>
+              <li><strong>AI Policy Engine:</strong> Enforces declarative-only rule and filters AI extensions.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 6: END-TO-END SYSTEM FLOW -->
+    <section class="slide" data-notes="Examiners frequently ask: 'Trace the lifecycle of a click on the Run button.' Here are the 6 stages: 1. Auto-save ensures the disk matches the editor; 2. IPC dispatch sends the request to Rust; 3. The runner sets up an isolated scratch sandbox; 4. Compilation occurs with error parsing; 5. The executable is launched in a detached process group; and 6. The dual-cadence pump buffers output while the 30-second watchdog monitors for infinite loops.">
+      <div class="slide-header">
+        <div class="category-badge">Execution Pipeline</div>
+        <h2 class="slide-title">End-to-End System Execution Flow</h2>
+        <div class="slide-subtitle">What happens step-by-step when a student clicks 'Run' in the user interface?</div>
+      </div>
+      <div class="grid-3 slide-content">
+        <div class="card">
+          <div class="card-title c-cyan">Step 1: UI Trigger & Save</div>
+          <div class="card-body">React workspace store validates active file and automatically flushes dirty in-memory buffers to disk via <code>fsService</code>.</div>
+        </div>
+        <div class="card">
+          <div class="card-title c-indigo">Step 2: Tauri IPC Dispatch</div>
+          <div class="card-body">Dispatches <code>commands::process::run_file(path)</code> across Tauri's asynchronous IPC boundary with zero UI freeze.</div>
+        </div>
+        <div class="card">
+          <div class="card-title c-cyan">Step 3: Runner Resolution</div>
+          <div class="card-body">Rust backend maps extension (<code>.c</code>, <code>.java</code>, <code>.py</code>) to the appropriate <code>LanguageRunner</code> and allocates a transient scratch dir.</div>
+        </div>
+        <div class="card">
+          <div class="card-title c-amber">Step 4: Build & Diagnostics</div>
+          <div class="card-body">Executes compiler. If build fails, captures stderr stream, parses error coordinates, and emits inline Monaco squiggly lines.</div>
+        </div>
+        <div class="card">
+          <div class="card-title c-emerald">Step 5: Process Detachment</div>
+          <div class="card-body">Spawns child process inside a new OS process group (<code>libc::setsid()</code> on Linux or Win32 creation flags).</div>
+        </div>
+        <div class="card">
+          <div class="card-title c-rose">Step 6: Throttling & Watchdog</div>
+          <div class="card-body">Dual-cadence output pump buffers stdout (30ms/8KB, 5MB cap). Background watchdog monitors 30s execution ceiling.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 7: ZERO-ASSISTANCE LOCKDOWN ENGINE -->
+    <section class="slide" data-notes="Here is our core pedagogical innovation. In VS Code, disabling suggestions is just a user setting that any student can re-enable in 2 clicks. CodeUI enforces zero assistance at 3 distinct layers: 1. Disabling all Monaco suggestion properties; 2. Hijacking the underlying Monaco language registry so providers cannot be registered; and 3. Overriding keyboard shortcuts like Ctrl+Space at the DOM level. Even advanced students cannot re-enable autocomplete.">
+      <div class="slide-header">
+        <div class="category-badge">Core Innovation</div>
+        <h2 class="slide-title">The Zero-Assistance Lockdown Engine</h2>
+        <div class="slide-subtitle">A 3-layer defense-in-depth model that makes cheating technically impossible</div>
+      </div>
+      <div class="grid-3 slide-content">
+        <div class="card">
+          <div class="card-title c-indigo">Layer 1: Monaco Config Locks</div>
+          <div class="card-subtitle">Declarative Deactivation</div>
+          <div class="card-body">
+            <ul>
+              <li><code>quickSuggestions: false</code> (strings, comments, code)</li>
+              <li><code>suggestOnTriggerCharacters: false</code></li>
+              <li><code>wordBasedSuggestions: 'off'</code></li>
+              <li><code>parameterHints.enabled: false</code></li>
+              <li><code>inlineSuggest.enabled: false</code></li>
+              <li><code>autoClosingBrackets: 'never'</code></li>
+              <li><code>snippetSuggestions: 'none'</code></li>
+            </ul>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title c-cyan">Layer 2: Registry Hijacking</div>
+          <div class="card-subtitle">Dynamic Service Interception</div>
+          <div class="card-body">
+            <ul>
+              <li>Overrides <code>registerCompletionItemProvider</code></li>
+              <li>Overrides <code>registerHoverProvider</code></li>
+              <li>Overrides <code>registerDefinitionProvider</code></li>
+              <li>Overrides <code>registerCodeActionProvider</code></li>
+              <li>Replaces provider registries with dummy no-op disposables.</li>
+              <li>Even third-party extensions cannot register suggestions.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title c-rose">Layer 3: Keyboard Overrides</div>
+          <div class="card-subtitle">DOM Keybinding Neutralization</div>
+          <div class="card-body">
+            <ul>
+              <li>Intercepts <code>Ctrl+Space</code> & <code>Ctrl+Shift+Space</code></li>
+              <li>Intercepts <code>Alt+Enter</code> & <code>Ctrl+.</code> (Lightbulbs)</li>
+              <li>Intercepts <code>F12</code> (Go to Definition)</li>
+              <li>Intercepts <code>F2</code> (Symbol Rename Refactoring)</li>
+              <li>Binds all standard completion key combinations to empty routines on editor mount.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 8: PROCESS ISOLATION & DETACHED GROUPS -->
+    <section class="slide" data-notes="Here we discuss deep operating systems programming. If a student's C program calls fork(), or their Python script launches a subprocess, standard kill commands only kill the immediate parent. The child processes become zombies or orphans. CodeUI uses OS process group detachment: setsid() on Linux and CREATE_NEW_PROCESS_GROUP on Windows. This ensures that when we terminate, we terminate the entire process group with zero leftover orphans.">
+      <div class="slide-header">
+        <div class="category-badge">Native Systems Core</div>
+        <h2 class="slide-title">OS-Level Process Group Detachment</h2>
+        <div class="slide-subtitle">Guaranteeing total termination of student programs and child subprocesses</div>
+      </div>
+      <div class="grid-2 slide-content">
+        <div class="card" style="border-color: rgba(244, 63, 94, 0.4);">
+          <div class="card-title c-rose">The Danger: Process Tree Escapes</div>
+          <div class="card-subtitle">Why standard process spawning fails on lab machines:</div>
+          <div class="card-body">
+            <ul>
+              <li><strong>Subprocess Forking:</strong> When student code executes <code>fork()</code> or spawns a shell subprocess, child processes are decoupled from the immediate parent.</li>
+              <li><strong>Orphaned Survival:</strong> When the IDE terminates the main PID, grandchildren are adopted by <code>init</code> (PID 1) on Linux or continue as background tasks on Windows.</li>
+              <li><strong>Workstation Freezes:</strong> Unchecked orphaned processes accumulate across multiple student batches, eventually exhausting system RAM and locking the CPU.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="card" style="border-color: rgba(16, 185, 129, 0.4);">
+          <div class="card-title c-emerald">CodeUI Solution: Detached Groups</div>
+          <div class="card-subtitle">How CodeUI isolates process trees in Rust:</div>
+          <div class="card-body">
+            <ul>
+              <li><strong>Linux / POSIX (<code>libc::setsid</code>):</strong> Calls <code>setsid()</code> in pre-exec hook. The child becomes a brand-new session leader and process group leader. Signals sent to <code>-PGID</code> kill the entire tree atomically.</li>
+              <li><strong>Windows (<code>CREATE_NEW_PROCESS_GROUP</code>):</strong> Injects <code>CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW</code> flags into process creation attributes.</li>
+              <li><strong>Deterministic Tree Kill:</strong> Dispatches <code>taskkill /PID &lt;pid&gt; /T /F</code> (<code>/T</code> = entire process tree, <code>/F</code> = force kill).</li>
+              <li><strong>Zero Orphans:</strong> Guarantees 100% clean termination of every child process.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 9: WATCHDOG & ESCALATING KILL -->
+    <section class="slide" data-notes="Watchdogs are essential for academic labs. If a student writes an infinite loop and leaves their desk, the PC would normally stay frozen. In CodeUI, a 30-second watchdog kills runaway programs automatically. Notice our two-stage kill_tree algorithm: it sends SIGTERM first, waits 500ms for output buffers to flush so students can see their final output, and then escalates to SIGKILL. Also, when the window closes, all background tasks are torn down immediately.">
+      <div class="slide-header">
+        <div class="category-badge">Fault Tolerance</div>
+        <h2 class="slide-title">Watchdog Timers & Escalating Termination</h2>
+        <div class="slide-subtitle">Automatic detection and two-stage termination of runaway student programs</div>
+      </div>
+      <div class="grid-3 slide-content">
+        <div class="card">
+          <div class="card-title c-amber">1. The 30s Watchdog Budget</div>
+          <div class="card-subtitle">Autonomous Loop Detection</div>
+          <div class="card-body">
+            • Dedicated background thread monitors execution wall-clock time.<br>
+            • Hard 30-second execution ceiling prevents hung processes.<br>
+            • Triggers automatically if student writes <code>while(1) {}</code>.<br>
+            • Emits human-readable notification: <em>"Execution timed out (30s limit)"</em>.<br>
+            • Keeps physical lab computers responsive.
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title c-indigo">2. Two-Stage Kill (kill_tree)</div>
+          <div class="card-subtitle">Polite Flush -> Forceful Kill</div>
+          <div class="card-body">
+            • <strong>Stage 1 (Polite):</strong> Dispatches <code>SIGTERM</code> to the process group.<br>
+            • <strong>500ms Grace Period:</strong> Allows pending standard I/O buffers to flush cleanly to screen.<br>
+            • <strong>Stage 2 (Forceful):</strong> If process remains active after 500ms, escalates to unconditional <code>SIGKILL</code>.<br>
+            • Ensures complete termination without corrupted buffers.
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title c-emerald">3. Window Close Enforcement</div>
+          <div class="card-subtitle">Zero Leftover Zombies</div>
+          <div class="card-body">
+            • Hooked to Tauri's <code>CloseRequested</code> event.<br>
+            • Immediately invokes <code>shutdown_all()</code> across <code>RunRegistry</code> and <code>PtyManager</code>.<br>
+            • When student closes app or logs off, all processes terminate immediately.<br>
+            • Clean workstation state guaranteed for the next class batch.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 10: OUTPUT THROTTLING -->
+    <section class="slide" data-notes="This slide covers a subtle engineering challenge: output throttling. When a student writes an infinite printf loop, naive IDEs crash because the webview event loop is flooded. CodeUI implements a dual-cadence pump in Rust. It batches characters and only emits an IPC event every 30ms or when 8KB accumulates. Furthermore, we enforce a 5MB hard output ceiling. This guarantees that CodeUI's UI remains responsive at 60 frames per second under any runaway print load.">
+      <div class="slide-header">
+        <div class="category-badge">Stability Guardrails</div>
+        <h2 class="slide-title">Dual-Cadence Output Throttling & Memory Cap</h2>
+        <div class="slide-subtitle">Preventing webview thread starvation and memory exhaustion from infinite print loops</div>
+      </div>
+      <div class="grid-2 slide-content">
+        <div class="card" style="border-color: rgba(244, 63, 94, 0.4);">
+          <div class="card-title c-rose">The Denial-of-Service Risk</div>
+          <div class="card-subtitle">Why naive terminal output freezes IDE webviews:</div>
+          <div class="card-body">
+            <ul>
+              <li><strong>The Infinite Print Loop:</strong> A student writes <code>while(1) printf("%d\n", i++);</code>. The process emits tens of thousands of lines per second.</li>
+              <li><strong>Event Queue Saturation:</strong> If every print triggers an immediate IPC message, the React/webview main thread is flooded with tens of thousands of state updates.</li>
+              <li><strong>Browser Out-Of-Memory:</strong> Webview memory spikes into gigabytes trying to store endless string spans, resulting in a complete browser crash.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="card" style="border-color: rgba(6, 182, 212, 0.4);">
+          <div class="card-title c-cyan">CodeUI Defense: Dual-Cadence Pump</div>
+          <div class="card-subtitle">How CodeUI throttles output in native Rust:</div>
+          <div class="card-body">
+            <ul>
+              <li><strong>Cadence 1 — Time Interval (30ms):</strong> Pushes buffered characters to the frontend at most once every 30 milliseconds (~33 FPS).</li>
+              <li><strong>Cadence 2 — Size Chunk (8,192 Bytes):</strong> If the buffer hits 8KB before 30ms expires, it flushes immediately for high throughput.</li>
+              <li><strong>Hard Memory Ceiling (5 Megabytes):</strong> Caps total output at 5MB per run. If exceeded, halts output and warns: <em>"Output limit exceeded (5MB). Program stopped."</em></li>
+              <li><strong>Fluid 60 FPS:</strong> UI remains 100% responsive under any print load.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 11: TRANSIENT SCRATCH DIRECTORIES -->
+    <section class="slide" data-notes="Here is another thoughtful feature: scratch directory sandboxing. Traditional compilers generate binaries directly alongside source code. CodeUI redirects build outputs to a transient scratch folder in the OS temp directory. However, notice our key architectural decision: we keep the working directory pointed at the student's folder. This means if a student's program reads 'input.txt', relative file I/O works seamlessly while their project folder stays 100% clean.">
+      <div class="slide-header">
+        <div class="category-badge">Workspace Cleanliness</div>
+        <h2 class="slide-title">Transient Scratch Directory Sandboxing</h2>
+        <div class="slide-subtitle">Keeping student assignment workspaces clean and preventing submission errors</div>
+      </div>
+      <div class="grid-2 slide-content">
+        <div class="card" style="border-color: rgba(245, 158, 11, 0.4);">
+          <div class="card-title c-amber">Traditional IDE Build Clutter</div>
+          <div class="card-subtitle">Pollution of student assignment folders:</div>
+          <div class="card-body">
+            <ul>
+              <li><strong>Intermediate Binaries:</strong> Compilers dump <code>.exe</code>, <code>.o</code>, <code>.class</code>, and <code>.pdb</code> debug files right next to source files.</li>
+              <li><strong>Polluted Submissions:</strong> Novice students accidentally zip 50MB of compiled binaries when submitting assignments to college portals or flash drives.</li>
+              <li><strong>Grading Headaches:</strong> Lab evaluators have to manually hunt down and delete old binaries before recompiling student code.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="card" style="border-color: rgba(16, 185, 129, 0.4);">
+          <div class="card-title c-emerald">CodeUI Scratch Sandboxing</div>
+          <div class="card-subtitle">How CodeUI isolates builds transparently:</div>
+          <div class="card-body">
+            <ul>
+              <li><strong>Isolated Temp Folder:</strong> Every run allocates a private scratch directory in the OS temp folder (e.g. <code>/tmp/codeui-run-xyz</code> or <code>%TEMP%\codeui-run-xyz</code>).</li>
+              <li><strong>Preserved Working Directory (CWD):</strong> Crucial design decision: The process's current working directory remains pointed at the student's folder!</li>
+              <li><strong>Relative File I/O Works:</strong> Student calls like <code>fopen("input.txt", "r")</code> or <code>open("data.csv")</code> resolve correctly relative to their source code.</li>
+              <li><strong>Pristine Folders:</strong> The project folder contains only clean source files.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 12: TRUE INTERACTIVE PTY -->
+    <section class="slide" data-notes="Interactive programs like scanf or Python input() are notoriously buggy in basic student IDEs because of OS pipe buffering. If you print 'Enter N: ' without a newline, the prompt is buffered in memory while scanf blocks, so the student sees nothing. CodeUI embeds real PTY emulation via portable-pty on Rust and xterm.js on the frontend. It allocates a real pseudo-terminal master/slave pair, runs Python with -u unbuffered mode, and dynamically updates terminal dimensions with TIOCSWINSZ ioctls.">
+      <div class="slide-header">
+        <div class="category-badge">Terminal Engineering</div>
+        <h2 class="slide-title">True Interactive PTY Terminal Emulation</h2>
+        <div class="slide-subtitle">Overcoming pipe redirection flaws to support interactive C, Java, and Python input</div>
+      </div>
+      <div class="grid-3 slide-content">
+        <div class="card">
+          <div class="card-title c-rose">Redirected Pipe Flaw</div>
+          <div class="card-subtitle">Why naive terminals fail</div>
+          <div class="card-body">
+            • Standard pipes use block buffering (4,096 bytes).<br>
+            • Prompts like <code>printf("Enter N: ");</code> lack a newline (<code>\n</code>).<br>
+            • Output stays trapped in the OS buffer while <code>scanf()</code> blocks.<br>
+            • Student sees a blank screen, thinks the IDE froze, and gets marked down.
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title c-cyan">Real PTY Master/Slave</div>
+          <div class="card-subtitle">portable-pty + xterm.js</div>
+          <div class="card-body">
+            • Allocates real pseudo-terminals (Linux <code>/dev/pts</code>, Windows ConPTY).<br>
+            • Manages line discipline, canonical input mode, and local echo.<br>
+            • Prompts appear immediately on screen before input functions block.<br>
+            • Full ANSI / VT100 escape sequence support.
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title c-emerald">Python Unbuffered (-u)</div>
+          <div class="card-subtitle">Eliminating input() delays</div>
+          <div class="card-body">
+            • Python defaults to block-buffered I/O when redirected.<br>
+            • <code>PythonRunner</code> automatically passes <code>-u</code> flag.<br>
+            • Guarantees prompts from <code>input("Enter name: ")</code> display instantly.<br>
+            • Window resizing via <code>TIOCSWINSZ</code> ioctl supports <code>nano</code> and curses.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 13: COMPILER DIAGNOSTICS -->
+    <section class="slide" data-notes="Novice students lose immense time during exams trying to decipher raw GCC error dumps. CodeUI features a pure TypeScript diagnostic parser that scans compiler stderr in real time and paints red squiggly error markers directly on Monaco editor lines. Furthermore, when a program crashes with an operating system signal like 139 or 136, CodeUI provides a plain-English explanation explaining that 139 is a segmentation fault or 136 is division by zero.">
+      <div class="slide-header">
+        <div class="category-badge">Developer Ergonomics</div>
+        <h2 class="slide-title">Intelligent Compiler Diagnostic Highlighting</h2>
+        <div class="slide-subtitle">Real-time regex parsing of compiler stderr into inline Monaco squiggly error markers</div>
+      </div>
+      <div class="grid-2 slide-content">
+        <div class="card">
+          <div class="card-title c-indigo">Real-Time Stderr Parsing</div>
+          <div class="card-subtitle">How parseCompilerDiagnostics.ts works:</div>
+          <div class="card-body">
+            <ul>
+              <li><strong>C/C++ (GCC & Clang):</strong> Extracts regex <code>file:line:col: (error|warning): message</code> and translates coordinates into Monaco markers.</li>
+              <li><strong>Java (Javac):</strong> Matches <code>file:line: error: message</code> and scans subsequent lines for caret (<code>^</code>) column indicators.</li>
+              <li><strong>Python Tracebacks:</strong> Analyzes multi-line traceback frames, extracting line numbers and exception types (<code>IndexError</code>, <code>NameError</code>).</li>
+              <li><strong>Inline Squigglies:</strong> High-contrast red markers painted directly under offending source lines.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title c-cyan">Plain-English Crash Hints</div>
+          <div class="card-subtitle">Translating cryptic exit codes for students:</div>
+          <div class="card-body">
+            <ul>
+              <li><strong>Exit Code 139 (SIGSEGV):</strong> <em>"Program crashed — likely a segmentation fault. You may have accessed an uninitialized pointer or an out-of-bounds array index."</em></li>
+              <li><strong>Exit Code 136 (SIGFPE):</strong> <em>"Arithmetic exception — likely a division by zero or modulo by zero operation in your code."</em></li>
+              <li><strong>Exit Code 137 (SIGKILL):</strong> <em>"Program stopped — execution took longer than the 30-second watchdog limit or was killed."</em></li>
+              <li><strong>Exit Code 1:</strong> <em>"Process exited with non-zero exit code 1. Check your logic and compiler warnings."</em></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 14: JAVA RESOLUTION -->
+    <section class="slide" data-notes="Java is notorious in first-year programming courses. Students constantly save public classes with filenames that don't match, or add package headers and get ClassNotFoundException. CodeUI's JavaRunner contains an intelligent AST scanner in Rust that validates class names before compilation and warns the student immediately. It also detects package statements and handles classpath routing automatically.">
+      <div class="slide-header">
+        <div class="category-badge">Language Runners</div>
+        <h2 class="slide-title">Advanced Java Class & Package Resolution</h2>
+        <div class="slide-subtitle">Pre-compilation AST validation eliminating academic ClassNotFoundException errors</div>
+      </div>
+      <div class="grid-2 slide-content">
+        <div class="card" style="border-color: rgba(245, 158, 11, 0.4);">
+          <div class="card-title c-amber">The Academic Java Struggle</div>
+          <div class="card-subtitle">Common beginner mistakes in Java labs:</div>
+          <div class="card-body">
+            <ul>
+              <li><strong>Filename Mismatch:</strong> A student writes <code>public class BinarySearchTree</code> inside a file named <code>Lab3.java</code>. <code>javac</code> throws a compilation error.</li>
+              <li><strong>Package Pathing Failures:</strong> A student writes <code>package com.college.ds;</code> but executes <code>java BinarySearchTree</code> from inside the package directory, triggering <code>ClassNotFoundException</code>.</li>
+              <li><strong>Lost Exam Time:</strong> Students spend 15 minutes renaming files and moving directories around instead of writing algorithms.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="card" style="border-color: rgba(16, 185, 129, 0.4);">
+          <div class="card-title c-emerald">CodeUI JavaRunner Intelligence</div>
+          <div class="card-subtitle">How CodeUI handles Java automatically:</div>
+          <div class="card-body">
+            <ul>
+              <li><strong>AST Pre-Flight Scanner:</strong> Parses Java source text (skipping comments and strings) to find the declared class and check if it is <code>public</code>.</li>
+              <li><strong>Pre-Compilation Alert:</strong> If <code>public class Calculator</code> is in <code>Main.java</code>, CodeUI flags it immediately with actionable advice before <code>javac</code> runs.</li>
+              <li><strong>Package Detection:</strong> Detects <code>package com.college.ds;</code> and compiles with <code>javac -d &lt;scratch&gt;</code>.</li>
+              <li><strong>Automatic FQCN Execution:</strong> Automatically launches <code>java -cp &lt;scratch&gt; com.college.ds.Calculator</code>.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 15: DECLARATIVE EXTENSIONS & AI POLICY -->
+    <section class="slide" data-notes="Can students customize CodeUI? Yes, but with strict security boundaries. CodeUI connects to the Open VSX registry to allow custom themes and syntax packages. However, our Rust unpacking pipeline enforces a declarative-only rule: it strips out executable JavaScript and language servers. Furthermore, our ai-policy engine checks extension names and descriptions against a blocklist, permanently preventing any AI assistants like Copilot from being installed.">
+      <div class="slide-header">
+        <div class="category-badge">Security & Customization</div>
+        <h2 class="slide-title">Declarative Extension Hub & Hardened AI Policy</h2>
+        <div class="slide-subtitle">Allowing community themes and syntax while permanently blocking AI coding assistants</div>
+      </div>
+      <div class="grid-3 slide-content">
+        <div class="card">
+          <div class="card-title c-indigo">Open VSX Registry Support</div>
+          <div class="card-subtitle">Community Themes & Grammars</div>
+          <div class="card-body">
+            • Connects to the open-source Open VSX marketplace.<br>
+            • Allows students to install dark/light themes and syntax packages.<br>
+            • Provides visual comfort for long programming sessions.<br>
+            • Completely independent of proprietary Microsoft VS Code services.
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title c-cyan">Declarative-Only Filter</div>
+          <div class="card-subtitle">Zero Executable Code Allowed</div>
+          <div class="card-body">
+            • Unpacks only declarative JSON assets (<code>.tmLanguage.json</code>, colors).<br>
+            • Drops all executable JavaScript and Node.js extensions.<br>
+            • Discards Language Server Protocol (LSP) binaries.<br>
+            • Discards CodeAction and auto-completion extension hooks.
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title c-rose">Hardened AI Policy Engine</div>
+          <div class="card-subtitle">Multi-Tiered Blocklist Filter</div>
+          <div class="card-body">
+            • <code>ai-policy.json</code> blocks terms: <em>copilot, gpt, llm, claude, deepseek, assistant, chat, inline-completion</em>.<br>
+            • Filters extension metadata at the Open VSX search query stage.<br>
+            • Filters extension manifests at the Rust VSIX unpacking stage.<br>
+            • Zero possibility of smuggling AI assistants into the IDE.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 16: TECH STACK & JUSTIFICATION (WHY TAURI?) -->
+    <section class="slide" data-notes="Examiners will immediately ask: 'Why didn't you just use Electron?' Here are three solid engineering reasons: 1. Resource efficiency: Tauri's installer is ~15MB compared to Electron's 150MB+, and idle RAM is ~60MB compared to 300MB+; 2. Security: Tauri strictly isolates the webview from the operating system with auditable Rust commands; and 3. Low-level systems access: Rust gives us direct control over POSIX process groups and PTYs. Also note our No-Python-Tooling policy: repository automation is handled in pure Rust xtask.">
+      <div class="slide-header">
+        <div class="category-badge">Engineering Decisions</div>
+        <h2 class="slide-title">Technology Stack & Technical Justification</h2>
+        <div class="slide-subtitle">Why Tauri 2.x and Rust were chosen over Electron and Python for CodeUI</div>
+      </div>
+      <div class="grid-2 slide-content">
+        <div class="card">
+          <div class="card-title c-cyan">Why Tauri + Rust Instead of Electron?</div>
+          <div class="card-subtitle">Key architectural comparisons:</div>
+          <div class="card-body">
+            <ul>
+              <li><strong>Resource Footprint:</strong> Electron bundles full Chromium + Node.js (~150MB installer, ~300MB-800MB RAM). Tauri uses host native webview (Edge WebView2 / WebKitGTK) with ~15MB installer and ~60MB RAM.</li>
+              <li><strong>Security Boundary:</strong> Electron apps frequently expose Node.js fs/child_process to renderer. Tauri enforces strongly-typed, auditable Rust commands with zero arbitrary shell access.</li>
+              <li><strong>Low-Level OS Control:</strong> Rust provides zero-cost access to POSIX syscalls (<code>setsid</code>, <code>killpg</code>, ioctl <code>TIOCSWINSZ</code>) and Win32 process creation flags impossible in pure web tech.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title c-indigo">The 'No-Python-Tooling' Architecture</div>
+          <div class="card-subtitle">Strict separation of build tooling from student targets:</div>
+          <div class="card-body">
+            <ul>
+              <li><strong>Python is a Target, Not a Tool:</strong> Python is supported exclusively as an execution runtime for student assignments; it is never used in the building or testing of CodeUI itself.</li>
+              <li><strong>Rust xtask Automation:</strong> All repository automation, version synchronization, and packaging tasks are built in a native Rust crate in <code>xtask/</code>.</li>
+              <li><strong>Zero Environment Fragmentation:</strong> Developers and CI runners never need a secondary Python virtual environment (venv) or pip packages to build CodeUI.</li>
+              <li><strong>Hermetic Reproducibility:</strong> Eliminates "works on my machine" dependency failures across lab machines.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 17: QUANTITATIVE BENCHMARKS -->
+    <section class="slide" data-notes="Here are the quantitative performance metrics. CodeUI's installer is approximately 15 Megabytes, meaning it can be distributed across college networks in seconds. Idle memory consumption is only ~60MB, making it completely stable on older 4GB lab PCs. Our 30ms output throttling keeps the UI at a fluid 60 FPS, and our 30-second watchdog guarantees that physical lab PCs never stay locked up by infinite loops.">
+      <div class="slide-header">
+        <div class="category-badge">Empirical Evaluation</div>
+        <h2 class="slide-title">Quantitative System Footprint & Benchmarks</h2>
+        <div class="slide-subtitle">Empirical measurements comparing CodeUI with traditional laboratory tools</div>
+      </div>
+      <div class="grid-4 slide-content">
+        <div class="card">
+          <div class="card-title c-cyan">Installer Size</div>
+          <div class="metric-number c-cyan">~15 MB</div>
+          <div class="card-body">10x lighter than commercial IDE installers (~150MB-200MB). Easy to distribute across college networks without bandwidth saturation.</div>
+        </div>
+        <div class="card">
+          <div class="card-title c-emerald">Idle RAM Footprint</div>
+          <div class="metric-number c-emerald">~60 MB</div>
+          <div class="card-body">Runs smoothly even on legacy 2GB-4GB RAM computer laboratory workstations without inducing OS swapping or memory pressure.</div>
+        </div>
+        <div class="card">
+          <div class="card-title c-indigo">Output Throttle Buffer</div>
+          <div class="metric-number c-indigo">30ms / 8KB</div>
+          <div class="card-body">Maintains a fluid 60 FPS UI without frame drops even during runaway print loops (e.g. <code>while(1) printf(...)</code>).</div>
+        </div>
+        <div class="card">
+          <div class="card-title c-amber">Default Watchdog Budget</div>
+          <div class="metric-number c-amber">30 Seconds</div>
+          <div class="card-body">Hard wall-clock limit automatically terminates hung processes with zero orphaned zombies left running on shared computers.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 18: COMPARATIVE EVALUATION MATRIX -->
+    <section class="slide" data-notes="This comparison matrix highlights CodeUI's unique market position. Bare editors prevent cheating but inflict terrible developer ergonomics. Commercial IDEs offer great ergonomics but completely destroy exam integrity and hog memory. CodeUI matches the ergonomic strengths of commercial IDEs while matching the strict zero-cheating safety of bare text editors, with superior process supervision.">
+      <div class="slide-header">
+        <div class="category-badge">Comparative Analysis</div>
+        <h2 class="slide-title">Comprehensive Evaluation Matrix</h2>
+        <div class="slide-subtitle">Side-by-side comparison across pedagogical, ergonomic, and operational dimensions</div>
+      </div>
+      <div class="slide-content">
+        <table class="comparison-table">
+          <thead>
+            <tr>
+              <th>Feature / Dimension</th>
+              <th>Bare Editors (Notepad)</th>
+              <th>Commercial IDEs (VS Code)</th>
+              <th>CodeUI (Our Solution)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Exam Cheating & AI Risk</td>
+              <td>None (Zero assistance)</td>
+              <td style="color: var(--accent-rose);">Severe (IntelliSense/Copilot)</td>
+              <td class="highlight">Zero (Hardened Lockdown)</td>
+            </tr>
+            <tr>
+              <td>Syntax Highlighting</td>
+              <td>None / Extremely basic</td>
+              <td>Rich and accurate</td>
+              <td class="highlight">Rich and accurate</td>
+            </tr>
+            <tr>
+              <td>Integrated Terminal</td>
+              <td>None (Alt-Tab required)</td>
+              <td>Yes (Full terminal)</td>
+              <td class="highlight">Yes (Native xterm.js PTY)</td>
+            </tr>
+            <tr>
+              <td>Compiler Error Navigation</td>
+              <td>Manual terminal reading</td>
+              <td>Inline error squigglies</td>
+              <td class="highlight">Inline squigglies + plain hints</td>
+            </tr>
+            <tr>
+              <td>Process Group Isolation</td>
+              <td>None (Orphans persist)</td>
+              <td>Variable / Incomplete</td>
+              <td class="highlight">Strict (setsid / Win32 groups)</td>
+            </tr>
+            <tr>
+              <td>Watchdog Timeout</td>
+              <td>None (Runs indefinitely)</td>
+              <td>None by default</td>
+              <td class="highlight">30-second hard watchdog</td>
+            </tr>
+            <tr>
+              <td>Output Flooding Guard</td>
+              <td>Freezes terminal window</td>
+              <td>High memory consumption</td>
+              <td class="highlight">30ms buffer & 5MB cap</td>
+            </tr>
+            <tr>
+              <td>RAM Footprint (Idle)</td>
+              <td>&lt; 20 MB</td>
+              <td style="color: var(--accent-rose);">~300 MB - 800 MB</td>
+              <td class="highlight">~60 MB - 80 MB</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- SLIDE 19: TESTING & QA MATRIX -->
+    <section class="slide" data-notes="Software testing is critical for a project defense. CodeUI maintains a dual-tier testing matrix. In Rust, cargo test verifies process group tree termination, signal translation, and split UTF-8 stream decoding. In TypeScript, Vitest asserts that Monaco suggestion properties are disabled, tests diagnostic regexes against authentic compiler stderr, and validates the AI policy filter. All tests run on GitHub Actions across Linux, Windows, and macOS.">
+      <div class="slide-header">
+        <div class="category-badge">Verification & QA</div>
+        <h2 class="slide-title">Testing Matrix & Continuous Integration</h2>
+        <div class="slide-subtitle">Multi-tiered automated testing validating backend safety and frontend zero-assistance</div>
+      </div>
+      <div class="grid-2 slide-content">
+        <div class="card" style="border-color: rgba(16, 185, 129, 0.4);">
+          <div class="card-title c-emerald">Rust Backend Test Suite (cargo test)</div>
+          <div class="card-subtitle">Validating systems programming correctness:</div>
+          <div class="card-body">
+            <ul>
+              <li><strong>Process Tree Kill Test:</strong> Spawns nested sleep tasks and proves <code>kill_tree</code> terminates both parent and child processes without leaving orphans.</li>
+              <li><strong>UTF-8 Split Stream Test:</strong> Verifies <code>take_utf8</code> correctly buffers multi-byte Unicode characters split across read buffer boundaries.</li>
+              <li><strong>Runner Resolution Tests:</strong> Verifies command-line generation for C, C++, Java, Python, and Salivo compilers.</li>
+              <li><strong>Signal Translation Tests:</strong> Validates exit code to plain-English diagnostic mappings (139 -> Segfault, 136 -> DivZero).</li>
+            </ul>
+          </div>
+        </div>
+        <div class="card" style="border-color: rgba(6, 182, 212, 0.4);">
+          <div class="card-title c-cyan">Frontend Vitest Suite (npm test)</div>
+          <div class="card-subtitle">Validating UI security and error parsing:</div>
+          <div class="card-body">
+            <ul>
+              <li><strong>Zero-Assistance Enforcement:</strong> Asserts <code>MONACO_LAB_SAFE_OPTIONS</code> disables all suggestions; asserts keyboard interceptor cancels <code>Ctrl+Space</code>.</li>
+              <li><strong>Compiler Diagnostics Parsers:</strong> Tests regex parsing against authentic GCC, Clang, Javac, and Python stderr logs under Windows and Linux paths.</li>
+              <li><strong>AI Policy Word Filter:</strong> Verifies <code>aiReason()</code> detects banned keywords (copilot, gpt, llm, claude) while allowing valid syntax themes.</li>
+              <li><strong>Continuous Integration (CI):</strong> GitHub Actions pipeline builds and verifies all tests across Linux, Windows, and macOS.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 20: SYSTEM REQUIREMENTS -->
+    <section class="slide" data-notes="Deployment feasibility is key for real institutions. Many college labs still run older dual-core PCs with 2GB to 4GB of RAM. CodeUI runs comfortably on these machines without hardware upgrades. It supports Linux, Windows, and macOS, and automatically detects standard compilers like GCC, Javac, Python, and Salivo already installed in the system PATH.">
+      <div class="slide-header">
+        <div class="category-badge">Deployment Specifications</div>
+        <h2 class="slide-title">Hardware Requirements & Toolchain Compatibility</h2>
+        <div class="slide-subtitle">Engineered to run seamlessly on existing, budget-constrained laboratory hardware</div>
+      </div>
+      <div class="grid-3 slide-content">
+        <div class="card">
+          <div class="card-title c-indigo">Target Client Hardware</div>
+          <div class="card-subtitle">Runs on aging lab machines</div>
+          <div class="card-body">
+            • <strong>CPU:</strong> Dual-Core 64-bit x86_64 or ARM64 (1.8 GHz+).<br>
+            • <strong>RAM:</strong> 2 GB minimum (4 GB recommended).<br>
+            • <strong>Storage:</strong> 250 MB free disk space.<br>
+            • <strong>Display:</strong> 1024x768 minimum resolution.<br>
+            • Zero requirement for discrete graphics cards (GPUs).
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title c-cyan">Supported Operating Systems</div>
+          <div class="card-subtitle">Cross-platform distribution</div>
+          <div class="card-body">
+            • <strong>Linux:</strong> Ubuntu 20.04/22.04/24.04 LTS, Debian 11/12, Fedora (AppImage & deb packages).<br>
+            • <strong>Windows:</strong> Windows 10 (1809+) & Windows 11 64-bit with WebView2 (EXE & MSI installers).<br>
+            • <strong>macOS:</strong> macOS 10.15 Catalina or newer (Universal DMG).
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title c-emerald">Student Host Toolchains</div>
+          <div class="card-subtitle">Auto-detected in system PATH</div>
+          <div class="card-body">
+            • <strong>C/C++:</strong> GCC, G++, Clang, MinGW-w64.<br>
+            • <strong>Java:</strong> OpenJDK or Oracle JDK (8, 11, 17, 21+).<br>
+            • <strong>Python:</strong> Python 3.8+ (<code>python3</code> or <code>python.exe</code>).<br>
+            • <strong>Salivo:</strong> Salivo Modern Language Toolchain (<code>sf</code>).<br>
+            • <strong>Web:</strong> Native webview engine.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 21: FUTURE SCOPE -->
+    <section class="slide" data-notes="Looking forward, CodeUI has a clear roadmap for broader institutional deployment. Our roadmap includes an Exam Kiosk Lockdown mode to lock Alt-Tab, a Portable USB Edition for zero-install labs, local keystroke cadence telemetry to detect block copy-pastes, and an integrated offline documentation browser for standard libraries.">
+      <div class="slide-header">
+        <div class="category-badge">Future Scope</div>
+        <h2 class="slide-title">Project Roadmap & Academic Extensions</h2>
+        <div class="slide-subtitle">Planned capabilities for future institutional laboratory deployments</div>
+      </div>
+      <div class="grid-4 slide-content">
+        <div class="card">
+          <div class="card-title c-rose">1. Exam Kiosk Lockdown Mode</div>
+          <div class="card-subtitle">Full-Screen Proctored Kiosk</div>
+          <div class="card-body">An optional instructor-activated kiosk mode that disables desktop switching (<code>Alt+Tab</code>, Super key) and locks the system clipboard to prevent pasting external cheat sheets.</div>
+        </div>
+        <div class="card">
+          <div class="card-title c-indigo">2. USB Flash Drive Portable Edition</div>
+          <div class="card-subtitle">Zero-Installation Portable IDE</div>
+          <div class="card-body">A self-contained portable executable that can run directly off student USB drives on laboratory computers where students lack administrative installation rights.</div>
+        </div>
+        <div class="card">
+          <div class="card-title c-cyan">3. Keystroke Cadence Telemetry</div>
+          <div class="card-subtitle">Plagiarism & Paste Detection</div>
+          <div class="card-body">Non-intrusive local typing cadence logging to identify sudden multi-line block paste events, assisting evaluators in detecting unauthorized code insertion.</div>
+        </div>
+        <div class="card">
+          <div class="card-title c-emerald">4. Integrated Offline Docs Browser</div>
+          <div class="card-subtitle">Searchable Offline Reference</div>
+          <div class="card-body">An integrated offline documentation panel covering standard C library (<code>man 3</code>), C++ STL, Python 3 standard library, and Java API documentation.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 22: CONCLUSION & SUMMARY -->
+    <section class="slide" data-notes="In conclusion, CodeUI reconciles the long-standing conflict between modern developer ergonomics and academic examination integrity. By enforcing a permanent zero-assistance lockdown while providing Monaco editing, an integrated PTY terminal, and Rust-based process isolation, CodeUI gives academic institutions a dependable, student-friendly standard for computing labs. Thank you, Sir/Ma'am. We are now ready to demonstrate the application and answer your questions.">
+      <div class="slide-header">
+        <div class="category-badge">Summary & Conclusion</div>
+        <h2 class="slide-title">CodeUI: Reconciling Ergonomics with Exam Integrity</h2>
+        <div class="slide-subtitle">Key takeaways and defense summary for practical laboratory evaluation</div>
+      </div>
+      <div class="grid-3 slide-content" style="flex: 1;">
+        <div class="card">
+          <div class="card-title c-indigo">The Core Takeaway</div>
+          <div class="card-subtitle">Bridging the Gap</div>
+          <div class="card-body">
+            • Successfully solves the college laboratory dilemma.<br>
+            • Permanent, irreversible zero-assistance lockdown prevents AI and autocomplete cheating.<br>
+            • Preserves professional developer ergonomics: Monaco multi-tab editor, file tree, and real PTY terminal.
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title c-emerald">Operational Excellence</div>
+          <div class="card-subtitle">Workstation Protection</div>
+          <div class="card-body">
+            • Detached OS process groups (<code>setsid</code>/Win32) eliminate runaway zombie processes.<br>
+            • 30-second watchdog hard limit terminates infinite loops.<br>
+            • Dual-cadence output pump (30ms/8KB/5MB) prevents UI freezing.<br>
+            • Scratch sandbox keeps student folders 100% clean.
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title c-cyan">Production Readiness</div>
+          <div class="card-subtitle">Built with Rust & Tauri 2.x</div>
+          <div class="card-body">
+            • Ultra-compact ~15MB installer with lightweight ~60MB RAM footprint.<br>
+            • Dual-tier testing matrix across Rust unit tests and TypeScript Vitest.<br>
+            • Open source under MIT License at <code>iamriteshhh/CodeUI</code>.<br>
+            • Ready for deployment in computer science labs.
+          </div>
+        </div>
+      </div>
+      <div style="margin-top: 20px; text-align: center; padding: 12px; background: rgba(6, 182, 212, 0.1); border: 1px solid rgba(6, 182, 212, 0.3); border-radius: 8px;">
+        <span style="font-weight: 700; color: var(--accent-cyan); font-size: 1.1rem;">Thank You! We are now open for questions and examiner viva voce defense.</span>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Navigation Controls -->
+  <nav id="nav-controls">
+    <button class="btn-nav" id="btn-prev" title="Previous Slide (Left Arrow)">‹</button>
+    <span id="slide-indicator">1 / 22</span>
+    <button class="btn-nav" id="btn-next" title="Next Slide (Right Arrow)">›</button>
+    <div style="width: 1px; height: 20px; background: var(--card-border); margin: 0 4px;"></div>
+    <button class="btn-tool" id="btn-notes" title="Toggle Speaker Notes (N)">Notes [N]</button>
+    <button class="btn-tool" id="btn-fullscreen" title="Toggle Fullscreen (F)">Full [F]</button>
+  </nav>
+
+  <!-- Speaker Notes Overlay Modal -->
+  <aside id="speaker-notes-modal">
+    <div class="notes-header">
+      <div class="notes-title">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+        Examiner Viva Voce Notes
+      </div>
+      <span style="font-size: 0.75rem; color: var(--text-dim);">Press N to close</span>
+    </div>
+    <div class="notes-content" id="notes-text">
+      Loading notes...
+    </div>
+  </aside>
+
+  <script>
+    const slides = Array.from(document.querySelectorAll('.slide'));
+    const progressBar = document.getElementById('progress-bar');
+    const slideIndicator = document.getElementById('slide-indicator');
+    const btnPrev = document.getElementById('btn-prev');
+    const btnNext = document.getElementById('btn-next');
+    const btnNotes = document.getElementById('btn-notes');
+    const btnFullscreen = document.getElementById('btn-fullscreen');
+    const notesModal = document.getElementById('speaker-notes-modal');
+    const notesText = document.getElementById('notes-text');
+
+    let currentSlide = 0;
+    const totalSlides = slides.length;
+
+    function updateSlide(index) {
+      if (index < 0) index = 0;
+      if (index >= totalSlides) index = totalSlides - 1;
+      
+      slides.forEach((slide, i) => {
+        slide.classList.toggle('active', i === index);
+      });
+
+      currentSlide = index;
+      slideIndicator.textContent = `${currentSlide + 1} / ${totalSlides}`;
+      progressBar.style.width = `${((currentSlide + 1) / totalSlides) * 100}%`;
+
+      // Update speaker notes
+      const notes = slides[currentSlide].getAttribute('data-notes') || "No notes available for this slide.";
+      notesText.innerHTML = notes;
+    }
+
+    function nextSlide() {
+      if (currentSlide < totalSlides - 1) {
+        updateSlide(currentSlide + 1);
+      }
+    }
+
+    function prevSlide() {
+      if (currentSlide > 0) {
+        updateSlide(currentSlide - 1);
+      }
+    }
+
+    function toggleNotes() {
+      notesModal.classList.toggle('visible');
+    }
+
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => console.log(err));
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        }
+      }
+    }
+
+    // Event Listeners
+    btnNext.addEventListener('click', nextSlide);
+    btnPrev.addEventListener('click', prevSlide);
+    btnNotes.addEventListener('click', toggleNotes);
+    btnFullscreen.addEventListener('click', toggleFullscreen);
+
+    window.addEventListener('keydown', (e) => {
+      switch (e.key) {
+        case 'ArrowRight':
+        case ' ':
+        case 'PageDown':
+          e.preventDefault();
+          nextSlide();
+          break;
+        case 'ArrowLeft':
+        case 'PageUp':
+          e.preventDefault();
+          prevSlide();
+          break;
+        case 'Home':
+          e.preventDefault();
+          updateSlide(0);
+          break;
+        case 'End':
+          e.preventDefault();
+          updateSlide(totalSlides - 1);
+          break;
+        case 'n':
+        case 'N':
+          toggleNotes();
+          break;
+        case 'f':
+        case 'F':
+          toggleFullscreen();
+          break;
+      }
+    });
+
+    // Initialize
+    updateSlide(0);
+  </script>
+</body>
+</html>

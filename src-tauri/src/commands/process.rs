@@ -271,6 +271,26 @@ fn output_event(run_id: &str) -> String {
     format!("run-output-{run_id}")
 }
 
+pub fn validate_run_id(run_id: Option<String>) -> Result<String, RunError> {
+    match run_id {
+        Some(id) if !id.trim().is_empty() => {
+            let trimmed = id.trim();
+            if trimmed.len() > 64
+                || !trimmed
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+            {
+                return Err(RunError::Io(
+                    "invalid run_id: must only contain alphanumeric characters, hyphens, or underscores"
+                        .into(),
+                ));
+            }
+            Ok(trimmed.to_string())
+        }
+        _ => Ok(uuid::Uuid::new_v4().to_string()),
+    }
+}
+
 /// Compiles (if needed) and runs `path`, streaming output back over Tauri events.
 ///
 /// Returns immediately with the run id; progress arrives on `run-status-{id}`
@@ -290,7 +310,7 @@ pub fn run_file(
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
 
-    let run_id = run_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    let run_id = validate_run_id(run_id)?;
     let scratch = std::env::temp_dir().join(format!("codeui-{run_id}"));
     std::fs::create_dir_all(&scratch).map_err(|e| RunError::Io(e.to_string()))?;
     restrict_scratch(&scratch);
@@ -896,5 +916,18 @@ mod tests {
         for _ in 0..100 {
             assert!(budget.allow(1024));
         }
+    }
+
+    #[test]
+    fn validate_run_id_rejects_path_traversal() {
+        assert!(validate_run_id(Some("../../evil".into())).is_err());
+        assert!(validate_run_id(Some("../etc/passwd".into())).is_err());
+        assert!(validate_run_id(Some("foo/bar".into())).is_err());
+        assert!(validate_run_id(Some("foo\\bar".into())).is_err());
+        assert!(validate_run_id(Some("foo bar".into())).is_err());
+        assert!(validate_run_id(Some("a".repeat(65))).is_err());
+        assert!(validate_run_id(Some("valid-id_123".into())).is_ok());
+        assert!(validate_run_id(None).is_ok());
+        assert!(validate_run_id(Some("".into())).is_ok());
     }
 }

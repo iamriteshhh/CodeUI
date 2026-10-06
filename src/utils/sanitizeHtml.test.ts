@@ -24,10 +24,32 @@ describe("sanitizeHtml Webview Security (R5)", () => {
     expect(clean).not.toContain("javascript:doEvil()");
   });
 
-  it("strips iframes and objects", () => {
-    const dirty = '<iframe src="https://evil.com"></iframe><object data="malware.swf"></object>';
+  it("neutralizes obfuscated javascript: URLs with embedded control chars/whitespace", () => {
+    const dirty = '<a href="java\nscript:doEvil()">Click</a><a href="  javascript:doEvil()">Click2</a>';
+    const clean = sanitizeHtml(dirty);
+    expect(clean).not.toContain("doEvil()");
+  });
+
+  it("neutralizes SVG xlink:href and dangerous protocols", () => {
+    const dirty = '<svg><a xlink:href="javascript:evil()"><text>SVG Link</text></a></svg>';
+    const clean = sanitizeHtml(dirty);
+    expect(clean).not.toContain("javascript:evil()");
+    expect(clean).not.toContain("evil()");
+  });
+
+  it("neutralizes vbscript: and file: protocol schemes", () => {
+    const dirty = '<a href="vbscript:msgbox(1)">VB</a><a href="file:///etc/passwd">Local</a>';
+    const clean = sanitizeHtml(dirty);
+    expect(clean).not.toContain("vbscript:msgbox(1)");
+    expect(clean).not.toContain("file:///etc/passwd");
+  });
+
+  it("strips iframes, objects, templates, and math tags", () => {
+    const dirty = '<iframe src="https://evil.com"></iframe><object data="malware.swf"></object><template><script>x</script></template><math></math>';
     const clean = sanitizeHtml(dirty);
     expect(clean).not.toContain("<iframe");
     expect(clean).not.toContain("<object");
+    expect(clean).not.toContain("<template");
+    expect(clean).not.toContain("<math");
   });
 });
