@@ -12,7 +12,23 @@ use commands::process::RunRegistry;
 use commands::settings::SettingsStore;
 use pty::PtyManager;
 
+/// Linux (WebKitGTK): the DMABUF renderer and accelerated compositing cause
+/// stale repaints — Monaco's scroll layers move but the view is not redrawn
+/// until the caret forces it, so wheel/scrollbar scrolling looks dead.
+/// Must run before any webview is created. User-set values are respected.
+#[cfg(target_os = "linux")]
+fn apply_webkitgtk_workarounds() {
+    for key in ["WEBKIT_DISABLE_DMABUF_RENDERER", "WEBKIT_DISABLE_COMPOSITING_MODE"] {
+        if std::env::var_os(key).is_none() {
+            std::env::set_var(key, "1");
+        }
+    }
+}
+
 pub fn run() {
+    #[cfg(target_os = "linux")]
+    apply_webkitgtk_workarounds();
+
     tauri::Builder::default()
         .setup(|app| {
             if let Ok(dir) = app.path().resource_dir() {
