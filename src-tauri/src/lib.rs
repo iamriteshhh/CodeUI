@@ -18,7 +18,10 @@ use pty::PtyManager;
 /// Must run before any webview is created. User-set values are respected.
 #[cfg(target_os = "linux")]
 fn apply_webkitgtk_workarounds() {
-    for key in ["WEBKIT_DISABLE_DMABUF_RENDERER", "WEBKIT_DISABLE_COMPOSITING_MODE"] {
+    for key in [
+        "WEBKIT_DISABLE_DMABUF_RENDERER",
+        "WEBKIT_DISABLE_COMPOSITING_MODE",
+    ] {
         if std::env::var_os(key).is_none() {
             std::env::set_var(key, "1");
         }
@@ -27,15 +30,7 @@ fn apply_webkitgtk_workarounds() {
 
 pub fn run() {
     #[cfg(target_os = "linux")]
-    {
-        // Linux/Ubuntu: Disable DMA-BUF rendering in WebKitGTK to prevent intermittent
-        // scrollbar freezes, input stalls, and dropped wheel events (especially with NVIDIA/Mesa).
-        if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
-            std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
-        }
-
-        apply_webkitgtk_workarounds();
-    }
+    apply_webkitgtk_workarounds();
 
     tauri::Builder::default()
         .setup(|app| {

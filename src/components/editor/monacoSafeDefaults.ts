@@ -93,23 +93,16 @@ export const MONACO_LAB_SAFE_OPTIONS: NonNullable<EditorProps["options"]> = {
   scrollbar: {
     vertical: "auto",
     horizontal: "auto",
-    verticalScrollbarSize: 14,
-    horizontalScrollbarSize: 12,
+    verticalScrollbarSize: 10,
+    horizontalScrollbarSize: 10,
     useShadows: false,
-    alwaysConsumeMouseWheel: true,
+    alwaysConsumeMouseWheel: false,
   },
   renderLineHighlight: "line",
   occurrencesHighlight: "off",
   selectionHighlight: true,
   matchBrackets: "always",
   contextmenu: true,
-  scrollbar: {
-    vertical: "auto",
-    horizontal: "auto",
-    verticalScrollbarSize: 10,
-    horizontalScrollbarSize: 10,
-    alwaysConsumeMouseWheel: false,
-  },
 };
 
 /**
