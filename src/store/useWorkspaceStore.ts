@@ -10,6 +10,7 @@ import { notify, formatError } from "../services/notify";
 import { parseCompilerDiagnostics } from "../services/diagnostics";
 import { extensionLanguageFor } from "../languages/extLanguageMap";
 import { terminalReady } from "../services/terminalReady";
+import { applyBaseTheme } from "../services/extensionHost";
 import { join, dirname, basename, isInside, rebase, validateName } from "../utils/path";
 
 export function detectLanguage(fileName: string): string {
@@ -163,6 +164,12 @@ export function useWorkspace() {
   useEffect(() => {
     settingsService.loadSettings().then(async (s) => {
       setSettings(s);
+      const theme = s.theme || "dark";
+      applyBaseTheme(theme, false);
+      if (typeof document !== "undefined") {
+        document.documentElement.setAttribute("data-theme", theme);
+        document.body.setAttribute("data-theme", theme);
+      }
       if (s.recentFolders && s.recentFolders.length > 0) {
         setRecentFolders(s.recentFolders);
       }
@@ -383,6 +390,12 @@ export function useWorkspace() {
   const updateSettings = useCallback(
     async (newSettings: UserSettings) => {
       setSettings(newSettings);
+      const theme = newSettings.theme || "dark";
+      applyBaseTheme(theme, true);
+      if (typeof document !== "undefined") {
+        document.documentElement.setAttribute("data-theme", theme);
+        document.body.setAttribute("data-theme", theme);
+      }
       await settingsService.saveSettings(newSettings);
     },
     []

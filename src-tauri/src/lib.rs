@@ -13,6 +13,13 @@ use commands::settings::SettingsStore;
 use pty::PtyManager;
 
 pub fn run() {
+    // Linux/Ubuntu: Disable DMA-BUF rendering in WebKitGTK to prevent intermittent
+    // scrollbar freezes, input stalls, and dropped wheel events (especially with NVIDIA/Mesa).
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
+
     tauri::Builder::default()
         .setup(|app| {
             if let Ok(dir) = app.path().resource_dir() {

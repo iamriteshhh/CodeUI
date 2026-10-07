@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { X, Settings as SettingsIcon, Save, RotateCcw } from "lucide-react";
 import { UserSettings } from "../../types";
 
@@ -23,6 +23,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [showWelcome, setShowWelcome] = useState<boolean>(
     settings.showWelcomeOnStartup !== undefined ? settings.showWelcomeOnStartup : true
   );
+
+  useEffect(() => {
+    setTheme(settings.theme || "dark");
+    setFontSize(settings.fontSize || 14);
+    setTabWidth(settings.tabWidth || 4);
+    setRunTimeoutSecs(settings.runTimeoutSecs || 30);
+    setShellPath(settings.shellPath || "");
+    setShowWelcome(
+      settings.showWelcomeOnStartup !== undefined ? settings.showWelcomeOnStartup : true
+    );
+  }, [settings]);
 
   if (!isOpen) return null;
 
@@ -69,13 +80,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         style={{
           width: 500,
           maxWidth: "90%",
-          backgroundColor: "#252526",
-          border: "1px solid #454545",
+          backgroundColor: "var(--bg-sidebar)",
+          border: "1px solid var(--border-color)",
           borderRadius: 6,
-          boxShadow: "0 8px 32px rgba(0, 0, 0, 0.6)",
+          boxShadow: "0 8px 32px rgba(0, 0, 0, 0.4)",
           display: "flex",
           flexDirection: "column",
-          color: "#cccccc",
+          color: "var(--text-primary)",
           fontFamily: "var(--font-ui)",
         }}
         onClick={(e) => e.stopPropagation()}
@@ -87,12 +98,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             alignItems: "center",
             justifyContent: "space-between",
             padding: "14px 18px",
-            borderBottom: "1px solid #333333",
+            borderBottom: "1px solid var(--border-color)",
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <SettingsIcon size={18} color="#007acc" />
-            <span style={{ fontSize: 14, fontWeight: 600, color: "#ffffff" }}>
+            <SettingsIcon size={18} color="var(--accent-blue)" />
+            <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text-bright)" }}>
               Settings & Preferences
             </span>
           </div>
@@ -106,16 +117,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* Theme */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 500, color: "#e0e0e0" }}>Editor Theme</div>
-              <div style={{ fontSize: 11, color: "#888888" }}>Dark or Light syntax palette</div>
+              <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-bright)" }}>Editor Theme</div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Dark or Light syntax palette</div>
             </div>
             <select
               value={theme}
               onChange={(e) => setTheme(e.target.value as "dark" | "light")}
               style={{
-                background: "#3c3c3c",
-                color: "#fff",
-                border: "1px solid #555",
+                background: "var(--bg-input)",
+                color: "var(--text-bright)",
+                border: "1px solid var(--border-subtle)",
                 borderRadius: 3,
                 padding: "4px 8px",
                 fontSize: 12,
@@ -129,8 +140,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* Font Size */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 500, color: "#e0e0e0" }}>Font Size</div>
-              <div style={{ fontSize: 11, color: "#888888" }}>Monaco editor font size ({fontSize}px)</div>
+              <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-bright)" }}>Font Size</div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Monaco editor font size ({fontSize}px)</div>
             </div>
             <input
               type="number"
@@ -140,9 +151,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               onChange={(e) => setFontSize(Number(e.target.value))}
               style={{
                 width: 70,
-                background: "#3c3c3c",
-                color: "#fff",
-                border: "1px solid #555",
+                background: "var(--bg-input)",
+                color: "var(--text-bright)",
+                border: "1px solid var(--border-subtle)",
                 borderRadius: 3,
                 padding: "4px 8px",
                 fontSize: 12,
@@ -153,16 +164,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* Tab Width */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 500, color: "#e0e0e0" }}>Tab Size</div>
-              <div style={{ fontSize: 11, color: "#888888" }}>Number of spaces per indentation</div>
+              <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-bright)" }}>Tab Size</div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Number of spaces per indentation</div>
             </div>
             <select
               value={tabWidth}
               onChange={(e) => setTabWidth(Number(e.target.value))}
               style={{
-                background: "#3c3c3c",
-                color: "#fff",
-                border: "1px solid #555",
+                background: "var(--bg-input)",
+                color: "var(--text-bright)",
+                border: "1px solid var(--border-subtle)",
                 borderRadius: 3,
                 padding: "4px 8px",
                 fontSize: 12,
@@ -176,8 +187,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* Execution Timeout */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 500, color: "#e0e0e0" }}>Run Timeout (Secs)</div>
-              <div style={{ fontSize: 11, color: "#888888" }}>Lab-safe protection against infinite loops</div>
+              <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-bright)" }}>Run Timeout (Secs)</div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Lab-safe protection against infinite loops</div>
             </div>
             <input
               type="number"
@@ -187,9 +198,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               onChange={(e) => setRunTimeoutSecs(Number(e.target.value))}
               style={{
                 width: 70,
-                background: "#3c3c3c",
-                color: "#fff",
-                border: "1px solid #555",
+                background: "var(--bg-input)",
+                color: "var(--text-bright)",
+                border: "1px solid var(--border-subtle)",
                 borderRadius: 3,
                 padding: "4px 8px",
                 fontSize: 12,
@@ -199,10 +210,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {/* Shell Path */}
           <div>
-            <div style={{ fontSize: 13, fontWeight: 500, color: "#e0e0e0", marginBottom: 2 }}>
+            <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-bright)", marginBottom: 2 }}>
               Default Shell Path
             </div>
-            <div style={{ fontSize: 11, color: "#888888", marginBottom: 6 }}>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>
               Leave blank to use system default (powershell.exe / bash)
             </div>
             <input
@@ -212,9 +223,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               onChange={(e) => setShellPath(e.target.value)}
               style={{
                 width: "100%",
-                background: "#3c3c3c",
-                color: "#fff",
-                border: "1px solid #555",
+                background: "var(--bg-input)",
+                color: "var(--text-bright)",
+                border: "1px solid var(--border-subtle)",
                 borderRadius: 3,
                 padding: "5px 8px",
                 fontSize: 12,
@@ -225,8 +236,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* Show Welcome on Startup */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 4 }}>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 500, color: "#e0e0e0" }}>Welcome Page</div>
-              <div style={{ fontSize: 11, color: "#888888" }}>Show the Welcome screen on startup</div>
+              <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-bright)" }}>Welcome Page</div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Show the Welcome screen on startup</div>
             </div>
             <input
               type="checkbox"
@@ -244,8 +255,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             alignItems: "center",
             justifyContent: "space-between",
             padding: "12px 18px",
-            borderTop: "1px solid #333333",
-            backgroundColor: "#202020",
+            borderTop: "1px solid var(--border-color)",
+            backgroundColor: "var(--bg-app)",
           }}
         >
           <button
@@ -255,8 +266,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               alignItems: "center",
               gap: 6,
               background: "transparent",
-              border: "1px solid #444",
-              color: "#aaa",
+              border: "1px solid var(--border-subtle)",
+              color: "var(--text-muted)",
               padding: "5px 12px",
               borderRadius: 3,
               fontSize: 12,
@@ -272,8 +283,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               onClick={onClose}
               style={{
                 background: "transparent",
-                border: "1px solid #444",
-                color: "#ccc",
+                border: "1px solid var(--border-subtle)",
+                color: "var(--text-primary)",
                 padding: "5px 12px",
                 borderRadius: 3,
                 fontSize: 12,
@@ -288,9 +299,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 display: "flex",
                 alignItems: "center",
                 gap: 6,
-                background: "#007acc",
+                background: "var(--accent-blue)",
                 border: "none",
-                color: "#fff",
+                color: "#ffffff",
                 padding: "5px 14px",
                 borderRadius: 3,
                 fontSize: 12,

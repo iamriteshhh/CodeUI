@@ -102,13 +102,13 @@ const MonacoEditorGroupComponent: React.FC<MonacoEditorGroupProps> = ({
         <FileIcon fileName={file.name} size={14} />
         <span>{file.name}</span>
         <ChevronRight size={12} />
-        <span style={{ color: "#e0e0e0" }}>
+        <span style={{ color: "var(--text-bright)" }}>
           {file.name.replace(/\.[^/.]+$/, "")}
         </span>
       </div>
 
       {/* Monaco Editor Container */}
-      <div style={{ flex: 1, position: "relative", overflow: "hidden", background: "#1e1e1e", minHeight: 0 }}>
+      <div style={{ flex: 1, position: "relative", overflow: "hidden", background: "var(--bg-editor)", minHeight: 0 }}>
         <Editor
           height="100%"
           path={getNormalizedUri(file.path)}
@@ -117,7 +117,7 @@ const MonacoEditorGroupComponent: React.FC<MonacoEditorGroupProps> = ({
           theme={getEditorTheme()}
           keepCurrentModel={true}
           saveViewState={true}
-          loading={<div style={{ height: "100%", width: "100%", background: "#1e1e1e" }} />}
+          loading={<div style={{ height: "100%", width: "100%", background: "var(--bg-editor)" }} />}
           options={MONACO_LAB_SAFE_OPTIONS}
           onChange={(value) => {
             if (value !== undefined && fileRef.current?.path) {

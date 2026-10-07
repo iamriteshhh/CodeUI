@@ -9,7 +9,8 @@ import { ExtLanguage, ExtTheme, InstalledExtension } from "../types";
 import { readExtensionFile } from "./extensionService";
 import { setExtensionLanguage } from "../languages/extLanguageMap";
 
-const DEFAULT_THEME = "codeui-dark";
+const DEFAULT_DARK_THEME = "codeui-dark";
+const DEFAULT_LIGHT_THEME = "codeui-light";
 const THEME_KEY = "codeui.colorTheme";
 
 // --- JSONC (VS Code config files allow comments and trailing commas) ---
@@ -184,8 +185,35 @@ export async function activateExtensions(list: InstalledExtension[]): Promise<vo
 
 // --- colour themes ---
 
-let currentTheme = DEFAULT_THEME;
+let currentBaseTheme: "dark" | "light" = "dark";
+let currentTheme = DEFAULT_DARK_THEME;
+
+export function getDefaultTheme(base: "dark" | "light" = currentBaseTheme): string {
+  return base === "light" ? DEFAULT_LIGHT_THEME : DEFAULT_DARK_THEME;
+}
+
 export const getEditorTheme = () => currentTheme;
+
+export function applyBaseTheme(theme: "dark" | "light", force = false): void {
+  currentBaseTheme = theme;
+  const targetTheme = getDefaultTheme(theme);
+  let isExtensionTheme = false;
+  try {
+    isExtensionTheme = Boolean(localStorage.getItem(THEME_KEY));
+  } catch {}
+
+  if (force || !isExtensionTheme || currentTheme === DEFAULT_DARK_THEME || currentTheme === DEFAULT_LIGHT_THEME) {
+    if (force) {
+      try {
+        localStorage.removeItem(THEME_KEY);
+      } catch {}
+    }
+    currentTheme = targetTheme;
+    if (typeof monaco !== "undefined" && monaco.editor) {
+      monaco.editor.setTheme(currentTheme);
+    }
+  }
+}
 
 const HEX = /^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 
@@ -238,7 +266,7 @@ async function defineExtensionTheme(extId: string, theme: ExtTheme): Promise<str
 
 /** Switches the editor colour theme; `null` returns to CodeUI's default. */
 export async function applyColorTheme(extId: string | null, theme: ExtTheme | null): Promise<void> {
-  currentTheme = extId && theme ? await defineExtensionTheme(extId, theme) : DEFAULT_THEME;
+  currentTheme = extId && theme ? await defineExtensionTheme(extId, theme) : getDefaultTheme();
   monaco.editor.setTheme(currentTheme);
   try {
     if (extId && theme) localStorage.setItem(THEME_KEY, JSON.stringify({ extId, path: theme.path }));

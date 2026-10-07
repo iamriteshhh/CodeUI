@@ -4,6 +4,7 @@ import * as monaco from "./monaco";
 import { registerAllEagerLanguages } from "./languages/registerAllLanguages";
 import { ensureMonacoFontsReady } from "./utils/fontCheck";
 import { applyZeroSuggestionsLockdown } from "./components/editor/monacoSafeDefaults";
+import { getEditorTheme } from "./services/extensionHost";
 // Only the generic editor worker: language-service workers are not bundled (no suggestions).
 import editorWorker from "monaco-editor/editor/editor.worker.js?worker";
 
@@ -87,7 +88,74 @@ monaco.editor.defineTheme("codeui-dark", {
     "editorGutter.background": "#1e1e1e",
   },
 });
-monaco.editor.setTheme("codeui-dark");
+
+// Define clean high-contrast light theme with guaranteed token colors
+monaco.editor.defineTheme("codeui-light", {
+  base: "vs",
+  inherit: true,
+  rules: [
+    { token: "keyword", foreground: "0000ff", fontStyle: "bold" },
+    { token: "keyword.flow", foreground: "af00db", fontStyle: "bold" },
+    { token: "keyword.directive", foreground: "001080" },
+    { token: "keyword.directive.include", foreground: "0000ff" },
+    { token: "type", foreground: "267f99" },
+    { token: "type.identifier", foreground: "267f99" },
+    { token: "string", foreground: "a31515" },
+    { token: "string.escape", foreground: "ee0000" },
+    { token: "string.target", foreground: "001080" },
+    { token: "number", foreground: "098658" },
+    { token: "number.float", foreground: "098658" },
+    { token: "number.hex", foreground: "098658" },
+    { token: "comment", foreground: "008000", fontStyle: "italic" },
+    { token: "operator", foreground: "000000" },
+    { token: "operator.arrow", foreground: "0000ff" },
+    { token: "delimiter", foreground: "000000" },
+    { token: "identifier", foreground: "001080" },
+    { token: "predefined", foreground: "795e26" },
+    { token: "variable", foreground: "001080" },
+    { token: "variable.predefined", foreground: "267f99" },
+    { token: "annotation", foreground: "795e26" },
+    // TextMate scopes (grammars from installed extensions and built-in Salivo)
+    { token: "keyword.control", foreground: "af00db" },
+    { token: "keyword.operator", foreground: "000000" },
+    { token: "storage", foreground: "0000ff" },
+    { token: "storage.type", foreground: "0000ff" },
+    { token: "storage.modifier", foreground: "0000ff" },
+    { token: "constant.numeric", foreground: "098658" },
+    { token: "constant.language", foreground: "0000ff" },
+    { token: "constant.character.escape", foreground: "ee0000" },
+    { token: "constant.other", foreground: "0070c1" },
+    { token: "entity.name.function", foreground: "795e26" },
+    { token: "entity.name.type", foreground: "267f99" },
+    { token: "entity.name.class", foreground: "267f99" },
+    { token: "entity.name.namespace", foreground: "267f99" },
+    { token: "entity.name.tag", foreground: "800000" },
+    { token: "entity.other.attribute-name", foreground: "e50000" },
+    { token: "entity.other.inherited-class", foreground: "267f99" },
+    { token: "support.function", foreground: "795e26" },
+    { token: "support.type", foreground: "267f99" },
+    { token: "support.class", foreground: "267f99" },
+    { token: "variable.parameter", foreground: "001080" },
+    { token: "variable.language", foreground: "0000ff" },
+    { token: "markup.heading", foreground: "0000ff", fontStyle: "bold" },
+    { token: "invalid", foreground: "cd3131" },
+  ],
+  colors: {
+    "editor.background": "#ffffff",
+    "editor.foreground": "#1e1e1e",
+    "editorCursor.foreground": "#000000",
+    "editorCursor.background": "#ffffff",
+    "editor.selectionBackground": "#add6ff",
+    "editor.inactiveSelectionBackground": "#e5ebf1",
+    "editorLineNumber.foreground": "#747474",
+    "editorLineNumber.activeForeground": "#000000",
+    "editor.lineHighlightBackground": "#f8f8f8",
+    "editor.lineHighlightBorder": "#f8f8f800",
+    "editorGutter.background": "#ffffff",
+  },
+});
+
+monaco.editor.setTheme(getEditorTheme());
 
 // Configure Monaco web workers via Vite ?worker constructors
 self.MonacoEnvironment = {

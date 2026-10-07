@@ -47,6 +47,9 @@
   --accent-red: #f14c4c;
   --accent-yellow: #cca700;
 
+  --scrollbar-thumb: rgba(121, 121, 121, 0.4);
+  --scrollbar-thumb-hover: rgba(100, 100, 100, 0.7);
+
   --font-ui: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
   --font-mono: "CodeUI Mono", Consolas, "Courier New", monospace;
 
@@ -56,11 +59,48 @@
   --tab-height: 35px;
 }
 
+:root[data-theme="light"],
+[data-theme="light"] {
+  --bg-app: #ffffff;
+  --bg-titlebar: #dddddd;
+  --bg-activitybar: #2c2c2c;
+  --bg-sidebar: #f3f3f3;
+  --bg-editor: #ffffff;
+  --bg-tab-active: #ffffff;
+  --bg-tab-inactive: #ececec;
+  --bg-panel: #f8f8f8;
+  --bg-statusbar: #007acc;
+  --bg-input: #ffffff;
+  --bg-hover: #e8e8e8;
+  --bg-selected: #e4e6f1;
+
+  --border-color: #e5e5e5;
+  --border-subtle: #d4d4d4;
+  --border-focus: #007acc;
+
+  --text-primary: #333333;
+  --text-bright: #1e1e1e;
+  --text-muted: #6e6e6e;
+  --text-link: #0066cc;
+
+  --accent-blue: #007acc;
+  --accent-blue-hover: #0e639c;
+  --accent-green: #098658;
+  --accent-orange: #a31515;
+  --accent-red: #cd3131;
+  --accent-yellow: #795e26;
+
+  --scrollbar-thumb: rgba(0, 0, 0, 0.25);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.45);
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
   user-select: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
 html,
@@ -105,7 +145,7 @@ textarea,
 }
 
 .monaco-editor .margin-view-overlays .line-numbers.active-line-number {
-  color: #ffffff !important;
+  color: var(--text-bright) !important;
   font-weight: 400 !important;
   visibility: visible !important;
   opacity: 1 !important;
@@ -123,7 +163,7 @@ textarea,
 }
 
 
-/* Scrollbars */
+/* Scrollbars (Standard W3C + WebKitGTK / Chromium fallback) */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -134,11 +174,21 @@ textarea,
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(121, 121, 121, 0.4);
+  background: var(--scrollbar-thumb);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+  min-height: 20px;
+  min-width: 20px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(100, 100, 100, 0.7);
+  background: var(--scrollbar-thumb-hover);
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 /* Layout Docking System */
@@ -198,8 +248,8 @@ textarea,
 }
 
 .menu-item.active {
-  background-color: rgba(255, 255, 255, 0.15);
-  color: #ffffff;
+  background-color: var(--bg-hover);
+  color: var(--text-bright);
 }
 
 /* Dropdown Menu from TitleBar */
@@ -208,10 +258,10 @@ textarea,
   top: 100%;
   left: 0;
   margin-top: 4px;
-  background-color: #252526;
-  border: 1px solid #454545;
+  background-color: var(--bg-sidebar);
+  border: 1px solid var(--border-color);
   border-radius: 4px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
   min-width: 230px;
   padding: 4px 0;
   z-index: 10000;
@@ -225,7 +275,7 @@ textarea,
   justify-content: space-between;
   padding: 5px 12px;
   font-size: 12px;
-  color: #cccccc;
+  color: var(--text-primary);
   cursor: pointer;
   transition: background-color 0.1s;
   user-select: none;
@@ -233,7 +283,7 @@ textarea,
 }
 
 .dropdown-item:hover {
-  background-color: #094771;
+  background-color: var(--accent-color);
   color: #ffffff;
 }
 
@@ -248,7 +298,7 @@ textarea,
   align-items: center;
   justify-content: center;
   width: 16px;
-  color: #8c8c8c;
+  color: var(--text-muted);
 }
 
 .dropdown-item:hover .dropdown-item-icon {
@@ -257,7 +307,7 @@ textarea,
 
 .dropdown-item-shortcut {
   font-size: 11px;
-  color: #8c8c8c;
+  color: var(--text-muted);
   margin-left: 24px;
   font-family: var(--font-mono);
 }
@@ -268,17 +318,17 @@ textarea,
 
 .dropdown-divider {
   height: 1px;
-  background-color: #383838;
+  background-color: var(--border-color);
   margin: 4px 0;
 }
 
 /* Context Menu (File Tree, Explorer, Editor Tabs) */
 .file-tree-context-menu {
   position: fixed;
-  background-color: #252526;
-  border: 1px solid #454545;
+  background-color: var(--bg-sidebar);
+  border: 1px solid var(--border-color);
   border-radius: 4px;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
   min-width: 190px;
   padding: 4px 0;
   z-index: 10000;
@@ -292,7 +342,7 @@ textarea,
   justify-content: space-between;
   padding: 5px 12px;
   font-size: 12px;
-  color: #cccccc;
+  color: var(--text-primary);
   cursor: pointer;
   transition: background-color 0.1s;
   user-select: none;
@@ -300,7 +350,7 @@ textarea,
 }
 
 .context-menu-item:hover {
-  background-color: #094771;
+  background-color: var(--accent-color);
   color: #ffffff;
 }
 
@@ -321,14 +371,14 @@ textarea,
 
 .context-menu-shortcut {
   font-size: 11px;
-  color: #8c8c8c;
+  color: var(--text-muted);
   margin-left: 20px;
   font-family: var(--font-mono);
 }
 
 .context-menu-divider {
   height: 1px;
-  background-color: #383838;
+  background-color: var(--border-color);
   margin: 4px 0;
 }
 
@@ -602,7 +652,7 @@ textarea,
 
 .tab:hover {
   color: var(--text-primary);
-  background-color: #282828;
+  background-color: var(--bg-hover);
 }
 
 .tab.active {
