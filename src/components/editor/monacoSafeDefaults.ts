@@ -1,5 +1,11 @@
 import type { EditorProps } from "@monaco-editor/react";
 
+/** Linux desktop (WebKitGTK webview in Tauri). */
+const IS_LINUX_WEBKIT =
+  typeof navigator !== "undefined" &&
+  /Linux/i.test(navigator.userAgent) &&
+  !/Android/i.test(navigator.userAgent);
+
 /**
  * Hard Project Constraint from TASK_DIVISION.md & README.md:
  * NO AUTOCOMPLETE, SUGGESTIONS, OR AI IN THE EDITOR — EVER.
@@ -81,7 +87,17 @@ export const MONACO_LAB_SAFE_OPTIONS: NonNullable<EditorProps["options"]> = {
   cursorBlinking: "solid",
   cursorSmoothCaretAnimation: "off",
   smoothScrolling: false,
-  disableLayerHinting: false,
+  // WebKitGTK repaints GPU-hinted layers late: scrolling looks frozen until
+  // the caret moves. Plain layers repaint on every scroll there.
+  disableLayerHinting: IS_LINUX_WEBKIT,
+  scrollbar: {
+    vertical: "auto",
+    horizontal: "auto",
+    verticalScrollbarSize: 14,
+    horizontalScrollbarSize: 12,
+    useShadows: false,
+    alwaysConsumeMouseWheel: true,
+  },
   renderLineHighlight: "line",
   occurrencesHighlight: "off",
   selectionHighlight: true,

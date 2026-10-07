@@ -12,12 +12,29 @@ use commands::process::RunRegistry;
 use commands::settings::SettingsStore;
 use pty::PtyManager;
 
+/// Linux (WebKitGTK): the DMABUF renderer and accelerated compositing cause
+/// stale repaints — Monaco's scroll layers move but the view is not redrawn
+/// until the caret forces it, so wheel/scrollbar scrolling looks dead.
+/// Must run before any webview is created. User-set values are respected.
+#[cfg(target_os = "linux")]
+fn apply_webkitgtk_workarounds() {
+    for key in ["WEBKIT_DISABLE_DMABUF_RENDERER", "WEBKIT_DISABLE_COMPOSITING_MODE"] {
+        if std::env::var_os(key).is_none() {
+            std::env::set_var(key, "1");
+        }
+    }
+}
+
 pub fn run() {
-    // Linux/Ubuntu: Disable DMA-BUF rendering in WebKitGTK to prevent intermittent
-    // scrollbar freezes, input stalls, and dropped wheel events (especially with NVIDIA/Mesa).
     #[cfg(target_os = "linux")]
-    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
-        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    {
+        // Linux/Ubuntu: Disable DMA-BUF rendering in WebKitGTK to prevent intermittent
+        // scrollbar freezes, input stalls, and dropped wheel events (especially with NVIDIA/Mesa).
+        if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+            std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+        }
+
+        apply_webkitgtk_workarounds();
     }
 
     tauri::Builder::default()
