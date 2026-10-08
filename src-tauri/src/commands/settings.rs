@@ -310,8 +310,17 @@ mod tests {
         // In-memory state is current immediately, before any disk write lands.
         assert_eq!(store.get().font_size, 20);
 
-        std::thread::sleep(DEBOUNCE + Duration::from_millis(250));
-        let raw = std::fs::read_to_string(&store.path).expect("debounced write");
+        // Allow debounced write to land; poll so slow CI scheduling does not race.
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let mut raw = None;
+        while std::time::Instant::now() < deadline {
+            if let Ok(content) = std::fs::read_to_string(&store.path) {
+                raw = Some(content);
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        let raw = raw.expect("debounced write should land within deadline");
         let loaded: Settings = serde_json::from_str(&raw).unwrap();
         assert_eq!(loaded.font_size, 20);
     }
@@ -398,7 +407,10 @@ mod tests {
         // The debounced write fails in the background; the next save says so,
         // while still applying the new value in memory.
         store.save(Settings::default()).unwrap();
-        std::thread::sleep(DEBOUNCE + Duration::from_millis(250));
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while store.write_error.lock().unwrap().is_none() && std::time::Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(25));
+        }
         let next = Settings {
             font_size: 16,
             ..Settings::default()
