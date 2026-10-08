@@ -24,7 +24,7 @@
 # 1. The 2-Minute Elevator Pitch
 *If your teacher or examiner asks: "Tell me about your project in 2 minutes," speak this with confidence:*
 
-> *"Good morning/afternoon, Sir/Ma'am. Our project is **CodeUI**, a lightweight, lab-safe desktop Integrated Development Environment (IDE) built specifically for college computer laboratories and practical examinations.*
+> *"Good morning/afternoon, Sir/Ma'am. Our project is **CodeUI**, a lightweight, assistance-free desktop Integrated Development Environment (IDE) built specifically for college computer laboratories and practical examinations.*
 >
 > *The problem we are solving is the **academic lab dilemma**: In college practical exams, students are prohibited from using modern IDEs like VS Code because features like autocomplete, code suggestions, IntelliSense, and AI assistants (like Copilot or ChatGPT) undermine exam integrity. As a result, colleges force students to use bare text editors like Notepad, gedit, or nano.*
 > 
@@ -32,7 +32,7 @@
 >
 > *CodeUI bridges this exact gap: It gives students a clean, modern programming environment with Monaco Editor, an integrated xterm.js terminal, split views, and automatic compiler error squigglies—while **strictly, permanently disabling all autocomplete, suggestions, parameter hints, and AI features**.*
 >
-> *Architecturally, it is built with **Tauri 2.x and Rust** on the backend for memory safety, process group isolation, and watchdog timeouts, and **React 18 with TypeScript** on the frontend for high-fidelity UI. It consumes only ~60MB of RAM compared to Electron's 300MB+, making it ideal for college computers."*
+> *Architecturally, it is built with **Tauri 2.x and Rust** on the backend for memory safety, supervised execution (process groups, timeouts, and OS sandboxing where the platform supports it), and **React 18 with TypeScript** on the frontend for high-fidelity UI. It consumes only ~60MB of RAM compared to Electron's 300MB+, making it ideal for college computers."*
 
 ---
 
@@ -75,7 +75,9 @@
     • Rust calls `detach_process_group(&mut cmd)`.
          - On Linux: calls `libc::setsid()` so the child becomes a process group leader.
          - On Windows: passes `CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW`.
-    • Spawns the binary/interpreter (e.g., python -u script.py).
+    • Spawns the binary/interpreter (e.g., python -u script.py) through the OS sandbox launcher
+      (Linux: rlimits, Landlock, seccomp, namespaces; Windows: Job Object only; see README "Security model").
+      If the sandbox cannot be set up, the run continues supervised with a visible notice.
     • Registers process in `RunRegistry` under a unique UUID `run_id`.
                  │
                  ▼
@@ -89,7 +91,8 @@
                  │
                  ▼
 [7. Watchdog Timer & Escalating Termination]
-    • A watchdog thread monitors execution time against a 30-second budget.
+    • A watchdog thread stops the program after 30 s without input (idle timeout, configurable 1–300 s)
+      or 300 s total wall clock; compilation has its own 60 s limit.
     • If timeout occurs or student clicks "Stop":
          - Calls `kill_tree()`:
              1. Sends polite `SIGTERM` to the entire process group.
@@ -129,14 +132,14 @@ Here is the exhaustive inventory of every file in CodeUI and why it exists.
 
 ### 3.2 Rust Backend (`src-tauri/`)
 
-The backend is where security, process isolation, filesystem operations, and operating system calls live.
+The backend is where security (workspace scoping, execution sandbox), process supervision, filesystem operations, and operating system calls live.
 
 | File Path | Purpose & Functionality | Why It Is Crucial |
 | :--- | :--- | :--- |
 | [`src-tauri/Cargo.toml`](file:///d:/CodeUI/src-tauri/Cargo.toml) | Declares backend dependencies: `tauri`, `serde`, `portable-pty`, `which`, `dirs`, `rfd` (native file dialogs), `walkdir`, `ureq` (HTTP downloads for extensions), and `zip`. | Supplies the Rust compiler with all required libraries for desktop integration. |
 | [`src-tauri/build.rs`](file:///d:/CodeUI/src-tauri/build.rs) | Custom Cargo build script. Extracts Git short commit SHA, build timestamp, target architecture, and profile at compile time, injecting them as `CODEUI_GIT_SHA` and `CODEUI_BUILD_TIME` env vars. Calls `tauri_build::build()`. | Embeds build metadata directly into the executable so the diagnostics screen can show exact version info. |
 | [`src-tauri/tauri.conf.json`](file:///d:/CodeUI/src-tauri/tauri.conf.json) | Master Tauri 2.x configuration file. Configures window properties (title, 1280x800, frameless window `decorations: false`), Content Security Policy (CSP), bundle targets, and file associations. | Controls the native desktop window lifecycle, security constraints, and packaging rules. |
-| [`src-tauri/ai-policy.json`](file:///d:/CodeUI/src-tauri/ai-policy.json) | Comprehensive AI blacklist policy. Lists blocked terms (`copilot`, `chatgpt`, `gemini`, `llm`, `deepseek`), blocked extensions IDs (`github.copilot`, `tabnine.tabnine-vscode`), and blocked manifest capability keys (`chatParticipants`, `inlineCompletions`). | The single source of truth that guarantees no AI assistant can ever be loaded into CodeUI. |
+| [`src-tauri/ai-policy.json`](file:///d:/CodeUI/src-tauri/ai-policy.json) | Multi-signal policy for known and identifiable AI-assistance extensions. Lists blocked terms (`copilot`, `chatgpt`, `gemini`, `llm`, `deepseek`), blocked extensions IDs (`github.copilot`, `tabnine.tabnine-vscode`), and blocked manifest capability keys (`chatParticipants`, `inlineCompletions`). | Single source of truth shared by the UI and the Rust installer; extension code never runs, so even an undetected extension can only add grammars/themes. |
 | [`src-tauri/src/main.rs`](file:///d:/CodeUI/src-tauri/src/main.rs) | Application entry point for the desktop binary. Directly delegates execution to `codeui_lib::run()`. | Standard Tauri architecture separating executable bootstrap from reusable library code. |
 | [`src-tauri/src/lib.rs`](file:///d:/CodeUI/src-tauri/src/lib.rs) | Initializes Tauri builder, manages shared state (`RunRegistry`, `PtyManager`, `SettingsStore`), registers all 25+ IPC commands, and binds the window close event to invoke `shutdown()` (killing all student processes). | The central hub linking the Rust modules together and guarding against orphaned processes on window close. |
 
@@ -153,7 +156,8 @@ The backend is where security, process isolation, filesystem operations, and ope
 - [`extensions.rs`](file:///d:/CodeUI/src-tauri/src/commands/extensions.rs): Downloads extensions from Open VSX, parses VSIX archives, enforces `ai-policy.json`, and extracts **only declarative syntax grammars and themes**, dropping any executable JavaScript.
 
 #### B. Process & Sandboxing (`src-tauri/src/proc/`)
-- [`mod.rs`](file:///d:/CodeUI/src-tauri/src/proc/mod.rs): Implements `detach_process_group()` (creates isolated process groups), `crash_hint()` (maps exit codes 139, 136, 137 to plain-language explanations), and `take_utf8()` (prevents multi-byte Unicode truncation across chunk reads).
+- [`sandbox.rs`](file:///d:/CodeUI/src-tauri/src/proc/sandbox.rs): OS restrictions for the run phase (Linux rlimits/Landlock/seccomp/namespaces, macOS `sandbox-exec`, Windows Job Object) and the status report shown in Copy Diagnostics.
+- [`mod.rs`](file:///d:/CodeUI/src-tauri/src/proc/mod.rs): Implements `detach_process_group()` (gives each run its own process group), `crash_hint()` (maps exit codes 139, 136, 137 to plain-language explanations), and `take_utf8()` (prevents multi-byte Unicode truncation across chunk reads).
 - [`kill.rs`](file:///d:/CodeUI/src-tauri/src/proc/kill.rs): Escalating termination engine (`kill_tree`). Dispatches `SIGTERM`, waits 500ms, and escalates to `SIGKILL` on Unix; uses `taskkill /PID <pid> /T /F` on Windows.
 - [`toolpath.rs`](file:///d:/CodeUI/src-tauri/src/proc/toolpath.rs): Augments `$PATH` to ensure standard compiler paths (e.g., `/usr/bin`, `/usr/local/bin`, Windows MinGW paths) are checked even if the desktop environment launched with a sparse environment.
 
@@ -309,7 +313,7 @@ Prepare these answers thoroughly. They represent the most likely and challenging
 > **Answer:** *"We chose Tauri and Rust for three decisive reasons:*
 > 1. ***Memory Footprint:*** *Electron bundles an entire Chromium browser and Node.js runtime, consuming 300MB–500MB of RAM at idle. Tauri uses the operating system's native webview and a compiled Rust backend, consuming only ~60MB–80MB of RAM. This is crucial for aging college lab computers with only 4GB of RAM.*
 > 2. ***Binary Size:*** *An Electron installer is typically 150MB+, whereas CodeUI's installer is only ~15MB.*
-> 3. ***Low-Level Process Control:*** *Rust allows direct POSIX system calls (`libc::setsid`, `libc::killpg`) and Win32 APIs for robust process-group sandboxing and watchdog management, which cannot be achieved reliably from Node.js."*
+> 3. ***Low-Level Process Control:*** *Rust allows direct POSIX system calls (`libc::setsid`, `libc::killpg`) and Win32 APIs (Job Objects) for robust process-group supervision, OS-level sandboxing and watchdog management, which cannot be achieved reliably from Node.js."*
 
 #### Q4: "How does the frontend communicate with the backend in Tauri?"
 > **Answer:** *"Communication occurs over Tauri's asynchronous Inter-Process Communication (IPC) bridge in two ways:*
@@ -322,8 +326,8 @@ Prepare these answers thoroughly. They represent the most likely and challenging
 
 #### Q5: "What happens if a student writes an infinite loop like `while(1);`? Will it crash your IDE?"
 > **Answer:** *"No, Sir/Ma'am. CodeUI has a multi-layered defense:*
-> 1. *Student programs are executed in an isolated child process, completely decoupled from the IDE's UI thread.*
-> 2. *A 30-second watchdog timer automatically triggers if the program exceeds its wall-clock budget.*
+> 1. *Student programs are executed in a separate child process with OS resource limits (CPU time, memory), completely decoupled from the IDE's UI thread.*
+> 2. *A watchdog stops the program after 30 seconds without input (idle timeout) or 300 seconds in total.*
 > 3. *The student can click the 'Stop' button at any time.*
 > 4. *Termination invokes `kill_tree()`, which sends `SIGTERM`, waits a 500ms grace period, and escalates to unconditional `SIGKILL` (or Win32 `taskkill /PID <pid> /T /F`), cleanly terminating the process."*
 
@@ -341,7 +345,7 @@ Prepare these answers thoroughly. They represent the most likely and challenging
 ### Category D: Compiler Runners & Languages
 
 #### Q9: "How does CodeUI compile and run C and C++ programs?"
-> **Answer:** *"When a student clicks Run on a `.c` or `.cpp` file, `CRunner` or `CppRunner` resolves the local compiler (`gcc` or `g++`). It compiles the code with `-Wall -g` and outputs the executable into a **sandboxed scratch directory** (`/tmp/codeui-xyz`). If compilation succeeds, it executes the binary in a detached process group, setting the current working directory to the student's project folder so relative file paths work properly."*
+> **Answer:** *"When a student clicks Run on a `.c` or `.cpp` file, `CRunner` or `CppRunner` resolves the local compiler (`gcc` or `g++`). It compiles the code with `-Wall -g` and outputs the executable into a **per-run scratch directory** (`/tmp/codeui-xyz`). If compilation succeeds, it executes the binary in a detached process group, setting the current working directory to the student's project folder so relative file paths work properly."*
 
 #### Q10: "Why compile to a scratch directory instead of the project directory?"
 > **Answer:** *"In college labs, students' folders often become cluttered with `.o`, `.class`, `.exe`, or `a.out` binaries, causing confusion during evaluation and Git submissions. By compiling into a temporary scratch directory and executing from there, the student's source folder remains 100% clean."*
@@ -376,7 +380,10 @@ Prepare these answers thoroughly. They represent the most likely and challenging
 #### Q15: "Can a student install an AI extension like GitHub Copilot or ChatGPT?"
 > **Answer:** *"No, Sir/Ma'am. It is blocked at two independent levels:*
 > 1. ***Frontend UI Filtering:*** *The marketplace search evaluates names, descriptions, and manifest tags against `ai-policy.json`. AI tools are rejected and marked as blocked by lab policy.*
-> 2. ***Backend Rust Enforcement:*** *When downloading a VSIX package from Open VSX in `commands/extensions.rs`, the Rust backend inspects the package manifest. If any AI keywords, blocked extension IDs, or AI capabilities (like `chatParticipants` or `languageModels`) are present, the installation is rejected with a `Blocked by lab policy` error. Furthermore, CodeUI **only extracts declarative syntax grammars and themes**; it never executes third-party extension JavaScript code."*
+> 2. ***Backend Rust Enforcement:*** *When downloading a VSIX package from Open VSX in `commands/extensions.rs`, the Rust backend inspects the package manifest. If any AI keywords, blocked extension IDs, or AI capabilities (like `chatParticipants` or `languageModels`) are present, the installation is rejected with a `Blocked by lab policy` error. It is a multi-signal policy for known and identifiable AI extensions, so it cannot promise to catch every one. Furthermore, CodeUI **only extracts declarative syntax grammars and themes**; it never executes third-party extension JavaScript code."*
+
+#### Q15b: "Is student code sandboxed?"
+> **Answer:** *"Partly, depending on the OS. On Linux the run phase gets rlimits, no_new_privs, a network namespace, Landlock (writes only to the project, scratch, /tmp and /dev; home folders like ~/.ssh unreadable) and seccomp (no IPv4/IPv6 sockets) where the kernel supports each. On Windows it is **supervised, not sandboxed**: a Job Object limits CPU time, memory and process count, but network and files are not isolated. Compilation is supervised only. Help > Copy Diagnostics shows what this machine enforces; the README's Security model section has the details."*
 
 #### Q16: "What is the purpose of the `xtask` crate in your repository?"
 > **Answer:** *"The `xtask` crate is a native Rust automation tool that enforces our project's **No-Python-Tooling** architectural policy. Instead of using Python or Bash scripts for version syncing and codebase maintenance, we use `cargo run -p xtask -- <task>`. It handles tasks like synchronizing version numbers across `Cargo.toml`, `package.json`, and `tauri.conf.json`, and running `audit-no-python` to verify no stray `.py` build scripts exist in the repository."*
@@ -389,11 +396,11 @@ Prepare these answers thoroughly. They represent the most likely and challenging
 | :--- | :--- |
 | **Q17: What does exit code 139 mean?** | *"It is a Segmentation Fault (SIGSEGV, 128 + 11). CodeUI detects this and shows: 'Program crashed - likely invalid memory access.'"* |
 | **Q18: What does exit code 136 mean?** | *"It is an Arithmetic Exception (SIGFPE, 128 + 8), typically a division by zero."* |
-| **Q19: What does exit code 137 mean?** | *"The process was killed by SIGKILL (128 + 9), usually by CodeUI's watchdog timer after exceeding the 30-second limit."* |
+| **Q19: What does exit code 137 mean?** | *"The process was killed by SIGKILL (128 + 9), usually by CodeUI's watchdog after the idle timeout (default 30 s) or the 300 s maximum run time."* |
 | **Q20: Why did you use `portable-pty`?** | *"To create real operating system pseudo-terminals on both Windows (ConPTY) and Linux (`/dev/pts`), enabling full terminal escape sequence handling and interactive prompts."* |
-| **Q21: How do you handle HTML/CSS preview?** | *"Through an isolated, sandboxed `<iframe>` inside `PreviewPanel.tsx` with sanitization to prevent unauthorized access."* |
+| **Q21: How do you handle HTML/CSS preview?** | *"Through a sandboxed `<iframe>` (`allow-scripts allow-modals`, no same-origin) in `PreviewPanel.tsx` with an injected CSP. Known limit: the preview inherits the app CSP, so inline `<script>` may not run in the built app."* |
 | **Q22: What state management library do you use?** | *"We use a custom reactive Zustand-style store hook in `src/store/useWorkspaceStore.ts`, keeping bundle size minimal while providing clean reactive state across tabs, file tree, and execution status."* |
-| **Q23: How do you test your application?** | *"We run `cargo test --workspace` for the Rust backend (process isolation, signal handling, UTF-8 streaming) and `npm test` with Vitest for the frontend (Monaco lockdown, diagnostics regex parsers, path utils)."* |
+| **Q23: How do you test your application?** | *"We run `cargo test --workspace` for the Rust backend (process supervision, sandbox, workspace scoping, signal handling, UTF-8 streaming) and `npm test` with Vitest for the frontend (Monaco lockdown, diagnostics regex parsers, path utils)."* |
 | **Q24: Can CodeUI open large project folders?** | *"Yes, `fs.rs` lists directories lazily on expand, avoiding loading deep directory trees into memory all at once."* |
 | **Q25: What happens if a compiler is missing?** | *"On startup, `env_detect.rs` checks `$PATH`. If GCC or Python is missing, CodeUI displays a yellow warning banner and provides the exact install command (e.g., `sudo apt install build-essential` or `winget install Python`)."* |
 

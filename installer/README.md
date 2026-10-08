@@ -15,6 +15,8 @@ All official binaries, installers, and SHA-256 checksums are published at:
 | **Linux (Universal)** | Portable AppImage | `.AppImage` | Portable binary: `chmod +x CodeUI_<version>_amd64.AppImage && ./CodeUI_<version>_amd64.AppImage`. *(Note: Ubuntu 24.04 requires `sudo apt install libfuse2t64`)* |
 | **macOS** | Disk Image | `.dmg` | Mount and drag `CodeUI.app` into `/Applications`. |
 
+> **Lab deployment note:** student programs are sandboxed on Linux (kernel permitting) but only *supervised* on Windows (resource limits, no network or filesystem isolation). See *Security model* in the main [README](../README.md#security-model).
+
 ### Verifying Checksums
 
 Each release includes a verified `SHA256SUMS.txt` file.

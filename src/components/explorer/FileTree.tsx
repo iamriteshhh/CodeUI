@@ -3,6 +3,7 @@ import {
   FilePlus,
   FolderPlus,
   FolderOpen,
+  FolderX,
   RotateCw,
   Trash2,
   Edit2,
@@ -41,6 +42,7 @@ interface FileTreeProps {
   onDeletePath: (path: string) => void;
   onRenamePath: (oldPath: string, newPath: string) => void;
   onOpenFolderDialog: () => void;
+  onCloseFolder?: () => void;
   onOpenInFileManager?: () => void;
 }
 
@@ -123,6 +125,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
   onDeletePath,
   onRenamePath,
   onOpenFolderDialog,
+  onCloseFolder,
   onOpenInFileManager,
 }) => {
   const [isFolderExpanded, setIsFolderExpanded] = useState(true);
@@ -591,6 +594,18 @@ export const FileTree: React.FC<FileTreeProps> = ({
           >
             <FolderOpen size={14} />
           </button>
+          {onCloseFolder && workspacePath && (
+            <button
+              className="icon-btn"
+              title="Close Folder"
+              onClick={(e) => {
+                e.stopPropagation();
+                onCloseFolder();
+              }}
+            >
+              <FolderX size={14} />
+            </button>
+          )}
           {onOpenInFileManager && (
             <button
               className="icon-btn"

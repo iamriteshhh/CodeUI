@@ -30,9 +30,11 @@ interface SidebarProps {
   onRefreshTools: () => void;
   onSendToTerminal: (command: string) => void;
   onOpenFolderDialog: () => void;
+  onCloseFolder?: () => void;
   onOpenInFileManager?: () => void;
   onRunFile?: () => void;
   onSearchSelectResult?: (filePath: string, lineNumber: number) => void;
+  runTimeoutSecs: number;
   selectedExtensionId?: string | null;
   extensionsList?: ExtensionItem[];
   isSyncingExtensions?: boolean;
@@ -67,9 +69,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onRefreshTools,
   onSendToTerminal,
   onOpenFolderDialog,
+  onCloseFolder,
   onOpenInFileManager,
   onRunFile,
   onSearchSelectResult,
+  runTimeoutSecs,
   selectedExtensionId,
   extensionsList,
   isSyncingExtensions,
@@ -119,6 +123,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onDeletePath={onDeletePath}
             onRenamePath={onRenamePath}
             onOpenFolderDialog={onOpenFolderDialog}
+            onCloseFolder={onCloseFolder}
             onOpenInFileManager={onOpenInFileManager}
           />
         )}
@@ -137,6 +142,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onRunFile={() => onRunFile?.()}
             onRefreshTools={onRefreshTools}
             onOpenTerminal={() => onSendToTerminal("")}
+            runTimeoutSecs={runTimeoutSecs}
           />
         )}
 

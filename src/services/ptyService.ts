@@ -490,7 +490,7 @@ export const ptyService = {
 
     if (isTauri()) {
       if (!entry.tauriDataUnlisten && !entry.tauriDataPromise) {
-        entry.tauriDataPromise = listen<any>(
+        entry.tauriDataPromise = listen<string | { sessionId: string; data: string }>(
           `pty-data-${sessionId}`,
           (e) => {
             let text = "";
@@ -551,7 +551,7 @@ export const ptyService = {
 
     if (isTauri()) {
       if (!entry.tauriExitUnlisten && !entry.tauriExitPromise) {
-        entry.tauriExitPromise = listen<any>(`pty-exit-${sessionId}`, () => {
+        entry.tauriExitPromise = listen<string>(`pty-exit-${sessionId}`, () => {
           entry.exitCallbacks.forEach((cb) => {
             try {
               cb();

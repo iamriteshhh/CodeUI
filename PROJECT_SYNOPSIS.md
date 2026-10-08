@@ -23,7 +23,7 @@ In contemporary university and college computing curricula, laboratory practical
 
 Consequently, institutions force students to write timed exam code in bare-bones text editors such as **Notepad, gedit, or nano**. While this measure prevents cheating, it inflicts a disproportionate operational penalty: students lose syntax highlighting, integrated terminal access, directory tree management, and structured compiler error diagnostics. Timed exams become exercises in managing operating system windows and debugging cryptic terminal outputs rather than demonstrations of algorithmic knowledge.
 
-**CodeUI** is engineered to resolve this institutional dilemma. It is a desktop Integrated Development Environment that bridges the gap between bare-bones text editors and commercial IDEs. CodeUI provides a modern, ergonomic editing workspace—including syntax highlighting, project explorer, multi-tab editing, split views, an integrated pseudo-terminal (PTY), and one-click compilation—while **strictly, permanently eliminating all autocomplete, predictive suggestions, parameter hints, and AI coding assistance**. Furthermore, CodeUI integrates deep operating-system-level process isolation, watchdog timers, and memory-safe IPC to protect shared laboratory workstations against runaway loops, orphaned processes, and memory exhaustion.
+**CodeUI** is engineered to resolve this institutional dilemma. It is a desktop Integrated Development Environment that bridges the gap between bare-bones text editors and commercial IDEs. CodeUI provides a modern, ergonomic editing workspace—including syntax highlighting, project explorer, multi-tab editing, split views, an integrated pseudo-terminal (PTY), and one-click compilation—while **strictly, permanently eliminating all autocomplete, predictive suggestions, parameter hints, and AI coding assistance**. Furthermore, CodeUI supervises every student program (process groups, idle and wall-clock timeouts, output caps) and adds OS-level restrictions where the platform supports them (rlimits, Landlock, seccomp and namespaces on Linux; a Job Object on Windows) to protect shared laboratory workstations against runaway loops, orphaned processes, and memory exhaustion. Network and filesystem isolation are Linux/macOS only; on Windows execution is supervised, not sandboxed (see README, *Security model*).
 
 ---
 
@@ -36,7 +36,7 @@ During practical programming examinations in subjects such as *Data Structures &
 | :--- | :--- | :--- |
 | **Option A: Commercial IDEs**<br>*(VS Code, CLion, Eclipse)* | High developer productivity, integrated terminals, debugging tools. | **Compromises Exam Integrity:** Built-in autocomplete, automatic parameter hints, syntax completion, and AI plugins suggest code structure, making independent assessment impossible. High RAM footprint freezes older lab computers. |
 | **Option B: Bare Editors**<br>*(Notepad, gedit, nano)* | Zero code generation or cheating assistance. | **Cripples Student Experience:** No integrated terminal (requires constant Alt-Tabbing to a shell), no directory view, poor/no syntax coloring, and no visual compiler error diagnostics. |
-| **Proposed: CodeUI** | Complete editor ergonomics (tabs, split view, terminal, file tree, diagnostic markers). | **Lab-Safe & Zero-Assistance:** Guaranteed zero autocomplete, zero suggestions, process-group sandboxing, watchdog timeouts, and strict AI extension blocking. |
+| **Proposed: CodeUI** | Complete editor ergonomics (tabs, split view, terminal, file tree, diagnostic markers). | **Lab-Safe & Zero-Assistance:** Zero autocomplete, zero suggestions, supervised execution with OS resource limits (sandboxed on Linux where the kernel allows), timeouts, and blocking of known AI-assistance extensions. |
 
 ### 2.2 Operational Vulnerabilities on Shared Lab Machines
 College computers are shared among hundreds of students across multiple batches each day. When students execute buggy code:
@@ -53,19 +53,20 @@ CodeUI addresses both the pedagogical need for **zero-assistance assessment** an
 1. **Pedagogical Integrity (Zero-Assistance Principle):**
    - Completely neutralize all autocomplete engines, word-based suggestions, parameter hints, automatic bracket/quote completion, and code-action lightbulbs across all supported languages.
    - Block keyboard triggers (`Ctrl+Space`, `Alt+Enter`, `F12`, `F2`) at both configuration and runtime dispatch levels.
-   - Enforce an irreversible AI-blocking policy in both the UI catalog and the backend extension loader.
+   - Enforce a multi-signal policy against known and identifiable AI-assistance extensions in both the UI catalog and the backend extension loader.
 
 2. **Self-Contained Ergonomic Workspace:**
    - Provide a responsive multi-tab code editor with split-screen capability based on Microsoft's Monaco Editor engine.
    - Provide a full-featured integrated terminal using real pseudo-terminal (PTY) emulation (`xterm.js` + `portable-pty`), enabling interactive programs (`scanf`, `cin`, Python `input()`, curses, vim) without external windows.
-   - Provide a real-time HTML/CSS/JavaScript web preview sandbox for web development labs.
+   - Provide a real-time HTML/CSS/JavaScript preview (sandboxed iframe with an injected CSP) for web development labs.
 
-3. **Lab-Safe Execution & Process Supervision:**
+3. **Supervised Execution & OS Restrictions:**
    - Execute student programs inside dedicated, detached process groups (`setsid` on Unix, `CREATE_NEW_PROCESS_GROUP` on Windows) so that the entire process tree can be terminated atomically.
-   - Enforce configurable watchdog execution limits (default 30 seconds) to terminate hung programs automatically.
+   - Stop programs after a configurable idle timeout (default 30 s without input, 1–300 s) and a hard 300 s wall clock; compilation is limited to 60 s.
+   - Apply OS restrictions to the run phase: rlimits, `no_new_privs`, user+network namespace, Landlock and seccomp on Linux (each degrading independently); `sandbox-exec` on macOS (untested); a Job Object (CPU time, memory, process count, kill-on-close) on Windows, which does not isolate network or files. If the sandbox cannot be set up, the run continues supervised with a visible notice.
    - Implement escalating process termination: polite `SIGTERM` followed by forceful `SIGKILL` (or Win32 `taskkill /PID /T /F`).
    - Implement batched output buffering (30ms intervals, 8KB chunks) and a strict 5MB output ceiling to protect the UI thread from stream saturation.
-   - Compile code into isolated, transient scratch directories so student project folders remain clean.
+   - Compile code into transient per-run scratch directories so student project folders remain clean.
 
 4. **Automated Toolchain Detection & Friendly Diagnostics:**
    - Scan the host environment `$PATH` on startup for installed compilers (`gcc`, `g++`, `javac`, `java`, `python3`, `sf`, `rustc`, `node`).
@@ -86,7 +87,7 @@ flowchart TB
         Xterm["Xterm.js Terminal Panel"]
         FileTree["File Explorer & Search"]
         Store["Workspace State Store (Zustand-like Pattern)"]
-        Preview["HTML/CSS/JS Sandbox Preview (iframe)"]
+        Preview["HTML/CSS/JS Preview (sandboxed iframe + CSP)"]
     end
 
     subgraph IPC["Tauri IPC Security Boundary"]
@@ -95,17 +96,17 @@ flowchart TB
     end
 
     subgraph Backend["Backend Layer (Rust / Tauri 2.x Core)"]
-        RunMgr["RunRegistry & Process Supervisor\n• Process Group Detachment\n• Watchdog Timers (30s)\n• Output Batching (30ms / 8KB / 5MB Cap)"]
+        RunMgr["RunRegistry & Process Supervisor\n• Process Group Detachment\n• Idle 30s / Wall 300s Timeouts\n• OS Sandbox Launcher (exec phase)\n• Output Batching (30ms / 8KB / 5MB Cap)"]
         PtyMgr["PtyManager (portable-pty)\n• Pseudo-Terminal Master/Slave Pairs\n• TIOCSWINSZ Window Resizing"]
-        FsCmds["Filesystem Manager\n• Safe Read/Write/Tree\n• System Path Protection"]
+        FsCmds["Filesystem Manager\n• Workspace-Scoped Read/Write/Tree\n• System Path Protection"]
         Runners["Language Runners\n• C (gcc/clang)\n• C++ (g++/clang++)\n• Java (Class & Package Detection)\n• Python (Unbuffered -u)\n• Salivo (sf)"]
-        ExtMgr["Extension Manager & AI Policy Engine\n• Declarative Syntax & Themes Only\n• Open VSX API\n• Hardcoded AI Filter"]
+        ExtMgr["Extension Manager & AI Policy Engine\n• Declarative Syntax & Themes Only\n• Open VSX API\n• Multi-Signal AI Policy"]
     end
 
     subgraph OS["Host Operating System (Linux / Windows / macOS)"]
         Compilers["Compilers & Interpreters (gcc, g++, javac, java, python3, sf)"]
         PTY["Native Shell (bash, zsh, cmd.exe, powershell.exe)"]
-        FS["Physical Disk Filesystem (Project Folder & Isolated Scratch Dirs)"]
+        FS["Physical Disk Filesystem (Project Folder & Per-Run Scratch Dirs)"]
     end
 
     UI --> Store
@@ -135,7 +136,7 @@ flowchart TB
 
 ### 4.3 Native Rust Backend
 - **Memory Safety & Zero-Cost Abstractions:** Rust guarantees memory safety and thread safety without garbage collection overhead, vital for resource-constrained laboratory computers.
-- **Process Supervisor (`src-tauri/src/proc` & `commands/process.rs`):** Spawns child processes with isolated process credentials, monitors CPU wall-clock duration with background watchdog threads, and handles interactive stdin pipes.
+- **Process Supervisor (`src-tauri/src/proc` & `commands/process.rs`):** Spawns child processes in their own process group (the run phase through the OS sandbox launcher), enforces idle and wall-clock timeouts with watchdog threads, and handles interactive stdin.
 - **PTY Manager (`src-tauri/src/pty`):** Interfaces with operating system pseudo-terminal APIs (ConPTY on Windows, `/dev/pts` on Linux) through `portable-pty`.
 - **Language Runners (`src-tauri/src/runners`):** Implements the `LanguageRunner` trait for each language, handling compilation arguments, output binary naming, and class/package detection.
 
@@ -149,13 +150,15 @@ Unlike general-purpose editors where disabling autocomplete is a user preference
 2. **Language Service Provider Interception:** The `applyZeroSuggestionsLockdown()` function intercepts Monaco's internal language registry, substituting `registerCompletionItemProvider`, `registerHoverProvider`, `registerDefinitionProvider`, and `registerCodeActionProvider` with dummy no-op disposables.
 3. **Keyboard Command Overrides:** Intercepts standard completion keybindings (`Ctrl+Space`, `Ctrl+Shift+Space`, `Alt+Enter`, `F12`, `F2`) on editor mount and binds them to empty routines.
 
-### 5.2 Lab-Safe Execution & Process Sandbox
+### 5.2 Supervised Execution & OS Sandbox
 Student programming assignments frequently produce runtime anomalies. CodeUI incorporates defensive execution guards:
-- **Detached Process Groups:** On Linux, `libc::setsid()` isolates child execution. On Windows, `CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW` flags are injected into process creation.
+- **Detached Process Groups:** On Linux, `libc::setsid()` gives each run its own process group. On Windows, `CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW` flags are injected into process creation.
 - **Escalating Termination (`kill_tree`):** When a run terminates or times out, CodeUI dispatches `SIGTERM` to the process group, grants a 500ms grace period for output flush, and escalates to unconditional `SIGKILL` (or `taskkill /PID <pid> /T /F` on Windows) if the process remains active.
+- **OS Sandbox (run phase):** Linux applies rlimits (CPU 300 s, 1 GiB data, 256 MiB files, 512 open files, 128 processes), `no_new_privs`, a user+network namespace, Landlock and seccomp where the kernel supports them; Windows uses a Job Object (CPU time, per-process memory, process count, kill-on-close) and is *supervised*, not sandboxed. Compilation is supervised only. See README, *Security model*.
+- **Workspace Scoping:** Filesystem commands are confined to the open folder (canonical paths, `..` and symlink escapes rejected); switching or closing the folder kills all terminals and runs.
 - **Window Close Enforcement:** Hooked to `tauri::WindowEvent::CloseRequested`, CodeUI immediately invokes `shutdown_all()` across `RunRegistry` and `PtyManager`, ensuring no runaway processes linger on shared computers when a student exits the app.
 - **Output Throttling & Protection:** A dual-cadence pump buffers output characters, flushing only every 30 milliseconds or 8,192 bytes. Output is capped at 5 Megabytes per run, preventing infinite print loops from crashing the webview.
-- **Scratch Directory Isolation:** Student code is compiled within a temporary directory (e.g., `/tmp/codeui-run-xyz` or `%TEMP%\codeui-run-xyz`), preventing intermediate object files and compiled binaries from cluttering the student's project workspace.
+- **Scratch Directories:** Student code is compiled within a temporary directory (e.g., `/tmp/codeui-run-xyz` or `%TEMP%\codeui-run-xyz`), preventing intermediate object files and compiled binaries from cluttering the student's project workspace.
 
 ### 5.3 Intelligent Compiler Diagnostic Highlighting
 When compilation fails, CodeUI does not merely dump raw terminal text. Its pure TypeScript diagnostic engine parses the output stream in real time:
@@ -182,7 +185,8 @@ Student programs requiring interactive input (such as `scanf("%d", &n);`, `cin >
 ### 5.6 Declarative Extension Hub with Hardened AI Filtering
 CodeUI supports community themes and syntax packages via the Open VSX registry, but enforces absolute lab policy:
 - **Declarative Only:** Only syntax grammars (`.tmLanguage.json`), language configurations (comment markers, brackets), and UI themes are extracted. Executable JavaScript code, language server protocols (LSP), and code-action hooks inside VSIX archives are dropped.
-- **Multi-Layer AI Policy Engine (`ai-policy.json`):** Evaluates extension package names, publishers, descriptions, and manifest contributions against a comprehensive blocklist (blocking terms such as `copilot`, `gpt`, `llm`, `claude`, `deepseek`, `assistant`, `inline-completion`). AI extensions are rejected at both the search/UI tier and the Rust VSIX unpacking tier.
+- **Multi-Signal AI Policy (`ai-policy.json`):** Evaluates extension package names, publishers, descriptions, and manifest contributions to block known and identifiable AI-assistance extensions (blocking terms such as `copilot`, `gpt`, `llm`, `claude`, `deepseek`, `assistant`, `inline-completion`). Matching extensions are rejected at both the search/UI tier and the Rust VSIX unpacking tier; an extension that hides its AI purpose may not be detected (extension code never runs regardless).
+- **VSIX Limits:** 150 MiB download, 20 MiB per file, 64 MiB total, 50,000 entries; traversal, absolute and symlink entries are rejected.
 
 ---
 
@@ -223,14 +227,15 @@ CodeUI enforces an explicit rule: **Python is strictly an execution target for s
 
 | Feature / Metric | Bare Editors (Notepad / gedit) | Commercial IDEs (VS Code) | CodeUI (Proposed Solution) |
 | :--- | :--- | :--- | :--- |
-| **Exam Cheating Risk** | None | **Severe** (Copilot, IntelliSense, Snippets) | **Zero** (Strict Zero-Assistance Lockdown) |
+| **Exam Cheating Risk** | None | **Severe** (Copilot, IntelliSense, Snippets) | **Low** (No in-editor assistance; network not isolated on Windows) |
 | **Syntax Highlighting** | Minimal / None | Comprehensive | Rich, Color-Accurate Syntax Highlighting |
 | **Integrated Terminal** | No (Alt-Tab Required) | Yes | Yes (Real PTY via xterm.js + portable-pty) |
 | **Compiler Error Navigation** | Manual terminal reading | Inline squigglies + hints | Automatic Inline Squiggly Error Markers |
-| **Process Group Isolation** | No (Orphans persist) | Variable | Strict (`setsid` / Win32 process groups) |
-| **Watchdog Timeout** | None (Runs forever) | None by default | Hard Watchdog Timeout (Default: 30s) |
+| **Process Group Supervision** | No (Orphans persist) | Variable | Whole tree killed (`setsid` / Job Object) |
+| **OS Sandbox** | No | No | Linux: rlimits, Landlock, seccomp, namespaces (kernel-dependent); Windows: Job Object limits only (supervised) |
+| **Watchdog Timeout** | None (Runs forever) | None by default | Idle timeout (default 30s) + 300s wall clock |
 | **Output Memory Protection** | Terminal freezes | High memory consumption | Batched (30ms) & Capped at 5MB |
-| **Scratch Build Sandboxing** | No (Lutters workspace) | Configurable | Automatic (Scratch dir per run) |
+| **Scratch Builds** | No (Litters workspace) | Configurable | Automatic (Scratch dir per run) |
 | **Memory Footprint** | Extremely low (<20MB) | Heavy (~300MB - 800MB) | Lightweight (~60MB - 80MB) |
 | **Installer Size** | Pre-installed | Large (~120MB - 200MB) | Ultra-Compact (~15MB installer) |
 
@@ -308,7 +313,7 @@ While CodeUI currently provides a complete, self-contained desktop IDE for colle
 
 **CodeUI** successfully addresses an unresolved paradox in computer science education: the conflict between **modern software ergonomics** and **academic examination integrity**. By stripping away intrusive autocomplete, suggestions, and generative AI while preserving the core benefits of modern developer tooling—rich syntax highlighting, an integrated pseudo-terminal, a structured file tree, and intelligent compiler diagnostic markers—CodeUI establishes a trustworthy, student-friendly standard for college computing laboratories. 
 
-Its memory-efficient, process-isolated Tauri/Rust architecture ensures that shared laboratory workstations remain fast, clean, and stable, allowing students to focus on what matters most: learning to think, solve problems, and write code independently.
+Its memory-efficient, supervised Tauri/Rust architecture ensures that shared laboratory workstations remain fast, clean, and stable, allowing students to focus on what matters most: learning to think, solve problems, and write code independently.
 
 ---
 *Report Prepared for Academic Project Evaluation, Laboratory Demonstrations, and Viva Voce Defense.*

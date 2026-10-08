@@ -1,9 +1,10 @@
 // Monaco editor service for dispatching Edit and Selection commands
+import type * as Monaco from "../monaco";
 
-type AnyEditor = any;
+type AnyEditor = Monaco.editor.IStandaloneCodeEditor;
 
 let activeEditorInstance: AnyEditor | null = null;
-let monacoInstance: any = null;
+let monacoInstance: typeof Monaco | null = null;
 type CursorCallback = (line: number, col: number) => void;
 const cursorCallbacks: CursorCallback[] = [];
 
@@ -12,7 +13,7 @@ export const editorService = {
     activeEditorInstance = editor;
   },
 
-  setMonaco(monaco: any) {
+  setMonaco(monaco: typeof Monaco) {
     monacoInstance = monaco;
   },
 
@@ -194,13 +195,14 @@ export const editorService = {
       const model = monacoInstance.editor.getModel(uri);
       if (!model) return;
 
+      const { MarkerSeverity } = monacoInstance;
       const markers = diagnostics.map((d) => ({
         severity:
           d.severity === "warning"
-            ? monacoInstance.MarkerSeverity.Warning
+            ? MarkerSeverity.Warning
             : d.severity === "info"
-            ? monacoInstance.MarkerSeverity.Info
-            : monacoInstance.MarkerSeverity.Error,
+            ? MarkerSeverity.Info
+            : MarkerSeverity.Error,
         message: d.message,
         startLineNumber: d.line,
         startColumn: d.column || 1,
@@ -212,6 +214,14 @@ export const editorService = {
     } catch (err) {
       console.error("Failed to set model markers:", err);
     }
+  },
+
+  /** Removes compiler markers from every file (models of closed files included). */
+  clearAllMarkers() {
+    if (!monacoInstance) return;
+    try {
+      monacoInstance.editor.removeAllMarkers("codeui-compiler");
+    } catch {}
   },
 
   clearMarkers(path: string) {

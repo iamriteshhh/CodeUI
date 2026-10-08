@@ -10,6 +10,7 @@ use tauri::Manager;
 
 use commands::process::RunRegistry;
 use commands::settings::SettingsStore;
+use commands::workspace::WorkspaceState;
 use pty::PtyManager;
 
 /// Linux (WebKitGTK): the DMABUF renderer and accelerated compositing cause
@@ -57,6 +58,7 @@ pub fn run() {
         .manage(RunRegistry::default())
         .manage(PtyManager::default())
         .manage(SettingsStore::load())
+        .manage(WorkspaceState::default())
         .invoke_handler(tauri::generate_handler![
             commands::fs::read_file,
             commands::fs::write_file,
@@ -71,6 +73,7 @@ pub fn run() {
             commands::fs::open_in_file_manager,
             commands::fs::search_files,
             commands::fs::find_files,
+            commands::workspace::set_workspace,
             commands::process::run_file,
             commands::process::stop_run,
             commands::process::write_run_stdin,
@@ -94,15 +97,22 @@ pub fn run() {
             commands::extensions::set_extension_enabled,
             commands::extensions::read_extension_file,
         ])
+        // Closing must not leave student processes or shells running on a
+        // shared lab machine. This waits for the window to really go away
+        // (or the app to exit), not CloseRequested, because the UI may cancel
+        // a close to ask about unsaved files. shutdown is idempotent.
         .on_window_event(|window, event| {
-            // Closing the window must not leave student processes or shells
-            // running on a shared lab machine.
-            if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
+            if matches!(event, tauri::WindowEvent::Destroyed) {
                 shutdown(window.app_handle());
             }
         })
-        .run(tauri::generate_context!())
-        .expect("failed to start CodeUI");
+        .build(tauri::generate_context!())
+        .expect("failed to start CodeUI")
+        .run(|app, event| {
+            if matches!(event, tauri::RunEvent::Exit) {
+                shutdown(app);
+            }
+        });
 }
 
 fn shutdown(app: &tauri::AppHandle) {

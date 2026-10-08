@@ -49,9 +49,15 @@ impl CommandSpec {
 #[derive(Debug, thiserror::Error, Serialize)]
 #[serde(tag = "kind", content = "message")]
 pub enum RunnerError {
-    #[error("no runner is registered for this file type")]
+    #[error(
+        "CodeUI cannot run this file type. Run works for C (.c), C++ (.cpp, .cc, .cxx), \
+         Java (.java), Python (.py) and Salivo (.sal) files."
+    )]
     UnsupportedLanguage,
-    #[error("required tool `{0}` was not found on PATH")]
+    #[error(
+        "`{0}` is needed to run this file but was not found. Install it, or add its folder \
+         to PATH, then try again (Diagnostics lists what is installed)."
+    )]
     ToolMissing(String),
     #[error("could not read the source file: {0}")]
     SourceUnreadable(String),

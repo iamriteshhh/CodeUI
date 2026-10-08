@@ -15,7 +15,7 @@ const THEME_KEY = "codeui.colorTheme";
 
 // --- JSONC (VS Code config files allow comments and trailing commas) ---
 
-export function parseJsonc(text: string): any {
+export function parseJsonc(text: string): unknown {
   let out = "";
   for (let i = 0; i < text.length; i++) {
     const c = text[i];
@@ -93,22 +93,36 @@ function attachGrammar(languageId: string, grammar: IGrammar) {
 
 // --- language configuration ---
 
-function toRegExp(v: any): RegExp | undefined {
+/** language-configuration.json as read below; regex-like fields stay unknown until toRegExp. */
+interface VsLanguageConfiguration {
+  comments?: monaco.languages.CommentRule;
+  brackets?: monaco.languages.CharacterPair[];
+  autoClosingPairs?: unknown;
+  surroundingPairs?: unknown;
+  wordPattern?: unknown;
+  indentationRules?: { increaseIndentPattern?: unknown; decreaseIndentPattern?: unknown };
+  folding?: { offSide?: boolean; markers?: { start?: unknown; end?: unknown } };
+}
+
+type VsPair = [string, string] | { open: string; close: string; notIn?: string[] };
+
+function toRegExp(v: unknown): RegExp | undefined {
   try {
     if (typeof v === "string") return new RegExp(v);
-    if (v && typeof v.pattern === "string") return new RegExp(v.pattern, v.flags);
+    const o = v as { pattern?: unknown; flags?: string } | null | undefined;
+    if (o && typeof o.pattern === "string") return new RegExp(o.pattern, o.flags);
   } catch {
     // Oniguruma-only syntax; Monaco falls back to its default
   }
   return undefined;
 }
 
-function toPairs(list: any): monaco.languages.IAutoClosingPairConditional[] | undefined {
+function toPairs(list: unknown): monaco.languages.IAutoClosingPairConditional[] | undefined {
   if (!Array.isArray(list)) return undefined;
-  return list.map((p) => (Array.isArray(p) ? { open: p[0], close: p[1] } : { open: p.open, close: p.close, notIn: p.notIn }));
+  return (list as VsPair[]).map((p) => (Array.isArray(p) ? { open: p[0], close: p[1] } : { open: p.open, close: p.close, notIn: p.notIn }));
 }
 
-export function toLanguageConfiguration(c: any): monaco.languages.LanguageConfiguration {
+export function toLanguageConfiguration(c: VsLanguageConfiguration): monaco.languages.LanguageConfiguration {
   return {
     comments: c.comments,
     brackets: c.brackets,
@@ -152,7 +166,7 @@ export async function activateExtension(ext: InstalledExtension): Promise<void> 
     registerLanguage(lang);
     if (lang.configuration) {
       try {
-        const cfg = parseJsonc(await readExtensionFile(ext.id, lang.configuration));
+        const cfg = parseJsonc(await readExtensionFile(ext.id, lang.configuration)) as VsLanguageConfiguration;
         monaco.languages.setLanguageConfiguration(lang.id, toLanguageConfiguration(cfg));
       } catch (e) {
         console.warn(`[${ext.id}] language configuration for ${lang.id} not loaded:`, e);
@@ -224,9 +238,22 @@ function hex6(color: unknown): string | undefined {
   return h.slice(0, 6);
 }
 
-async function readTheme(extId: string, path: string, depth = 0): Promise<{ colors: Record<string, string>; tokenColors: any[] }> {
-  const json = parseJsonc(await readExtensionFile(extId, path));
-  let base = { colors: {} as Record<string, string>, tokenColors: [] as any[] };
+/** A TextMate theme rule as read below. */
+interface VsTokenColor {
+  scope?: string | string[];
+  settings?: { foreground?: unknown; fontStyle?: string };
+}
+
+/** The colour-theme JSON fields read below. */
+interface VsThemeFile {
+  include?: unknown;
+  colors?: Record<string, string>;
+  tokenColors?: VsTokenColor[];
+}
+
+async function readTheme(extId: string, path: string, depth = 0): Promise<{ colors: Record<string, string>; tokenColors: VsTokenColor[] }> {
+  const json = parseJsonc(await readExtensionFile(extId, path)) as VsThemeFile;
+  let base = { colors: {} as Record<string, string>, tokenColors: [] as VsTokenColor[] };
   if (typeof json.include === "string" && depth < 5) {
     const dir = path.includes("/") ? path.slice(0, path.lastIndexOf("/") + 1) : "";
     base = await readTheme(extId, dir + json.include.replace(/^\.\//, ""), depth + 1);

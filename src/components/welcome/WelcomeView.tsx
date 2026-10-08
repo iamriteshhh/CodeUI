@@ -64,7 +64,7 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
             />
             <h1 className="welcome-title">CodeUI</h1>
           </div>
-          <p className="welcome-subtitle">Editing evolved • A lab-safe IDE for students & developers</p>
+          <p className="welcome-subtitle">Editing evolved • An assistance-free IDE for students & developers</p>
         </div>
 
         {/* Main 2-Column Content */}
@@ -147,7 +147,7 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
                       <span className="welcome-card-title">Get started with CodeUI</span>
                     </div>
                     <p className="welcome-card-desc">
-                      Customize your editor, learn shortcuts, and start coding in a lab-safe environment.
+                      Customize your editor, learn shortcuts, and start coding without autocomplete or AI assistance.
                     </p>
                   </div>
                 </div>
@@ -198,10 +198,10 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
                   <div className="welcome-card-body">
                     <div className="welcome-card-title-row">
                       <span className="welcome-card-title">Get Started with C / C++ Development</span>
-                      <span className="welcome-badge">Lab-Safe</span>
+                      <span className="welcome-badge">Supervised</span>
                     </div>
                     <p className="welcome-card-desc">
-                      Compile C & C++ files with GCC/Clang under strict memory and timeout budgets.
+                      Compile and run C & C++ with GCC/Clang under timeouts, an output cap and OS resource limits on the program.
                     </p>
                   </div>
                 </div>

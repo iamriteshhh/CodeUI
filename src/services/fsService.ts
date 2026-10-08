@@ -18,6 +18,18 @@ const mockFs = new Map<string, string>();
 const activeSavePromises = new Map<string, Promise<void>>();
 
 export const fsService = {
+  /**
+   * Makes `path` the only root the backend fs commands accept (null = no folder open).
+   * The backend also kills every PTY and run. Resolves to the canonical root (or null).
+   */
+  async setWorkspace(path: string | null): Promise<string | null> {
+    const invoke = await getInvoke();
+    if (invoke) {
+      return await invoke<string | null>("set_workspace", { path });
+    }
+    return path;
+  },
+
   async readFile(path: string): Promise<string> {
     const invoke = await getInvoke();
     if (invoke) {
@@ -156,12 +168,13 @@ export const fsService = {
     // Fallback for browsers running outside Tauri
     if (typeof window !== "undefined" && "showDirectoryPicker" in window) {
       try {
-        const dirHandle = await (window as any).showDirectoryPicker();
+        const picker = window as Window & { showDirectoryPicker: () => Promise<{ name: string }> };
+        const dirHandle = await picker.showDirectoryPicker();
         if (dirHandle && dirHandle.name) {
           return dirHandle.name;
         }
-      } catch (err: any) {
-        if (err?.name === "AbortError") {
+      } catch (err) {
+        if ((err as { name?: string } | null)?.name === "AbortError") {
           return null;
         }
       }

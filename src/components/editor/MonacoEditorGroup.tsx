@@ -7,6 +7,7 @@ import { OpenFile } from "../../types";
 import { ChevronRight } from "lucide-react";
 import { FileIcon } from "../icons/FileIcon";
 import { editorService, getNormalizedUri } from "../../services/editorService";
+import type * as Monaco from "../../monaco";
 
 interface MonacoEditorGroupProps {
   file: OpenFile | undefined;
@@ -23,9 +24,9 @@ const MonacoEditorGroupComponent: React.FC<MonacoEditorGroupProps> = ({
   onCursorChange,
   onMarkersChange,
 }) => {
-  const editorRef = React.useRef<any>(null);
-  const monacoRef = React.useRef<any>(null);
-  const markersDisposableRef = React.useRef<any>(null);
+  const editorRef = React.useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
+  const monacoRef = React.useRef<typeof Monaco | null>(null);
+  const markersDisposableRef = React.useRef<Monaco.IDisposable | null>(null);
 
   // Live refs to prevent stale closure bugs (F6)
   const fileRef = React.useRef<OpenFile | undefined>(file);
@@ -124,7 +125,7 @@ const MonacoEditorGroupComponent: React.FC<MonacoEditorGroupProps> = ({
               onChangeContentRef.current(fileRef.current.path, value);
             }
           }}
-          onMount={(editor, monaco) => {
+          onMount={(editor, monaco: typeof Monaco) => {
             editorRef.current = editor;
             monacoRef.current = monaco;
             monaco.editor.setTheme(getEditorTheme());
@@ -155,7 +156,7 @@ const MonacoEditorGroupComponent: React.FC<MonacoEditorGroupProps> = ({
             });
 
             // Track live cursor position
-            editor.onDidChangeCursorPosition((e: any) => {
+            editor.onDidChangeCursorPosition((e) => {
               editorService.notifyCursorChange(e.position.lineNumber, e.position.column);
               onCursorChangeRef.current?.(e.position.lineNumber, e.position.column);
             });
@@ -163,10 +164,11 @@ const MonacoEditorGroupComponent: React.FC<MonacoEditorGroupProps> = ({
             // Track live diagnostics / syntax errors & warnings
             const updateMarkers = () => {
               const currentModel = editor.getModel();
-              if (currentModel && monacoRef.current) {
-                const markers = monacoRef.current.editor.getModelMarkers({ resource: currentModel.uri });
-                const errors = markers.filter((m: any) => m.severity === monacoRef.current.MarkerSeverity.Error).length;
-                const warnings = markers.filter((m: any) => m.severity === monacoRef.current.MarkerSeverity.Warning).length;
+              const currentMonaco = monacoRef.current;
+              if (currentModel && currentMonaco) {
+                const markers = currentMonaco.editor.getModelMarkers({ resource: currentModel.uri });
+                const errors = markers.filter((m) => m.severity === currentMonaco.MarkerSeverity.Error).length;
+                const warnings = markers.filter((m) => m.severity === currentMonaco.MarkerSeverity.Warning).length;
                 onMarkersChangeRef.current?.(errors, warnings);
               }
             };

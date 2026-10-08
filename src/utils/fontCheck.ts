@@ -81,7 +81,7 @@ export function checkMonospaceMetrics(
  * Ensures "CodeUI Mono" or its fallback font has loaded into the browser font cache
  * before Monaco initializes, and triggers remeasurement to prevent overlapping text.
  */
-export async function ensureMonacoFontsReady(monacoInstance?: any): Promise<string> {
+export async function ensureMonacoFontsReady(monacoInstance?: { editor?: { remeasureFonts?: () => void } }): Promise<string> {
   if (typeof document === "undefined" || !document.fonts) {
     if (monacoInstance?.editor?.remeasureFonts) {
       monacoInstance.editor.remeasureFonts();

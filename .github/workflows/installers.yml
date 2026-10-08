@@ -1,0 +1,29 @@
+name: Committed installers
+
+# installer/dist holds release packages in Git LFS. Verify the LFS objects are
+# real binaries (not pointer files) and match SHA256SUMS.txt. Runs only when
+# that directory changes, to stay inside the LFS bandwidth quota.
+on:
+  push:
+    paths: ["installer/dist/**"]
+  pull_request:
+    paths: ["installer/dist/**"]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: No LFS pointer files left
+        run: |
+          if grep -l "version https://git-lfs" installer/dist/*; then
+            echo "LFS objects were not downloaded"
+            exit 1
+          fi
+
+      - name: Checksums match
+        working-directory: installer/dist
+        run: sha256sum -c SHA256SUMS.txt

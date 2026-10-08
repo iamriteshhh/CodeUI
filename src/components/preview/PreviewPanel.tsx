@@ -3,6 +3,26 @@ import { RotateCw, CheckSquare, Square, Globe } from "lucide-react";
 import { OpenFile } from "../../types";
 import { fsService } from "../../services/fsService";
 
+/**
+ * Defense-in-depth CSP for the student preview. Student scripts are meant to run (the iframe is
+ * sandboxed with allow-scripts but WITHOUT allow-same-origin, so it gets an opaque origin), so
+ * this policy only restricts schemes: loads are limited to http/https/data/blob (no tauri:,
+ * asset:, ipc:, file:), network requests from script to https/wss (blocks http://ipc.localhost
+ * and ipc:), and plugins/form posts are off. It intersects with any CSP inherited from the app.
+ */
+export const PREVIEW_CSP =
+  "default-src http: https: data: blob: 'unsafe-inline' 'unsafe-eval'; " +
+  "connect-src https: wss:; object-src 'none'; form-action 'none'";
+
+/** Injects the preview CSP <meta> as early as possible without forcing quirks mode. */
+export function withPreviewCsp(html: string): string {
+  const meta = `<meta http-equiv="Content-Security-Policy" content="${PREVIEW_CSP}">`;
+  const anchor = /<head(?=[\s>])[^>]*>/i.exec(html) ?? /<!doctype[^>]*>/i.exec(html);
+  if (!anchor) return meta + html;
+  const at = anchor.index + anchor[0].length;
+  return html.slice(0, at) + meta + html.slice(at);
+}
+
 interface PreviewPanelProps {
   openFiles: OpenFile[];
   activeFilePath: string | null;
@@ -102,7 +122,7 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
         {htmlFile ? (
           <iframe
             title="CodeUI Live Web Preview"
-            srcDoc={htmlContent}
+            srcDoc={withPreviewCsp(htmlContent)}
             sandbox="allow-scripts allow-modals"
             style={{
               width: "100%",

@@ -82,7 +82,7 @@ CodeUI scans your system environment for language compilers and interpreters whe
 ## 5. Diagnostic Reports
 
 If you experience unexpected behavior or missing toolchains, open CodeUI and access **Copy Diagnostics**:
-1. Click the status bar or open the command palette.
+1. Open the **Help** menu.
 2. Select **Copy Diagnostics**.
 3. The report will contain:
    - Application version, Git SHA, and build timestamp
@@ -90,5 +90,8 @@ If you experience unexpected behavior or missing toolchains, open CodeUI and acc
    - Resolved compiler paths (`gcc`, `g++`, `python`, `javac`, etc.)
    - Active PTY session IDs and status
    - Monaco registered languages and active editor layout dimensions
+   - **Execution Isolation**: whether runs are *Sandboxed* or only *Supervised* on this machine, network/filesystem status and resource limits (see the README's *Security model*)
+
+If a run prints "Sandbox unavailable ... running with supervision only", the OS sandbox could not be set up (e.g. old kernel, user namespaces disabled) and the program ran with timeouts and output limits only. On Windows, network and filesystem access are never isolated.
 
 Include this report when reporting bugs or submitting issues.

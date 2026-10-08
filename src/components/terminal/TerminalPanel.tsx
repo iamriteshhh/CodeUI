@@ -4,8 +4,16 @@ import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import { ptyService } from "../../services/ptyService";
 import { processService } from "../../services/processService";
-import { markTerminalReady } from "../../services/terminalReady";
+import { markTerminalReady, WORKSPACE_RESET_EVENT } from "../../services/terminalReady";
 import { Trash2, RotateCw, Terminal as TerminalIcon, Plus, Play, Square } from "lucide-react";
+
+/** detail of the "codeui-run-start" event dispatched by runActiveFile. */
+interface RunStartDetail {
+  runId: string;
+  name: string;
+  language: string;
+  path: string;
+}
 
 interface TerminalPanelProps {
   sessionId: string | null;
@@ -34,6 +42,10 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
   const runFitRef = useRef<FitAddon | null>(null);
 
   const sessionRef = useRef<string | null>(sessionId);
+  // Latest callback: the store recreates it when the workspace (cwd) changes.
+  const onEnsureSessionRef = useRef(onEnsureSession);
+  onEnsureSessionRef.current = onEnsureSession;
+  const respawningRef = useRef(false);
   const shellUnlistenRef = useRef<{ data?: () => void; exit?: () => void }>({});
   const runUnlistenRef = useRef<{ output?: () => void; status?: () => void; data?: () => void }>({});
 
@@ -94,6 +106,35 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
     shellUnlistenRef.current = { data: unData, exit: unExit };
   };
 
+  // Lazily start a shell (in the current workspace) after a workspace reset dropped the old one.
+  const respawnShell = async () => {
+    const ensure = onEnsureSessionRef.current;
+    if (respawningRef.current || !ensure) return;
+    respawningRef.current = true;
+    try {
+      shellTermRef.current?.reset();
+      // Listen before spawning so the first prompt is not lost.
+      const preferred = "pty-" + Math.random().toString(36).substring(2, 10);
+      await attachShellSession(preferred);
+      const sid = await ensure(preferred);
+      if (!sid) {
+        sessionRef.current = null;
+        shellTermRef.current?.writeln("\x1b[31m[Could not start a shell. Press any key to retry.]\x1b[0m");
+        return;
+      }
+      if (sid !== preferred) await attachShellSession(sid);
+      const term = shellTermRef.current;
+      if (term) {
+        try {
+          shellFitRef.current?.fit();
+        } catch {}
+        ptyService.resizePty(sid, Math.max(term.cols || 80, 20), Math.max(term.rows || 24, 4));
+      }
+    } finally {
+      respawningRef.current = false;
+    }
+  };
+
   useEffect(() => {
     if (!sessionId || sessionId === sessionRef.current) return;
     attachShellSession(sessionId);
@@ -118,6 +159,8 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
         ptyService.writePty(current, input).catch((err) => {
           console.error("[TerminalPanel] writePty error:", err);
         });
+      } else {
+        respawnShell();
       }
     });
 
@@ -189,8 +232,8 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
     setupShellSession();
 
     // Listen for codeui-run-start events from workspace store
-    const handleRunStart = (e: any) => {
-      const { runId, name, language } = e.detail;
+    const handleRunStart = (e: Event) => {
+      const { runId, name, language } = (e as CustomEvent<RunStartDetail>).detail;
       setActiveTab("run");
       setRunFileName(name);
       setActiveRunId(runId);
@@ -274,7 +317,29 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
       }
     };
 
+    // Workspace switched/closed: the backend killed every PTY and run, so drop all bindings.
+    // A new shell starts in the new folder on the next keystroke (or New Terminal).
+    const handleWorkspaceReset = () => {
+      if (shellUnlistenRef.current.data) shellUnlistenRef.current.data();
+      if (shellUnlistenRef.current.exit) shellUnlistenRef.current.exit();
+      shellUnlistenRef.current = {};
+      sessionRef.current = null;
+      if (runUnlistenRef.current.output) runUnlistenRef.current.output();
+      if (runUnlistenRef.current.status) runUnlistenRef.current.status();
+      if (runUnlistenRef.current.data) runUnlistenRef.current.data();
+      runUnlistenRef.current = {};
+      setRunActive(false);
+      setActiveRunId(null);
+      setRunFileName(null);
+      setActiveTab("shell");
+      shellTerm.reset();
+      shellTerm.writeln("\x1b[90m[Folder changed. Press any key to start a new shell.]\x1b[0m");
+      runTerm.reset();
+      runTerm.writeln("\x1b[90m[CodeUI Supervised Runner — press F5 or click Run to execute active file]\x1b[0m\r\n");
+    };
+
     window.addEventListener("codeui-run-start", handleRunStart);
+    window.addEventListener(WORKSPACE_RESET_EVENT, handleWorkspaceReset);
     markTerminalReady();
     window.addEventListener("focus-terminal", handleFocusTerminal);
 
@@ -300,6 +365,7 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
     return () => {
       isDisposed = true;
       window.removeEventListener("codeui-run-start", handleRunStart);
+      window.removeEventListener(WORKSPACE_RESET_EVENT, handleWorkspaceReset);
       window.removeEventListener("focus-terminal", handleFocusTerminal);
       resizeObserver.disconnect();
       if (shellUnlistenRef.current.data) shellUnlistenRef.current.data();

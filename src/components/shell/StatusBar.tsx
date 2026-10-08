@@ -279,10 +279,10 @@ export const StatusBar: React.FC<StatusBarProps> = ({
                   <strong style={{ color: "#fff" }}>No Autocomplete & Copilot:</strong> IntelliSense suggestion popups and AI assistants are intentionally disabled to verify student understanding.
                 </li>
                 <li>
-                  <strong style={{ color: "#fff" }}>Local Sandboxed Execution:</strong> Student code executes directly in an isolated local terminal without external network leaks.
+                  <strong style={{ color: "#fff" }}>Supervised Execution:</strong> Programs run under OS resource limits. Linux (and macOS, untested) also restrict network and file access where the kernel supports it; Windows does not isolate network or files. Help &gt; Copy Diagnostics shows what this machine enforces.
                 </li>
                 <li>
-                  <strong style={{ color: "#fff" }}>Safe Execution Timeout:</strong> A default 12-second execution safety cap prevents runaway while loops from freezing the workstation.
+                  <strong style={{ color: "#fff" }}>Execution Timeouts:</strong> A program is stopped after 30 seconds without input by default (configurable idle timeout) and after 300 seconds in total, so runaway loops cannot freeze the workstation.
                 </li>
               </ul>
             </div>

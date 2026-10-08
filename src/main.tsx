@@ -53,7 +53,7 @@ function initApp() {
           <div style="font-size:44px;margin-bottom:16px;">🖥️</div>
           <h1 style="font-size:20px;font-weight:600;margin-bottom:12px;color:#f85149;">Desktop Application Required</h1>
           <p style="max-width:520px;line-height:1.6;color:#8c8c8c;font-size:13px;margin-bottom:24px;">
-            CodeUI is an offline, lab-safe code editor engineered exclusively for native desktop execution.
+            CodeUI is an offline, assistance-free code editor engineered exclusively for native desktop execution.
             Standalone web browser access is disabled in production because browser sandboxes cannot access native toolchains or supervised execution PTYs.
           </p>
           <div style="background:#202020;border:1px solid #333;padding:10px 18px;border-radius:6px;font-family:monospace;font-size:12px;color:#4ec9b0;">

@@ -1,6 +1,6 @@
 # CodeUI
 
-A lightweight, lab-safe desktop Integrated Development Environment (IDE) built for college computer laboratories and practical programming examinations.
+A lightweight, assistance-free desktop Integrated Development Environment (IDE) built for college computer laboratories and practical programming examinations.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![Release](https://img.shields.io/github/v/release/iamriteshhh/CodeUI?color=blue)](https://github.com/iamriteshhh/CodeUI/releases)
@@ -64,9 +64,9 @@ Stripping away all editor capabilities makes lab practicals harder without impro
 ## Key Principles
 
 - **Zero Assistance**: No autocomplete, no code suggestions, no Copilot/AI features, and no automated grading.
-- **Lab-Safe Execution**: Student code runs in isolated process groups with watchdog timeouts, preventing runaway processes or orphaned background tasks on shared lab machines.
+- **Supervised Execution**: Student code runs in its own process group under idle and wall-clock timeouts, an output cap and OS resource limits, so runaway or orphaned processes do not linger on shared lab machines. Network and filesystem isolation depend on the OS; see [Security model](#security-model).
 - **Self-Contained Workspace**: Integrated terminal and one-click build/run systems avoid switching between windows.
-- **Clean Scratch Builds**: Compiler outputs and temporary build artifacts are placed in sandboxed scratch directories, keeping student project folders clean.
+- **Clean Scratch Builds**: Compiler outputs and temporary build artifacts are placed in per-run scratch directories, keeping student project folders clean.
 
 ---
 
@@ -80,9 +80,29 @@ Stripping away all editor capabilities makes lab practicals harder without impro
   - Salivo
   - Web Development (HTML, CSS, JavaScript with preview pane)
 - **Integrated Terminal**: Native PTY sessions powered by `portable-pty` and `xterm.js`.
-- **Process Supervisor**: Escalated process termination, output stream batching to protect the UI, and configurable timeout enforcement.
+- **Process Supervisor**: Escalated process termination, output stream batching to protect the UI, and configurable idle timeout (see [Security model](#security-model)).
 - **Environment Detection**: Automatic scanning of system `$PATH` for required compilers, interpreters, and shells.
 - **File Explorer**: Project directory management (create, rename, delete, tree view).
+
+---
+
+## Security model
+
+CodeUI limits what student programs can do, but how much depends on the OS. **Help > Copy Diagnostics** reports exactly what is enforced on the current machine.
+
+| | Linux | macOS (untested) | Windows |
+| :--- | :--- | :--- | :--- |
+| Status | Sandboxed when kernel features are available | Sandboxed | **Supervised** (not sandboxed) |
+| Resource limits | rlimits: CPU 300 s, data 1 GiB, file size 256 MiB, 512 open files, 128 processes | rlimits (CPU, file size, open files); memory/process limits not enforced | Job Object: CPU time, per-process memory, active process count, kill-on-close, no crash dialogs |
+| Network | User + network namespace when available; seccomp denies IPv4/IPv6 sockets and io_uring | `sandbox-exec`: no network | Not isolated |
+| Filesystem | Landlock (kernel 5.13+): write only project folder, scratch, `/tmp`, `/dev`; read system/toolchain dirs; rest of home (e.g. `~/.ssh`) unreadable | `sandbox-exec`: writes only project, scratch, temp | Not isolated |
+
+- Only the **run** (exec) phase uses the OS sandbox; the **compile** phase is supervised only. Each Linux layer (`no_new_privs`, namespaces, Landlock, seccomp) degrades independently. If the sandbox cannot be set up at all, the run continues supervised and a notice is shown.
+- **Timeouts:** the run-timeout setting is an *idle* timeout (default 30 s, range 1–300 s, reset by stdin input); hard wall clock 300 s per run; compile 60 s; output capped at 5 MiB per run.
+- **Workspace scoping:** every filesystem command is confined to the open folder (canonicalized paths, `..` rejected, symlink escapes blocked). Files picked via *Open File* are allowlisted individually. Switching or closing the folder kills all terminals and runs; unsaved changes prompt Save All / Don't Save / Cancel on folder switch, close folder, tab close and quit.
+- **Extensions:** only declarative contributions (grammars, language configurations, themes, icons, README) are used; extension JavaScript never executes. VSIX limits: 150 MiB download, 20 MiB per file, 64 MiB total, 50,000 entries; traversal, absolute and symlink entries are rejected. The AI policy (`src-tauri/ai-policy.json`) is a multi-signal policy for *known and identifiable* AI-assistance extensions; it cannot detect every AI extension.
+- **HTML preview:** a sandboxed iframe (`allow-scripts allow-modals`, no same-origin) with an injected CSP; extension README HTML goes through a sanitizer with a protocol allowlist. Known limit: the `srcdoc` preview inherits the app CSP, so inline student `<script>` may not run in the built app.
+- The integrated terminal is a normal shell with the user's privileges; it is not sandboxed.
 
 ---
 

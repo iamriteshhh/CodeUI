@@ -3,3 +3,6 @@
 let markReady: () => void = () => {};
 export const terminalReady = new Promise<void>((resolve) => (markReady = resolve));
 export const markTerminalReady = () => markReady();
+
+/** Dispatched on window after the workspace changed or closed; TerminalPanel drops its shell and run bindings. */
+export const WORKSPACE_RESET_EVENT = "codeui-workspace-reset";

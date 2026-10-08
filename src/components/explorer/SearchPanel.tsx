@@ -25,7 +25,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<SearchResult[]>([]);
   const [collapsedFiles, setCollapsedFiles] = useState<Set<string>>(new Set());
-  const debounceTimer = useRef<any>(null);
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Perform search with debounce
   useEffect(() => {

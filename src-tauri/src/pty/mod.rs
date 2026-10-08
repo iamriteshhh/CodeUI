@@ -156,15 +156,25 @@ impl PtyManager {
             None
         };
 
-        self.sessions.lock().expect("pty sessions").insert(
-            id.clone(),
-            PtySession {
-                master: pair.master,
-                _slave: slave_handle,
-                writer: Arc::new(Mutex::new(writer)),
-                child,
-            },
-        );
+        let session = PtySession {
+            master: pair.master,
+            _slave: slave_handle,
+            writer: Arc::new(Mutex::new(writer)),
+            child,
+        };
+        {
+            // Re-checked under the lock: a concurrent spawn with the same id may
+            // have won since the early check. Inserting blindly would drop the
+            // other session's handle and orphan its shell.
+            let mut sessions = self.sessions.lock().expect("pty sessions");
+            if sessions.contains_key(&id) {
+                drop(sessions);
+                let mut session = session;
+                session.kill();
+                return Err(PtyError::AlreadyExists(id));
+            }
+            sessions.insert(id.clone(), session);
+        }
 
         std::thread::spawn(move || {
             let mut reader = reader;
@@ -233,10 +243,14 @@ impl PtyManager {
     }
 
     pub fn kill(&self, id: &str) -> Result<(), PtyError> {
-        let mut sessions = self.sessions.lock().expect("pty sessions");
-        let mut session = sessions
+        let mut session = self
+            .sessions
+            .lock()
+            .expect("pty sessions")
             .remove(id)
             .ok_or_else(|| PtyError::UnknownSession(id.to_string()))?;
+        // Killed after releasing the map: waiting on a dying shell must not
+        // block every other terminal.
         session.kill();
         Ok(())
     }
@@ -250,10 +264,17 @@ impl PtyManager {
             .collect()
     }
 
-    /// Destroys every shell. Called on window close so no session outlives the app.
+    /// Destroys every shell. Called on app exit and when the workspace changes,
+    /// so no session outlives its workspace.
     pub fn shutdown_all(&self) {
-        let mut sessions = self.sessions.lock().expect("pty sessions");
-        for (_, mut session) in sessions.drain() {
+        let sessions: Vec<PtySession> = self
+            .sessions
+            .lock()
+            .expect("pty sessions")
+            .drain()
+            .map(|(_, s)| s)
+            .collect();
+        for mut session in sessions {
             session.kill();
         }
     }
@@ -278,6 +299,7 @@ pub fn default_shell() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicBool, Ordering};
 
     #[test]
     fn test_pty_spawn_and_write() {
@@ -333,6 +355,152 @@ mod tests {
             output
         );
         let _ = mgr.kill(&id);
+    }
+
+    fn opts(id: &str) -> PtySpawnOptions {
+        PtySpawnOptions {
+            id: id.to_string(),
+            shell: None,
+            cwd: None,
+            cols: 80,
+            rows: 24,
+        }
+    }
+
+    /// Writes `marker` until it shows up in the session's output.
+    fn echo_round_trip(mgr: &PtyManager, id: &str, out: &Arc<Mutex<String>>, marker: &str) -> bool {
+        let cmd = if cfg!(windows) {
+            format!("echo {marker}\r\n")
+        } else {
+            format!("echo {marker}\n")
+        };
+        let start = std::time::Instant::now();
+        while start.elapsed() < std::time::Duration::from_secs(10) {
+            let _ = mgr.write(id, &cmd);
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            if out.lock().unwrap().contains(marker) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn spawn_capturing(mgr: &PtyManager, id: &str) -> (Arc<Mutex<String>>, Arc<AtomicBool>) {
+        let out = Arc::new(Mutex::new(String::new()));
+        let exited = Arc::new(AtomicBool::new(false));
+        let (o, e) = (Arc::clone(&out), Arc::clone(&exited));
+        mgr.spawn(
+            opts(id),
+            move |data| o.lock().unwrap().push_str(&data),
+            move || e.store(true, Ordering::SeqCst),
+        )
+        .expect("spawn pty");
+        (out, exited)
+    }
+
+    fn wait_for(flag: &AtomicBool) -> bool {
+        let start = std::time::Instant::now();
+        while start.elapsed() < std::time::Duration::from_secs(10) {
+            if flag.load(Ordering::SeqCst) {
+                return true;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        false
+    }
+
+    #[test]
+    fn resize_and_kill_lifecycle() {
+        let mgr = PtyManager::default();
+        let (_out, exited) = spawn_capturing(&mgr, "life");
+        assert_eq!(mgr.session_ids(), vec!["life".to_string()]);
+
+        mgr.resize("life", 120, 40).expect("resize live session");
+        mgr.kill("life").expect("kill live session");
+
+        assert!(mgr.session_ids().is_empty());
+        assert!(
+            wait_for(&exited),
+            "reader thread must report exit after kill"
+        );
+        // A killed session is gone for every operation, not half-alive.
+        assert!(matches!(
+            mgr.write("life", "x"),
+            Err(PtyError::UnknownSession(_))
+        ));
+        assert!(matches!(
+            mgr.resize("life", 80, 24),
+            Err(PtyError::UnknownSession(_))
+        ));
+        assert!(matches!(mgr.kill("life"), Err(PtyError::UnknownSession(_))));
+    }
+
+    #[test]
+    fn unknown_session_operations_fail_cleanly() {
+        let mgr = PtyManager::default();
+        assert!(matches!(
+            mgr.write("nope", "x"),
+            Err(PtyError::UnknownSession(_))
+        ));
+        assert!(matches!(
+            mgr.resize("nope", 80, 24),
+            Err(PtyError::UnknownSession(_))
+        ));
+        assert!(matches!(mgr.kill("nope"), Err(PtyError::UnknownSession(_))));
+    }
+
+    #[test]
+    fn sessions_are_independent() {
+        let mgr = PtyManager::default();
+        let (out_a, _) = spawn_capturing(&mgr, "a");
+        let (out_b, _) = spawn_capturing(&mgr, "b");
+        let mut ids = mgr.session_ids();
+        ids.sort();
+        assert_eq!(ids, vec!["a".to_string(), "b".to_string()]);
+
+        mgr.kill("a").unwrap();
+        // Killing one terminal leaves the other fully working.
+        assert!(echo_round_trip(&mgr, "b", &out_b, "CODEUI_B_ALIVE"));
+        assert!(!out_a.lock().unwrap().contains("CODEUI_B_ALIVE"));
+        mgr.kill("b").unwrap();
+    }
+
+    #[test]
+    fn shutdown_all_leaves_no_sessions() {
+        let mgr = PtyManager::default();
+        let exits: Vec<_> = (0..3)
+            .map(|i| spawn_capturing(&mgr, &format!("s{i}")).1)
+            .collect();
+        assert_eq!(mgr.session_ids().len(), 3);
+
+        mgr.shutdown_all();
+
+        assert!(mgr.session_ids().is_empty());
+        for exited in &exits {
+            assert!(wait_for(exited), "every shell must exit on shutdown");
+        }
+        mgr.shutdown_all(); // idempotent
+    }
+
+    #[test]
+    fn concurrent_duplicate_spawns_keep_exactly_one_session() {
+        let mgr = Arc::new(PtyManager::default());
+        let threads: Vec<_> = (0..4)
+            .map(|_| {
+                let mgr = Arc::clone(&mgr);
+                std::thread::spawn(move || mgr.spawn(opts("race"), |_| {}, || {}))
+            })
+            .collect();
+        let results: Vec<_> = threads.into_iter().map(|t| t.join().unwrap()).collect();
+
+        let ok = results.iter().filter(|r| r.is_ok()).count();
+        assert_eq!(ok, 1, "exactly one spawn wins: {results:?}");
+        assert!(results
+            .iter()
+            .filter_map(|r| r.as_ref().err())
+            .all(|e| matches!(e, PtyError::AlreadyExists(_))));
+        assert_eq!(mgr.session_ids(), vec!["race".to_string()]);
+        mgr.shutdown_all();
     }
 
     #[test]

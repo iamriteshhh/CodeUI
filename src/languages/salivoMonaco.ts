@@ -1,12 +1,14 @@
 // Monaco language definition and Monarch tokenizer for Salivo
 // High-performance systems language with stream header imports (><)
 
-export function registerSalivoLanguage(monaco: any) {
+import type * as Monaco from "../monaco";
+
+export function registerSalivoLanguage(monaco: typeof Monaco) {
   if (!monaco || !monaco.languages) return;
 
   // 1. Register language ID
   const existingLanguages = monaco.languages.getLanguages();
-  if (!existingLanguages.some((l: any) => l.id === "salivo")) {
+  if (!existingLanguages.some((l) => l.id === "salivo")) {
     monaco.languages.register({
       id: "salivo",
       extensions: [".sal", ".sf", ".slv"],

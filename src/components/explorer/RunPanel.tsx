@@ -8,6 +8,8 @@ interface RunPanelProps {
   onRunFile: () => void;
   onRefreshTools: () => void;
   onOpenTerminal: () => void;
+  /** Configured idle timeout (settings.runTimeoutSecs). */
+  runTimeoutSecs: number;
 }
 
 export const RunPanel: React.FC<RunPanelProps> = ({
@@ -16,6 +18,7 @@ export const RunPanel: React.FC<RunPanelProps> = ({
   onRunFile,
   onRefreshTools,
   onOpenTerminal,
+  runTimeoutSecs,
 }) => {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "16px", color: "#ccc" }}>
@@ -133,7 +136,7 @@ export const RunPanel: React.FC<RunPanelProps> = ({
       <div style={{ borderTop: "1px solid #333", paddingTop: 14 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#888", marginBottom: 10 }}>
           <Clock size={13} />
-          <span>Lab-Safe: 12s timeout limit enabled</span>
+          <span>Lab-Safe: programs idle for {runTimeoutSecs}s are stopped</span>
         </div>
         <button
           onClick={onOpenTerminal}

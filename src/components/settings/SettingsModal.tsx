@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { X, Settings as SettingsIcon, Save, RotateCcw } from "lucide-react";
 import { UserSettings } from "../../types";
+import { DEFAULT_SETTINGS } from "../../services/settingsService";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -15,24 +16,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   onSave,
 }) => {
-  const [theme, setTheme] = useState<"dark" | "light">(settings.theme || "dark");
-  const [fontSize, setFontSize] = useState<number>(settings.fontSize || 14);
-  const [tabWidth, setTabWidth] = useState<number>(settings.tabWidth || 4);
-  const [runTimeoutSecs, setRunTimeoutSecs] = useState<number>(settings.runTimeoutSecs || 30);
+  const [theme, setTheme] = useState<"dark" | "light">(settings.theme || DEFAULT_SETTINGS.theme);
+  const [fontSize, setFontSize] = useState<number>(settings.fontSize || DEFAULT_SETTINGS.fontSize);
+  const [tabWidth, setTabWidth] = useState<number>(settings.tabWidth || DEFAULT_SETTINGS.tabWidth);
+  const [runTimeoutSecs, setRunTimeoutSecs] = useState<number>(
+    settings.runTimeoutSecs || DEFAULT_SETTINGS.runTimeoutSecs
+  );
   const [shellPath, setShellPath] = useState<string>(settings.shellPath || "");
   const [showWelcome, setShowWelcome] = useState<boolean>(
-    settings.showWelcomeOnStartup !== undefined ? settings.showWelcomeOnStartup : true
+    settings.showWelcomeOnStartup ?? DEFAULT_SETTINGS.showWelcomeOnStartup ?? true
   );
 
   useEffect(() => {
-    setTheme(settings.theme || "dark");
-    setFontSize(settings.fontSize || 14);
-    setTabWidth(settings.tabWidth || 4);
-    setRunTimeoutSecs(settings.runTimeoutSecs || 30);
+    setTheme(settings.theme || DEFAULT_SETTINGS.theme);
+    setFontSize(settings.fontSize || DEFAULT_SETTINGS.fontSize);
+    setTabWidth(settings.tabWidth || DEFAULT_SETTINGS.tabWidth);
+    setRunTimeoutSecs(settings.runTimeoutSecs || DEFAULT_SETTINGS.runTimeoutSecs);
     setShellPath(settings.shellPath || "");
-    setShowWelcome(
-      settings.showWelcomeOnStartup !== undefined ? settings.showWelcomeOnStartup : true
-    );
+    setShowWelcome(settings.showWelcomeOnStartup ?? DEFAULT_SETTINGS.showWelcomeOnStartup ?? true);
   }, [settings]);
 
   if (!isOpen) return null;
@@ -43,7 +44,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       theme,
       fontSize,
       tabWidth,
-      runTimeoutSecs,
+      // Same bounds as the input; an empty or invalid field falls back to the default.
+      runTimeoutSecs: Math.min(300, Math.max(1, Math.round(runTimeoutSecs) || DEFAULT_SETTINGS.runTimeoutSecs)),
       shellPath: shellPath.trim() || null,
       showWelcomeOnStartup: showWelcome,
     });
@@ -51,12 +53,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const handleReset = () => {
-    setTheme("dark");
-    setFontSize(14);
-    setTabWidth(4);
-    setRunTimeoutSecs(12);
-    setShellPath("");
-    setShowWelcome(true);
+    setTheme(DEFAULT_SETTINGS.theme);
+    setFontSize(DEFAULT_SETTINGS.fontSize);
+    setTabWidth(DEFAULT_SETTINGS.tabWidth);
+    setRunTimeoutSecs(DEFAULT_SETTINGS.runTimeoutSecs);
+    setShellPath(DEFAULT_SETTINGS.shellPath || "");
+    setShowWelcome(DEFAULT_SETTINGS.showWelcomeOnStartup ?? true);
   };
 
   return (
@@ -187,8 +189,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* Execution Timeout */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-bright)" }}>Run Timeout (Secs)</div>
-              <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Lab-safe protection against infinite loops</div>
+              <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-bright)" }}>Idle Timeout (Secs)</div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                Stop a running program after this many seconds with no activity
+              </div>
             </div>
             <input
               type="number"

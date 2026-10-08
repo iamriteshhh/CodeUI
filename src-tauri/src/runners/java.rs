@@ -28,32 +28,52 @@ impl LanguageRunner for JavaRunner {
         require_tool("java")?;
         let source = std::fs::read_to_string(&ctx.source)
             .map_err(|e| RunnerError::SourceUnreadable(e.to_string()))?;
-        let detected = detect_main_class(&source).ok_or_else(|| {
-            RunnerError::Invalid("could not find a class declaration in this file".into())
-        })?;
+        let scan = scan_top_level(&source);
+        let stem = ctx.stem();
 
         // javac rejects a public class whose file name differs, with a message
         // that sends students hunting through their code. Catch it up front,
         // before any compile runs, and say exactly what to rename.
-        let stem = ctx.stem();
-        if detected.is_public && detected.name != stem {
-            return Err(RunnerError::Invalid(format!(
-                "public class `{}` must live in a file named `{}.java`, but this file is `{}.java`. \
-                 Rename the file to `{}.java`, or rename the class to `{}`.",
-                detected.name, detected.name, stem, detected.name, stem
-            )));
+        if let Some(public) = scan.types.iter().find(|t| t.is_public) {
+            if public.name != stem {
+                let name = &public.name;
+                return Err(RunnerError::Invalid(format!(
+                    "public class `{name}` must live in a file named `{name}.java`, but this file is `{stem}.java`. \
+                     Rename the file to `{name}.java`, or rename the class to `{stem}`."
+                )));
+            }
         }
+
+        let entry = match pick_entry(&scan.types) {
+            Some(found) => found.name.clone(),
+            // A compact source file (Java 25+): `void main()` with no class
+            // around it. javac names the implicit class after the file.
+            None if scan.top_level_main => stem,
+            None => {
+                return Err(RunnerError::Invalid(
+                    "No class found in this file. A Java program needs a class with a \
+                     `public static void main(String[] args)` method."
+                        .into(),
+                ))
+            }
+        };
 
         // javac writes a packaged class to <scratch>/com/example/Name.class, and
         // `java` only finds it by its fully qualified name.
         let entry_point = match detect_package(&source) {
-            Some(package) => format!("{package}.{}", detected.name),
-            None => detected.name,
+            Some(package) => format!("{package}.{entry}"),
+            None => entry,
         };
 
         Ok(CommandSpec::new(
             "java",
             vec![
+                // Keep the heap inside the sandbox memory limit, so a runaway
+                // program gets an OutOfMemoryError instead of a JVM crash.
+                format!(
+                    "-Xmx{}m",
+                    crate::proc::sandbox::MEMORY_LIMIT_BYTES / 2 / (1024 * 1024)
+                ),
                 "-cp".into(),
                 ctx.scratch.to_string_lossy().into_owned(),
                 entry_point,
@@ -94,49 +114,96 @@ pub struct DetectedClass {
     pub is_public: bool,
 }
 
-/// Finds the class to hand to `java`, preferring the `public` one.
+/// A top-level type (class, interface, enum or record).
+struct TopLevelType {
+    name: String,
+    is_public: bool,
+    /// Declares `void main(` directly in its body.
+    has_main: bool,
+}
+
+struct Scan {
+    types: Vec<TopLevelType>,
+    /// `void main(` outside any type: a Java 25 compact source file.
+    top_level_main: bool,
+}
+
+/// Lists the top-level types, ignoring nested ones and anything inside
+/// comments or string literals.
+fn scan_top_level(source: &str) -> Scan {
+    let cleaned = strip_comments_and_literals(source);
+    let tokens: Vec<&str> = cleaned.split_whitespace().collect();
+    let mut scan = Scan {
+        types: Vec::new(),
+        top_level_main: false,
+    };
+    let mut depth = 0usize;
+
+    for (i, token) in tokens.iter().enumerate() {
+        match *token {
+            "{" => depth += 1,
+            "}" => depth = depth.saturating_sub(1),
+            "class" | "interface" | "enum" | "record" if depth == 0 => {
+                if let Some(name) = tokens.get(i + 1).and_then(|t| sanitize_identifier(t)) {
+                    scan.types.push(TopLevelType {
+                        name,
+                        is_public: is_public_declaration(&tokens, i),
+                        has_main: false,
+                    });
+                }
+            }
+            "main" if i > 0 && tokens[i - 1] == "void" && tokens.get(i + 1) == Some(&"(") => {
+                match (depth, scan.types.last_mut()) {
+                    (1, Some(current)) => current.has_main = true,
+                    (0, _) => scan.top_level_main = true,
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+    }
+    scan
+}
+
+/// The type `java` should launch: one with a `main` method (public first),
+/// else the public type, else the first.
+fn pick_entry(types: &[TopLevelType]) -> Option<&TopLevelType> {
+    types
+        .iter()
+        .find(|t| t.has_main && t.is_public)
+        .or_else(|| types.iter().find(|t| t.has_main))
+        .or_else(|| types.iter().find(|t| t.is_public))
+        .or_else(|| types.first())
+}
+
+/// Finds the class to hand to `java`.
 ///
 /// Java requires the public class to match the filename, but students rename
 /// files constantly, so the declaration in the source is the source of truth.
 pub fn detect_main_class(source: &str) -> Option<DetectedClass> {
-    let cleaned = strip_comments_and_literals(source);
-    let tokens: Vec<&str> = cleaned.split_whitespace().collect();
-
-    let mut first_class: Option<DetectedClass> = None;
-
-    for (i, token) in tokens.iter().enumerate() {
-        if *token != "class" {
-            continue;
-        }
-        let Some(name) = tokens.get(i + 1).and_then(|t| sanitize_identifier(t)) else {
-            continue;
-        };
-        if is_public_declaration(&tokens, i) {
-            return Some(DetectedClass {
-                name,
-                is_public: true,
-            });
-        }
-        if first_class.is_none() {
-            first_class = Some(DetectedClass {
-                name,
-                is_public: false,
-            });
-        }
-    }
-
-    first_class
+    pick_entry(&scan_top_level(source).types).map(|t| DetectedClass {
+        name: t.name.clone(),
+        is_public: t.is_public,
+    })
 }
 
-/// Walks backwards over modifiers to see whether this declaration is public.
+/// Walks backwards over modifiers and annotations to see whether this
+/// declaration is public.
 fn is_public_declaration(tokens: &[&str], class_idx: usize) -> bool {
-    const MODIFIERS: [&str; 5] = ["final", "abstract", "strictfp", "static", "sealed"];
+    const MODIFIERS: [&str; 6] = [
+        "final",
+        "abstract",
+        "strictfp",
+        "static",
+        "sealed",
+        "non-sealed",
+    ];
     let mut i = class_idx;
     while i > 0 {
         i -= 1;
         match tokens[i] {
             "public" => return true,
-            t if MODIFIERS.contains(&t) => continue,
+            t if MODIFIERS.contains(&t) || t.starts_with('@') => continue,
             _ => return false,
         }
     }
@@ -335,5 +402,162 @@ mod tests {
             let spec = JavaRunner.execute(&ctx).expect("package-private is legal");
             assert_eq!(spec.args.last().unwrap(), "Helper");
         }
+    }
+
+    /// Runs `execute` on `source` saved as `<file>.java`; `None` without a JDK.
+    fn execute_as(file: &str, source: &str) -> Option<Result<CommandSpec, RunnerError>> {
+        if which::which("java").is_err() {
+            eprintln!("skipping: java not installed");
+            return None;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(format!("{file}.java"));
+        std::fs::write(&path, source).unwrap();
+        let ctx = RunContext {
+            source: path,
+            scratch: dir.path().join("build"),
+            workdir: dir.path().to_path_buf(),
+        };
+        Some(JavaRunner.execute(&ctx))
+    }
+
+    #[test]
+    fn public_nested_class_is_not_the_entry_point() {
+        // `public static class Node` is nested: it must not be mistaken for
+        // the file's public class (which would trigger a bogus rename error).
+        let src = "class Main {\n  public static class Node { int v; }\n  \
+                   public static void main(String[] a) {}\n}";
+        let found = detect_main_class(src).unwrap();
+        assert_eq!(found.name, "Main");
+        assert!(!found.is_public);
+    }
+
+    #[test]
+    fn nested_class_inside_public_class() {
+        let src = "public class Outer { static class Inner {} \
+                   public static void main(String[] a) {} }";
+        assert_eq!(name_of(src).as_deref(), Some("Outer"));
+    }
+
+    #[test]
+    fn record_with_main_is_found() {
+        let src = "public record Point(int x, int y) {\n  \
+                   public static void main(String[] args) { }\n}";
+        let found = detect_main_class(src).unwrap();
+        assert_eq!(found.name, "Point");
+        assert!(found.is_public);
+    }
+
+    #[test]
+    fn interface_with_main_is_found() {
+        let src = "interface Shape { double area(); }\n\
+                   interface App { static void main(String[] a) { } }";
+        assert_eq!(name_of(src).as_deref(), Some("App"));
+    }
+
+    #[test]
+    fn class_with_main_wins_among_several_top_level_classes() {
+        let src =
+            "class Helper { int x; }\nclass Runner { public static void main(String[] a) {} }\n\
+                   class Other {}";
+        assert_eq!(name_of(src).as_deref(), Some("Runner"));
+    }
+
+    #[test]
+    fn enum_with_main_is_found() {
+        let src = "enum Color { RED, GREEN; public static void main(String[] a) {} }";
+        assert_eq!(name_of(src).as_deref(), Some("Color"));
+    }
+
+    #[test]
+    fn unicode_identifiers_are_kept_whole() {
+        let src = "public class Caf\u{e9}\u{3b1} { public static void main(String[] a) {} }";
+        assert_eq!(name_of(src).as_deref(), Some("Caf\u{e9}\u{3b1}"));
+    }
+
+    #[test]
+    fn class_keyword_in_comments_strings_and_text_blocks_is_ignored() {
+        let src = "/* public class Ghost { } */\n\
+                   // class Phantom\n\
+                   class Real {\n  \
+                   String a = \"public class Fake {\";\n  \
+                   char q = '\"';\n  \
+                   String b = \"\"\"\n    class TextBlock {\n    \"\"\";\n  \
+                   public static void main(String[] x) {}\n}";
+        let found = detect_main_class(src).unwrap();
+        assert_eq!(found.name, "Real");
+    }
+
+    #[test]
+    fn sealed_and_annotated_public_classes_are_public() {
+        assert!(
+            detect_main_class("@SuppressWarnings public sealed class S permits T {}")
+                .unwrap()
+                .is_public
+        );
+        assert!(
+            detect_main_class("public non-sealed class N extends S {}")
+                .unwrap()
+                .is_public
+        );
+    }
+
+    #[test]
+    fn package_declaration_after_comments() {
+        let src = "/* header */\n// package wrong.one;\npackage edu.lab1;\n\nclass Main {}";
+        assert_eq!(detect_package(src).as_deref(), Some("edu.lab1"));
+    }
+
+    #[test]
+    fn non_public_class_with_main_runs_under_any_filename() {
+        let Some(result) = execute_as(
+            "Whatever",
+            "class Lab { public static void main(String[] a) {} }",
+        ) else {
+            return;
+        };
+        assert_eq!(result.unwrap().args.last().unwrap(), "Lab");
+    }
+
+    #[test]
+    fn filename_mismatch_names_both() {
+        let Some(result) = execute_as("lab1", "public class Lab1 { }") else {
+            return;
+        };
+        let Err(RunnerError::Invalid(msg)) = result else {
+            panic!("expected a mismatch error");
+        };
+        assert!(
+            msg.contains("`Lab1.java`") && msg.contains("`lab1.java`"),
+            "{msg}"
+        );
+    }
+
+    #[test]
+    fn compact_source_file_runs_under_its_file_name() {
+        let Some(result) = execute_as("Hello", "void main() {\n  IO.println(\"hi\");\n}\n") else {
+            return;
+        };
+        assert_eq!(result.unwrap().args.last().unwrap(), "Hello");
+    }
+
+    #[test]
+    fn file_without_any_class_is_explained() {
+        let Some(result) = execute_as("Empty", "// nothing here\nint x = 5;") else {
+            return;
+        };
+        let Err(RunnerError::Invalid(msg)) = result else {
+            panic!("expected an error");
+        };
+        assert!(msg.contains("main"), "{msg}");
+    }
+
+    #[test]
+    fn heap_is_capped_below_the_sandbox_memory_limit() {
+        let Some(result) = execute_as("Main", "public class Main {}") else {
+            return;
+        };
+        let spec = result.unwrap();
+        assert!(spec.args[0].starts_with("-Xmx"), "{:?}", spec.args);
     }
 }

@@ -23,8 +23,8 @@ declare module "*?worker" {
 }
 
 declare module "*monaco-editor/esm/vs/languages/definitions/*" {
-  export const conf: any;
-  export const language: any;
+  export const conf: import("monaco-editor").languages.LanguageConfiguration;
+  export const language: import("monaco-editor").languages.IMonarchLanguage;
 }
 
 

@@ -14,6 +14,64 @@ pub struct ToolStatus {
     pub purpose: String,
     /// Exact Ubuntu command that installs it.
     pub install_hint: String,
+    /// First line of `--version` output. Only filled in by the diagnostics
+    /// report (see [`fill_versions`]); absent from the field otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+}
+
+/// How long one `--version` call may take before it is abandoned.
+const VERSION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// Asks every available tool for its version, in parallel and bounded by
+/// [`VERSION_TIMEOUT`], for the diagnostics report.
+pub fn fill_versions(tools: &mut [ToolStatus]) {
+    std::thread::scope(|scope| {
+        // Shells have no uniform version flag and would start interactively.
+        for tool in tools.iter_mut().filter(|t| t.name != "shell") {
+            if let Some(path) = tool.path.clone() {
+                // Java 8 only understands the single-dash form.
+                let flag = if matches!(tool.name.as_str(), "java" | "javac") {
+                    "-version"
+                } else {
+                    "--version"
+                };
+                scope.spawn(move || tool.version = version_of(&path, flag));
+            }
+        }
+    });
+}
+
+fn version_of(path: &str, flag: &str) -> Option<String> {
+    use std::process::{Command, Stdio};
+    let mut cmd = Command::new(path);
+    cmd.arg(flag)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    crate::proc::detach_process_group(&mut cmd);
+    let mut child = cmd.spawn().ok()?;
+
+    let deadline = std::time::Instant::now() + VERSION_TIMEOUT;
+    while child.try_wait().ok()?.is_none() {
+        if std::time::Instant::now() >= deadline {
+            let _ = crate::proc::kill_tree(&mut child);
+            return None;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    let out = child.wait_with_output().ok()?;
+    // `java -version` and older tools print to stderr.
+    [out.stdout, out.stderr]
+        .iter()
+        .flat_map(|bytes| {
+            String::from_utf8_lossy(bytes)
+                .lines()
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        })
+        .map(|line| line.trim().to_string())
+        .find(|line| !line.is_empty())
 }
 
 struct ToolSpec {
@@ -116,6 +174,7 @@ pub fn detect_tools() -> Vec<ToolStatus> {
                 path,
                 purpose: spec.purpose.to_string(),
                 install_hint: spec.install_hint.to_string(),
+                version: None,
             }
         })
         .collect();
@@ -136,6 +195,7 @@ pub fn detect_tools() -> Vec<ToolStatus> {
         path: shell_path,
         purpose: "Powers the integrated terminal".to_string(),
         install_hint: shell_hint,
+        version: None,
     });
 
     out

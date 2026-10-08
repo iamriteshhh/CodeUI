@@ -28,7 +28,7 @@ export function formatError(err: unknown): string {
   if (typeof err === "string") return err;
 
   if (typeof err === "object") {
-    const obj = err as Record<string, any>;
+    const obj = err as Record<string, unknown>;
     if (typeof obj.message === "string") {
       if (typeof obj.kind === "string" && obj.kind.trim()) {
         return `${obj.kind}: ${obj.message}`;

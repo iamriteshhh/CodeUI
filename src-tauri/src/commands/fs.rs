@@ -1,9 +1,15 @@
 //! Filesystem commands. Each maps 1:1 to a typed wrapper in `src/services/fsService.ts`.
+//!
+//! Every path is scoped to the open workspace by [`WorkspaceState`]; the
+//! `*_sync` helpers take the state explicitly so tests can drive them directly.
 
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Manager, State};
+
+use crate::commands::workspace::WorkspaceState;
 
 #[derive(Debug, thiserror::Error, Serialize)]
 #[serde(tag = "kind", content = "message")]
@@ -47,12 +53,25 @@ pub struct FileEntry {
     pub modified: Option<u64>,
 }
 
-/// Rejects empty paths before they reach the OS.
-fn validate(path: &str) -> Result<PathBuf, FsError> {
-    if path.trim().is_empty() {
-        return Err(FsError::InvalidPath);
+/// Runs a scoped filesystem operation off the IPC thread.
+async fn blocking<T: Send + 'static>(
+    app: AppHandle,
+    op: impl FnOnce(&WorkspaceState) -> Result<T, FsError> + Send + 'static,
+) -> Result<T, FsError> {
+    tauri::async_runtime::spawn_blocking(move || op(&app.state::<WorkspaceState>()))
+        .await
+        .map_err(|e| FsError::Io(e.to_string()))?
+}
+
+/// The workspace root itself may be listed and searched but never deleted or renamed.
+fn refuse_root(ws: &WorkspaceState, p: &Path) -> Result<(), FsError> {
+    if ws.root().as_deref() == Some(p) {
+        return Err(FsError::PermissionDenied(format!(
+            "Refusing to modify the workspace folder itself: {}",
+            p.display()
+        )));
     }
-    Ok(PathBuf::from(path))
+    Ok(())
 }
 
 /// Identifies filesystem roots and critical OS paths to guard against destructive mutations.
@@ -107,20 +126,18 @@ pub fn is_dangerous_system_path(path: &Path) -> bool {
     false
 }
 
-pub fn read_file_sync(path: &str) -> Result<String, FsError> {
-    let p = validate(path)?;
+pub fn read_file_sync(ws: &WorkspaceState, path: &str) -> Result<String, FsError> {
+    let p = ws.resolve(path)?;
     std::fs::read_to_string(&p).map_err(|e| FsError::from_io(e, &p))
 }
 
 #[tauri::command]
-pub async fn read_file(path: String) -> Result<String, FsError> {
-    tauri::async_runtime::spawn_blocking(move || read_file_sync(&path))
-        .await
-        .map_err(|e| FsError::Io(e.to_string()))?
+pub async fn read_file(app: AppHandle, path: String) -> Result<String, FsError> {
+    blocking(app, move |ws| read_file_sync(ws, &path)).await
 }
 
-pub fn write_file_sync(path: &str, contents: &str) -> Result<(), FsError> {
-    let p = validate(path)?;
+pub fn write_file_sync(ws: &WorkspaceState, path: &str, contents: &str) -> Result<(), FsError> {
+    let p = ws.resolve(path)?;
     if is_dangerous_system_path(&p) {
         return Err(FsError::PermissionDenied(format!(
             "Refusing to write to protected system path: {path}"
@@ -170,14 +187,12 @@ pub fn write_file_sync(path: &str, contents: &str) -> Result<(), FsError> {
 }
 
 #[tauri::command]
-pub async fn write_file(path: String, contents: String) -> Result<(), FsError> {
-    tauri::async_runtime::spawn_blocking(move || write_file_sync(&path, &contents))
-        .await
-        .map_err(|e| FsError::Io(e.to_string()))?
+pub async fn write_file(app: AppHandle, path: String, contents: String) -> Result<(), FsError> {
+    blocking(app, move |ws| write_file_sync(ws, &path, &contents)).await
 }
 
-pub fn list_dir_sync(path: &str) -> Result<Vec<FileEntry>, FsError> {
-    let p = validate(path)?;
+pub fn list_dir_sync(ws: &WorkspaceState, path: &str) -> Result<Vec<FileEntry>, FsError> {
+    let p = ws.resolve(path)?;
     if p.exists() && !p.is_dir() {
         return Err(FsError::NotADirectory(p.display().to_string()));
     }
@@ -197,7 +212,11 @@ pub fn list_dir_sync(path: &str) -> Result<Vec<FileEntry>, FsError> {
 
         out.push(FileEntry {
             name: entry.file_name().to_string_lossy().into_owned(),
-            path: entry.path().to_string_lossy().into_owned(),
+            // Report children in the form the UI asked with, not the canonical one.
+            path: Path::new(path)
+                .join(entry.file_name())
+                .to_string_lossy()
+                .into_owned(),
             is_dir: meta.is_dir(),
             size: meta.len(),
             modified,
@@ -214,14 +233,12 @@ pub fn list_dir_sync(path: &str) -> Result<Vec<FileEntry>, FsError> {
 }
 
 #[tauri::command]
-pub async fn list_dir(path: String) -> Result<Vec<FileEntry>, FsError> {
-    tauri::async_runtime::spawn_blocking(move || list_dir_sync(&path))
-        .await
-        .map_err(|e| FsError::Io(e.to_string()))?
+pub async fn list_dir(app: AppHandle, path: String) -> Result<Vec<FileEntry>, FsError> {
+    blocking(app, move |ws| list_dir_sync(ws, &path)).await
 }
 
-pub fn create_file_sync(path: &str) -> Result<(), FsError> {
-    let p = validate(path)?;
+pub fn create_file_sync(ws: &WorkspaceState, path: &str) -> Result<(), FsError> {
+    let p = ws.resolve(path)?;
     if is_dangerous_system_path(&p) {
         return Err(FsError::PermissionDenied(format!(
             "Refusing to create file in protected system path: {path}"
@@ -233,18 +250,22 @@ pub fn create_file_sync(path: &str) -> Result<(), FsError> {
     if let Some(parent) = p.parent() {
         std::fs::create_dir_all(parent).map_err(|e| FsError::from_io(e, parent))?;
     }
-    std::fs::write(&p, "").map_err(|e| FsError::from_io(e, &p))
+    // create_new never follows or replaces whatever appeared since the check.
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&p)
+        .map(drop)
+        .map_err(|e| FsError::from_io(e, &p))
 }
 
 #[tauri::command]
-pub async fn create_file(path: String) -> Result<(), FsError> {
-    tauri::async_runtime::spawn_blocking(move || create_file_sync(&path))
-        .await
-        .map_err(|e| FsError::Io(e.to_string()))?
+pub async fn create_file(app: AppHandle, path: String) -> Result<(), FsError> {
+    blocking(app, move |ws| create_file_sync(ws, &path)).await
 }
 
-pub fn create_dir_sync(path: &str) -> Result<(), FsError> {
-    let p = validate(path)?;
+pub fn create_dir_sync(ws: &WorkspaceState, path: &str) -> Result<(), FsError> {
+    let p = ws.resolve(path)?;
     if is_dangerous_system_path(&p) {
         return Err(FsError::PermissionDenied(format!(
             "Refusing to create directory in protected system path: {path}"
@@ -257,39 +278,45 @@ pub fn create_dir_sync(path: &str) -> Result<(), FsError> {
 }
 
 #[tauri::command]
-pub async fn create_dir(path: String) -> Result<(), FsError> {
-    tauri::async_runtime::spawn_blocking(move || create_dir_sync(&path))
-        .await
-        .map_err(|e| FsError::Io(e.to_string()))?
+pub async fn create_dir(app: AppHandle, path: String) -> Result<(), FsError> {
+    blocking(app, move |ws| create_dir_sync(ws, &path)).await
 }
 
-pub fn rename_file_sync(old_path: &str, new_path: &str) -> Result<(), FsError> {
-    let from = validate(old_path)?;
-    let to = validate(new_path)?;
+pub fn rename_file_sync(
+    ws: &WorkspaceState,
+    old_path: &str,
+    new_path: &str,
+) -> Result<(), FsError> {
+    let from = ws.resolve_entry(old_path)?;
+    let to = ws.resolve_entry(new_path)?;
+    refuse_root(ws, &from)?;
     if is_dangerous_system_path(&from) || is_dangerous_system_path(&to) {
         return Err(FsError::PermissionDenied(
             "Cannot rename protected system or root paths".into(),
         ));
     }
-    if !from.exists() {
+    if std::fs::symlink_metadata(&from).is_err() {
         return Err(FsError::NotFound(from.display().to_string()));
     }
     // rename() would silently clobber an existing target.
-    if to.exists() {
+    if std::fs::symlink_metadata(&to).is_ok() {
         return Err(FsError::AlreadyExists(to.display().to_string()));
     }
     std::fs::rename(&from, &to).map_err(|e| FsError::from_io(e, &from))
 }
 
 #[tauri::command]
-pub async fn rename_file(old_path: String, new_path: String) -> Result<(), FsError> {
-    tauri::async_runtime::spawn_blocking(move || rename_file_sync(&old_path, &new_path))
-        .await
-        .map_err(|e| FsError::Io(e.to_string()))?
+pub async fn rename_file(
+    app: AppHandle,
+    old_path: String,
+    new_path: String,
+) -> Result<(), FsError> {
+    blocking(app, move |ws| rename_file_sync(ws, &old_path, &new_path)).await
 }
 
-pub fn delete_file_sync(path: &str) -> Result<(), FsError> {
-    let p = validate(path)?;
+pub fn delete_file_sync(ws: &WorkspaceState, path: &str) -> Result<(), FsError> {
+    let p = ws.resolve_entry(path)?;
+    refuse_root(ws, &p)?;
     if is_dangerous_system_path(&p) {
         return Err(FsError::PermissionDenied(format!(
             "Refusing to delete protected system path: {path}"
@@ -298,18 +325,23 @@ pub fn delete_file_sync(path: &str) -> Result<(), FsError> {
     let meta = std::fs::symlink_metadata(&p).map_err(|e| FsError::from_io(e, &p))?;
     if meta.is_dir() {
         std::fs::remove_dir_all(&p).map_err(|e| FsError::from_io(e, &p))
+    } else if meta.is_symlink() {
+        // Removes the link only. Windows directory links need remove_dir.
+        std::fs::remove_file(&p)
+            .or_else(|_| std::fs::remove_dir(&p))
+            .map_err(|e| FsError::from_io(e, &p))
     } else {
         std::fs::remove_file(&p).map_err(|e| FsError::from_io(e, &p))
     }
 }
 
 #[tauri::command]
-pub async fn delete_file(path: String) -> Result<(), FsError> {
-    tauri::async_runtime::spawn_blocking(move || delete_file_sync(&path))
-        .await
-        .map_err(|e| FsError::Io(e.to_string()))?
+pub async fn delete_file(app: AppHandle, path: String) -> Result<(), FsError> {
+    blocking(app, move |ws| delete_file_sync(ws, &path)).await
 }
 
+/// Unscoped on purpose: the UI checks the remembered folder before opening it.
+/// It only ever reveals a boolean.
 #[tauri::command]
 pub fn path_exists(path: String) -> bool {
     !path.trim().is_empty() && Path::new(&path).exists()
@@ -335,8 +367,13 @@ pub async fn pick_folder(default_path: Option<String>) -> Result<Option<String>,
     Ok(res)
 }
 
+/// The picked file is allowlisted so it can be opened even when it lies
+/// outside the workspace; nothing else outside the workspace is.
 #[tauri::command]
-pub async fn pick_file(default_path: Option<String>) -> Result<Option<String>, String> {
+pub async fn pick_file(
+    state: State<'_, WorkspaceState>,
+    default_path: Option<String>,
+) -> Result<Option<String>, String> {
     let res = tauri::async_runtime::spawn_blocking(move || {
         let mut dialog = rfd::FileDialog::new().set_title("Open File");
         if let Some(ref path) = default_path {
@@ -354,6 +391,11 @@ pub async fn pick_file(default_path: Option<String>) -> Result<Option<String>, S
     .await
     .map_err(|e| e.to_string())?;
 
+    if let Some(path) = &res {
+        state
+            .allow_external(Path::new(path))
+            .map_err(|e| e.to_string())?;
+    }
     Ok(res)
 }
 
@@ -400,147 +442,88 @@ pub struct SearchResult {
     pub line_content: String,
 }
 
-#[tauri::command]
-pub async fn search_files(
-    workspace_path: String,
-    query: String,
-    case_sensitive: Option<bool>,
-    max_results: Option<usize>,
-) -> Result<Vec<SearchResult>, String> {
+/// Resolves a search root inside the workspace (the root or a subfolder).
+fn search_root(ws: &WorkspaceState, requested: &str) -> Result<PathBuf, FsError> {
+    let root = ws.resolve(requested)?;
+    if !root.is_dir() {
+        return Err(FsError::NotADirectory(requested.to_string()));
+    }
+    Ok(root)
+}
+
+/// Reports a hit under the root the UI sent rather than the canonical one.
+fn display_path(requested: &Path, canon_root: &Path, found: &Path) -> String {
+    found
+        .strip_prefix(canon_root)
+        .map(|rel| requested.join(rel))
+        .unwrap_or_else(|_| found.to_path_buf())
+        .to_string_lossy()
+        .into_owned()
+}
+
+pub fn search_files_sync(
+    ws: &WorkspaceState,
+    workspace_path: &str,
+    query: &str,
+    is_case_sensitive: bool,
+    limit: usize,
+) -> Result<Vec<SearchResult>, FsError> {
     let q = query.trim().to_string();
     if q.is_empty() {
         return Ok(Vec::new());
     }
+    let root = search_root(ws, workspace_path)?;
+    let requested = Path::new(workspace_path);
 
-    let root = PathBuf::from(workspace_path);
-    if !root.exists() || !root.is_dir() {
-        return Ok(Vec::new());
-    }
+    let mut matches = Vec::new();
+    // follow_links(false): a symlink inside the workspace must not lead the walk out of it.
+    let walker = walkdir::WalkDir::new(&root)
+        .follow_links(false)
+        .into_iter()
+        .filter_entry(|entry| {
+            let name = entry.file_name().to_string_lossy();
+            !name.starts_with(".git")
+                && name != "node_modules"
+                && name != "target"
+                && name != "dist"
+                && name != ".next"
+                && name != "__pycache__"
+                && name != ".venv"
+        });
 
-    let is_case_sensitive = case_sensitive.unwrap_or(false);
-    let limit = max_results.unwrap_or(100);
+    for entry in walker.filter_map(|e| e.ok()) {
+        if matches.len() >= limit {
+            break;
+        }
 
-    let results = tauri::async_runtime::spawn_blocking(move || {
-        let mut matches = Vec::new();
-        let walker = walkdir::WalkDir::new(&root)
-            .follow_links(false)
-            .into_iter()
-            .filter_entry(|entry| {
-                let name = entry.file_name().to_string_lossy();
-                !name.starts_with(".git")
-                    && name != "node_modules"
-                    && name != "target"
-                    && name != "dist"
-                    && name != ".next"
-                    && name != "__pycache__"
-                    && name != ".venv"
-            });
+        if !entry.file_type().is_file() {
+            continue;
+        }
 
-        for entry in walker.filter_map(|e| e.ok()) {
-            if matches.len() >= limit {
-                break;
-            }
-
-            if !entry.file_type().is_file() {
+        let path = entry.path();
+        if let Ok(metadata) = entry.metadata() {
+            if metadata.len() > 2 * 1024 * 1024 {
                 continue;
             }
-
-            let path = entry.path();
-            if let Ok(metadata) = entry.metadata() {
-                if metadata.len() > 2 * 1024 * 1024 {
-                    continue;
-                }
-            }
-
-            if let Ok(content) = std::fs::read_to_string(path) {
-                let file_path = path.to_string_lossy().to_string();
-                let file_name = entry.file_name().to_string_lossy().to_string();
-
-                for (idx, line) in content.lines().enumerate() {
-                    let is_match = if is_case_sensitive {
-                        line.contains(&q)
-                    } else {
-                        line.to_lowercase().contains(&q.to_lowercase())
-                    };
-
-                    if is_match {
-                        matches.push(SearchResult {
-                            file_path: file_path.clone(),
-                            file_name: file_name.clone(),
-                            line_number: idx + 1,
-                            line_content: line.trim().to_string(),
-                        });
-
-                        if matches.len() >= limit {
-                            break;
-                        }
-                    }
-                }
-            }
         }
-        matches
-    })
-    .await
-    .map_err(|e| e.to_string())?;
 
-    Ok(results)
-}
+        if let Ok(content) = std::fs::read_to_string(path) {
+            let file_path = display_path(requested, &root, path);
+            let file_name = entry.file_name().to_string_lossy().to_string();
 
-#[tauri::command]
-pub async fn find_files(
-    workspace_path: String,
-    query: String,
-    max_results: Option<usize>,
-) -> Result<Vec<FileEntry>, String> {
-    let root = PathBuf::from(workspace_path);
-    if !root.exists() || !root.is_dir() {
-        return Ok(Vec::new());
-    }
+            for (idx, line) in content.lines().enumerate() {
+                let is_match = if is_case_sensitive {
+                    line.contains(&q)
+                } else {
+                    line.to_lowercase().contains(&q.to_lowercase())
+                };
 
-    let q = query.trim().to_lowercase();
-    let limit = max_results.unwrap_or(50);
-
-    let results = tauri::async_runtime::spawn_blocking(move || {
-        let mut matches = Vec::new();
-        let walker = walkdir::WalkDir::new(&root)
-            .follow_links(false)
-            .into_iter()
-            .filter_entry(|entry| {
-                let name = entry.file_name().to_string_lossy();
-                !name.starts_with(".git")
-                    && name != "node_modules"
-                    && name != "target"
-                    && name != "dist"
-                    && name != ".next"
-                    && name != "__pycache__"
-                    && name != ".venv"
-            });
-
-        for entry_res in walker.filter_map(Result::ok) {
-            if entry_res.file_type().is_file() {
-                let file_name = entry_res.file_name().to_string_lossy().to_string();
-                let full_path = entry_res.path().to_string_lossy().to_string();
-
-                if q.is_empty()
-                    || file_name.to_lowercase().contains(&q)
-                    || full_path.to_lowercase().contains(&q)
-                {
-                    let metadata = entry_res.metadata().ok();
-                    let size = metadata.as_ref().map(|m| m.len()).unwrap_or(0);
-                    let modified = metadata.and_then(|m| {
-                        m.modified().ok().and_then(|t| {
-                            t.duration_since(std::time::UNIX_EPOCH)
-                                .ok()
-                                .map(|d| d.as_secs())
-                        })
-                    });
-
-                    matches.push(FileEntry {
-                        name: file_name,
-                        path: full_path,
-                        is_dir: false,
-                        size,
-                        modified,
+                if is_match {
+                    matches.push(SearchResult {
+                        file_path: file_path.clone(),
+                        file_name: file_name.clone(),
+                        line_number: idx + 1,
+                        line_content: line.trim().to_string(),
                     });
 
                     if matches.len() >= limit {
@@ -549,12 +532,105 @@ pub async fn find_files(
                 }
             }
         }
-        matches
+    }
+    Ok(matches)
+}
+
+#[tauri::command]
+pub async fn search_files(
+    app: AppHandle,
+    workspace_path: String,
+    query: String,
+    case_sensitive: Option<bool>,
+    max_results: Option<usize>,
+) -> Result<Vec<SearchResult>, String> {
+    blocking(app, move |ws| {
+        search_files_sync(
+            ws,
+            &workspace_path,
+            &query,
+            case_sensitive.unwrap_or(false),
+            max_results.unwrap_or(100),
+        )
     })
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| e.to_string())
+}
 
-    Ok(results)
+pub fn find_files_sync(
+    ws: &WorkspaceState,
+    workspace_path: &str,
+    query: &str,
+    limit: usize,
+) -> Result<Vec<FileEntry>, FsError> {
+    let root = search_root(ws, workspace_path)?;
+    let requested = Path::new(workspace_path);
+    let q = query.trim().to_lowercase();
+
+    let mut matches = Vec::new();
+    // follow_links(false): a symlink inside the workspace must not lead the walk out of it.
+    let walker = walkdir::WalkDir::new(&root)
+        .follow_links(false)
+        .into_iter()
+        .filter_entry(|entry| {
+            let name = entry.file_name().to_string_lossy();
+            !name.starts_with(".git")
+                && name != "node_modules"
+                && name != "target"
+                && name != "dist"
+                && name != ".next"
+                && name != "__pycache__"
+                && name != ".venv"
+        });
+
+    for entry_res in walker.filter_map(Result::ok) {
+        if entry_res.file_type().is_file() {
+            let file_name = entry_res.file_name().to_string_lossy().to_string();
+            let full_path = display_path(requested, &root, entry_res.path());
+
+            if q.is_empty()
+                || file_name.to_lowercase().contains(&q)
+                || full_path.to_lowercase().contains(&q)
+            {
+                let metadata = entry_res.metadata().ok();
+                let size = metadata.as_ref().map(|m| m.len()).unwrap_or(0);
+                let modified = metadata.and_then(|m| {
+                    m.modified().ok().and_then(|t| {
+                        t.duration_since(std::time::UNIX_EPOCH)
+                            .ok()
+                            .map(|d| d.as_secs())
+                    })
+                });
+
+                matches.push(FileEntry {
+                    name: file_name,
+                    path: full_path,
+                    is_dir: false,
+                    size,
+                    modified,
+                });
+
+                if matches.len() >= limit {
+                    break;
+                }
+            }
+        }
+    }
+    Ok(matches)
+}
+
+#[tauri::command]
+pub async fn find_files(
+    app: AppHandle,
+    workspace_path: String,
+    query: String,
+    max_results: Option<usize>,
+) -> Result<Vec<FileEntry>, String> {
+    blocking(app, move |ws| {
+        find_files_sync(ws, &workspace_path, &query, max_results.unwrap_or(50))
+    })
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
@@ -565,34 +641,37 @@ mod tests {
         tempfile::tempdir().expect("tempdir")
     }
 
-    #[allow(dead_code)]
+    /// These tests exercise file behaviour, not scoping (see tests/fs_workspace_scope.rs),
+    /// so the workspace is the system temp dir that every `tmp()` lives in.
+    fn ws() -> WorkspaceState {
+        let ws = WorkspaceState::default();
+        ws.set_root(Some(&std::env::temp_dir().to_string_lossy()))
+            .expect("temp dir as workspace");
+        ws
+    }
+
     fn read_file(path: String) -> Result<String, FsError> {
-        tauri::async_runtime::block_on(super::read_file(path))
+        read_file_sync(&ws(), &path)
     }
 
     fn write_file(path: String, contents: String) -> Result<(), FsError> {
-        tauri::async_runtime::block_on(super::write_file(path, contents))
+        write_file_sync(&ws(), &path, &contents)
     }
 
     fn list_dir(path: String) -> Result<Vec<FileEntry>, FsError> {
-        tauri::async_runtime::block_on(super::list_dir(path))
+        list_dir_sync(&ws(), &path)
     }
 
     fn create_file(path: String) -> Result<(), FsError> {
-        tauri::async_runtime::block_on(super::create_file(path))
-    }
-
-    #[allow(dead_code)]
-    fn create_dir(path: String) -> Result<(), FsError> {
-        tauri::async_runtime::block_on(super::create_dir(path))
+        create_file_sync(&ws(), &path)
     }
 
     fn rename_file(old_path: String, new_path: String) -> Result<(), FsError> {
-        tauri::async_runtime::block_on(super::rename_file(old_path, new_path))
+        rename_file_sync(&ws(), &old_path, &new_path)
     }
 
     fn delete_file(path: String) -> Result<(), FsError> {
-        tauri::async_runtime::block_on(super::delete_file(path))
+        delete_file_sync(&ws(), &path)
     }
 
     #[test]
@@ -748,23 +827,17 @@ mod tests {
 
     #[test]
     fn find_files_locates_by_name() {
-        tauri::async_runtime::block_on(async {
-            let dir = tmp();
-            let nested = dir.path().join("src/utils");
-            std::fs::create_dir_all(&nested).unwrap();
-            std::fs::write(nested.join("helper.py"), "print(1)").unwrap();
-            std::fs::write(dir.path().join("main.py"), "print(2)").unwrap();
+        let dir = tmp();
+        let nested = dir.path().join("src/utils");
+        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::write(nested.join("helper.py"), "print(1)").unwrap();
+        std::fs::write(dir.path().join("main.py"), "print(2)").unwrap();
 
-            let found = find_files(
-                dir.path().to_string_lossy().into_owned(),
-                "help".to_string(),
-                None,
-            )
-            .await
-            .unwrap();
-            assert_eq!(found.len(), 1);
-            assert_eq!(found[0].name, "helper.py");
-        });
+        let found = find_files_sync(&ws(), &dir.path().to_string_lossy(), "help", 50).unwrap();
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].name, "helper.py");
+        // Reported under the root as sent, not its canonical form.
+        assert!(found[0].path.starts_with(&*dir.path().to_string_lossy()));
     }
 
     #[cfg(unix)]
@@ -803,11 +876,18 @@ mod tests {
 
     #[test]
     fn write_and_delete_refuse_system_path() {
+        // Outside the workspace (or not even absolute on this OS): refused either way.
         let err = write_file("C:/Windows/system32/cmd.exe".to_string(), "bad".to_string());
-        assert!(matches!(err, Err(FsError::PermissionDenied(_))));
+        assert!(matches!(
+            err,
+            Err(FsError::PermissionDenied(_) | FsError::InvalidPath)
+        ));
 
         let del_err = delete_file("/etc".to_string());
-        assert!(matches!(del_err, Err(FsError::PermissionDenied(_))));
+        assert!(matches!(
+            del_err,
+            Err(FsError::PermissionDenied(_) | FsError::InvalidPath)
+        ));
     }
 
     #[test]

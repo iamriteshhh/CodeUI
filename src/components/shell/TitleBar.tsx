@@ -7,6 +7,7 @@ import {
   X,
   Sliders,
   FolderOpen,
+  FolderX,
   ExternalLink,
   FilePlus,
   FileCode,
@@ -45,6 +46,8 @@ interface TitleBarProps {
   onNewFile?: () => void;
   onOpenFile?: () => void;
   onOpenFolder?: () => void;
+  /** Undefined while no folder is open (menu item hidden). */
+  onCloseFolder?: () => void;
   onOpenInFileManager?: () => void;
   onSave?: () => void;
   onCloseActiveFile?: () => void;
@@ -69,6 +72,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
   onNewFile,
   onOpenFile,
   onOpenFolder,
+  onCloseFolder,
   onOpenInFileManager,
   onSave,
   onCloseActiveFile,
@@ -180,6 +184,9 @@ export const TitleBar: React.FC<TitleBarProps> = ({
       { label: "New File...", shortcut: "Ctrl+N", icon: <FilePlus size={14} />, action: onNewFile },
       { label: "Open File...", shortcut: "Ctrl+O", icon: <FileCode size={14} />, action: onOpenFile },
       { label: "Open Folder...", shortcut: "Ctrl+K Ctrl+O", icon: <FolderOpen size={14} />, action: onOpenFolder },
+      ...(onCloseFolder
+        ? [{ label: "Close Folder", shortcut: "Ctrl+K F", icon: <FolderX size={14} />, action: onCloseFolder }]
+        : []),
       { label: "Reveal in File Explorer", icon: <ExternalLink size={14} />, action: onOpenInFileManager },
       { divider: true, label: "" },
       { label: "Save", shortcut: "Ctrl+S", icon: <Save size={14} />, action: onSave },

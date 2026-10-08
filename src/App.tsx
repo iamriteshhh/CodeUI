@@ -6,6 +6,7 @@ import { RunDebugBar } from "./components/editor/RunDebugBar";
 import { SplitEditorContainer } from "./components/editor/SplitEditorContainer";
 import { StatusBar } from "./components/shell/StatusBar";
 import { Toasts } from "./components/shell/Toasts";
+import { UnsavedChangesDialog } from "./components/shell/UnsavedChangesDialog";
 import { useWorkspace } from "./store/useWorkspaceStore";
 import { fsService } from "./services/fsService";
 import { editorService } from "./services/editorService";
@@ -146,6 +147,7 @@ export function App() {
     setIsSplit,
     setActiveFilePath,
     openFolder,
+    closeFolder,
     openFileByPath,
     closeFile,
     updateFileContent,
@@ -170,6 +172,34 @@ export function App() {
   useEffect(() => {
     if (panelVisible) setPanelMounted(true);
   }, [panelVisible]);
+
+  // Problem counts belong to the previous folder's editors.
+  useEffect(() => {
+    setErrorCount(0);
+    setWarningCount(0);
+  }, [workspacePath]);
+
+  // Ctrl+K F: Close Folder (VS Code chord). Capture phase so it works while Monaco has focus.
+  const closeFolderRef = useRef(closeFolder);
+  closeFolderRef.current = closeFolder;
+  useEffect(() => {
+    let chordAt = 0;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "k") {
+        chordAt = Date.now();
+        return;
+      }
+      if (["Control", "Meta", "Shift", "Alt"].includes(e.key)) return;
+      const armed = chordAt !== 0 && Date.now() - chordAt < 3000;
+      chordAt = 0;
+      if (armed && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        closeFolderRef.current();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, []);
 
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
   const [isResizingPanel, setIsResizingPanel] = useState(false);
@@ -396,13 +426,13 @@ export function App() {
     await ensurePtySession();
   };
 
-  const handleCloseActiveFile = () => {
+  const handleCloseActiveFile = async () => {
     if (activeFilePath === "codeui://welcome") {
       setIsWelcomeOpen(false);
       setActiveFilePath(openFiles[0]?.path || null);
     } else if (activeFilePath) {
-      closeFile(activeFilePath);
-      if (openFiles.length <= 1) {
+      const closed = await closeFile(activeFilePath);
+      if (closed && openFiles.length <= 1) {
         setIsWelcomeOpen(true);
       }
     }
@@ -575,6 +605,7 @@ export function App() {
         onNewFile={handleNewFileDialog}
         onOpenFile={handleOpenFileDialog}
         onOpenFolder={handleOpenFolderDialog}
+        onCloseFolder={workspacePath ? closeFolder : undefined}
         onOpenInFileManager={handleOpenInFileManager}
         onSave={saveActiveFile}
         onCloseActiveFile={handleCloseActiveFile}
@@ -641,8 +672,10 @@ export function App() {
               onRefreshTools={refreshTools}
               onSendToTerminal={handleSendToTerminal}
               onOpenFolderDialog={handleOpenFolderDialog}
+              onCloseFolder={closeFolder}
               onOpenInFileManager={handleOpenInFileManager}
               onRunFile={runActiveFile}
+              runTimeoutSecs={settings.runTimeoutSecs}
               selectedExtensionId={selectedExtensionId}
               extensionsList={extensionsList}
               isSyncingExtensions={isSyncingExtensions}
@@ -959,6 +992,9 @@ export function App() {
           </div>
         </div>
       )}
+
+      {/* Unsaved changes prompt (tab close, folder switch/close, quit) */}
+      <UnsavedChangesDialog />
 
       {/* Global Notifications / Toasts */}
       <Toasts />

@@ -147,7 +147,7 @@ export function registerAllEagerLanguages(monacoInstance: typeof monaco): {
     // 1. Salivo language registration
     registerSalivoLanguage(monacoInstance);
     registered.push("salivo");
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[registerAllEagerLanguages] Failed to register Salivo:", err);
     failed.push({ id: "salivo", error: String(err) });
   }
@@ -155,8 +155,8 @@ export function registerAllEagerLanguages(monacoInstance: typeof monaco): {
   // 2. Synchronous list of all core languages
   const definitions: Array<{
     id: string;
-    conf?: any;
-    language?: any;
+    conf?: monaco.languages.LanguageConfiguration;
+    language?: monaco.languages.IMonarchLanguage;
     aliases?: string[];
     extensions?: string[];
   }> = [
@@ -199,12 +199,12 @@ export function registerAllEagerLanguages(monacoInstance: typeof monaco): {
           monacoInstance.languages.setMonarchTokensProvider(def.id, def.language);
         }
         registered.push(def.id);
-      } catch (innerErr: any) {
+      } catch (innerErr: unknown) {
         console.warn(`[registerAllEagerLanguages] Failed to register tokens for ${def.id}:`, innerErr);
         failed.push({ id: def.id, error: String(innerErr) });
       }
     }
-  } catch (outerErr: any) {
+  } catch (outerErr: unknown) {
     console.error("[registerAllEagerLanguages] Unexpected error registering languages:", outerErr);
   }
 

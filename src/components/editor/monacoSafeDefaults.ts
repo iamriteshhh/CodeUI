@@ -110,7 +110,16 @@ export const MONACO_LAB_SAFE_OPTIONS: NonNullable<EditorProps["options"]> = {
  * (completions, hovers, code actions/lightbulbs, definitions, renames) across all languages,
  * ensuring students write code purely from knowledge. Monarch syntax highlighting remains active.
  */
-export function applyZeroSuggestionsLockdown(monacoInstance: any) {
+// Structural view of the Monaco namespace: the lockdown overwrites provider registrars and
+// looks language namespaces up by name, which the precise namespace types do not allow.
+type ModeConfigurable = { setModeConfiguration(config: Record<string, boolean>): void };
+type LanguageNamespace = Record<string, ModeConfigurable | undefined>;
+interface LockdownTarget {
+  languages: Record<string, unknown>;
+  [namespace: string]: unknown;
+}
+
+export function applyZeroSuggestionsLockdown(monacoInstance: LockdownTarget) {
   if (!monacoInstance || !monacoInstance.languages) return;
 
   const dummyDisposable = { dispose: () => {} };
@@ -150,7 +159,8 @@ export function applyZeroSuggestionsLockdown(monacoInstance: any) {
   };
 
   // Monaco >= 0.55 exposes these at the top level (monaco.typescript); older builds under monaco.languages.
-  const ns = (name: string) => monacoInstance[name] ?? monacoInstance.languages[name];
+  const ns = (name: string) =>
+    (monacoInstance[name] ?? monacoInstance.languages[name]) as LanguageNamespace | undefined;
   const defaults = [
     ns("typescript")?.typescriptDefaults,
     ns("typescript")?.javascriptDefaults,
@@ -174,7 +184,13 @@ export function applyZeroSuggestionsLockdown(monacoInstance: any) {
 /**
  * Binds no-op handlers to all manual completion/hint shortcuts on the editor instance (Y1).
  */
-export function blockManualSuggestionShortcuts(editor: any, monacoInstance: any) {
+export function blockManualSuggestionShortcuts(
+  editor: { addCommand(keybinding: number, handler: () => void): unknown },
+  monacoInstance: {
+    KeyMod: { CtrlCmd: number; Shift: number; Alt: number };
+    KeyCode: { Space: number; Enter: number; F12: number; F2: number };
+  }
+) {
   if (!editor || !monacoInstance) return;
 
   const blocked = [

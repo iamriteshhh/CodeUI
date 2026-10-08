@@ -168,7 +168,7 @@ export async function syncAllExtensionsLive(
 }
 
 /**
- * Lab policy: AI assistants and AI code completion are never installable.
+ * Lab policy: a multi-signal policy for known and identifiable AI-assistance extensions.
  * The Rust installer enforces the same rules (src-tauri/ai-policy.json); this only drives the UI.
  */
 export function isAiExtension(ext: {
@@ -197,6 +197,24 @@ export function aiReason(ext: {
 /**
  * Searches the live Open VSX Marketplace directly
  */
+/** Fields read from an Open VSX search result (https://open-vsx.org/api/-/search). */
+interface OpenVsxSearchItem {
+  namespace: string;
+  name: string;
+  displayName?: string;
+  namespaceDisplayName?: string;
+  description?: string;
+  categories?: string[];
+  version?: string;
+  downloadCount?: unknown;
+  averageRating?: unknown;
+  reviewCount?: unknown;
+  timestamp?: string;
+  license?: string;
+  files?: { icon?: string };
+  repository?: string;
+}
+
 export async function searchOpenVsxMarketplace(query: string): Promise<ExtensionItem[]> {
   if (!query.trim()) return [];
 
@@ -218,7 +236,7 @@ export async function searchOpenVsxMarketplace(query: string): Promise<Extension
 
     if (!json.extensions || !Array.isArray(json.extensions)) return [];
 
-    return json.extensions.map((item: any) => {
+    return json.extensions.map((item: OpenVsxSearchItem) => {
       const id = `${item.namespace}.${item.name}`;
       const name = item.name;
       const displayName = item.displayName || item.name;

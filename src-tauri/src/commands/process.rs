@@ -11,8 +11,12 @@ use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 
+use crate::commands::workspace::{resolve_in_workspace, WorkspaceState};
+use crate::proc::sandbox::{self, Guard, Policy};
 use crate::proc::{
-    crash_hint, detach_process_group, kill_tree, kill_tree_by_pid, take_utf8, DEFAULT_TIMEOUT_SECS,
+    crash_hint, detach_process_group, explain_spawn_error, idle_timeout, kill_tree,
+    kill_tree_by_pid, os_error_in, stop_hint, take_utf8, StopReason, COMPILE_TIMEOUT_SECS,
+    MAX_RUNTIME_SECS,
 };
 use crate::runners::{runner_for_path, CommandSpec, RunContext, RunnerError};
 
@@ -34,10 +38,6 @@ const FLUSH_BYTES: usize = 8192;
 
 /// How long to wait for output pumps to drain once the program has exited.
 const DRAIN_GRACE: Duration = Duration::from_millis(250);
-
-/// Compilers get their own budget. Pathological C++ templates can run for
-/// minutes, and an unbounded compile would hang the app with no way out.
-const COMPILE_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Ceiling on forwarded output per run. A runaway print loop can emit hundreds
 /// of megabytes in twelve seconds, which would take the webview down with it.
@@ -77,9 +77,25 @@ pub enum RunStatus {
 enum ActiveChild {
     Piped(Arc<Mutex<Child>>),
     Pty {
-        child: Arc<Mutex<Box<dyn portable_pty::Child + Send + Sync>>>,
+        child: Arc<Mutex<PtyChild>>,
         pid: u32,
+        guard: Option<Arc<Guard>>,
     },
+}
+
+type PtyChild = Box<dyn portable_pty::Child + Send + Sync>;
+
+/// Ends a PTY run: its Job (Windows), the program, and its process group/tree.
+fn kill_pty_run(child: &Mutex<PtyChild>, pid: u32, guard: Option<&Guard>) {
+    if let Some(guard) = guard {
+        guard.terminate();
+    }
+    if let Ok(mut child) = child.lock() {
+        let _ = child.kill();
+    }
+    if pid > 0 {
+        kill_tree_by_pid(pid);
+    }
 }
 
 #[derive(Clone)]
@@ -129,7 +145,7 @@ impl RunRegistry {
                 let mut child = child.lock().expect("child");
                 kill_tree(&mut child).map_err(|e| RunError::Io(e.to_string()))?;
             }
-            ActiveChild::Pty { child, pid } => {
+            ActiveChild::Pty { child, pid, guard } => {
                 if let ActiveStdin::Pty(writer) = stdin {
                     if let Ok(mut guard) = writer.lock() {
                         if let Some(w) = guard.as_mut() {
@@ -139,11 +155,7 @@ impl RunRegistry {
                     }
                 }
                 std::thread::sleep(Duration::from_millis(100));
-                let mut child = child.lock().expect("pty child");
-                let _ = child.kill();
-                if pid > 0 {
-                    kill_tree_by_pid(pid);
-                }
+                kill_pty_run(&child, pid, guard.as_deref());
             }
         }
         Ok(())
@@ -227,13 +239,8 @@ impl RunRegistry {
                         let _ = kill_tree(&mut child);
                     }
                 }
-                ActiveChild::Pty { child, pid } => {
-                    if let Ok(mut child) = child.lock() {
-                        let _ = child.kill();
-                    }
-                    if pid > 0 {
-                        kill_tree_by_pid(pid);
-                    }
+                ActiveChild::Pty { child, pid, guard } => {
+                    kill_pty_run(&child, pid, guard.as_deref());
                 }
             }
         }
@@ -261,6 +268,8 @@ impl OutputBudget {
 struct Outcome {
     exit_code: Option<i32>,
     timed_out: bool,
+    /// Why the run ended early, when the supervisor or the OS ended it.
+    reason: Option<StopReason>,
 }
 
 fn status_event(run_id: &str) -> String {
@@ -298,10 +307,15 @@ pub fn validate_run_id(run_id: Option<String>) -> Result<String, RunError> {
 #[tauri::command]
 pub fn run_file(
     app: AppHandle,
+    workspace: State<'_, WorkspaceState>,
     path: String,
     run_id: Option<String>,
     timeout_secs: Option<u64>,
 ) -> Result<String, RunError> {
+    // Same scope rule as the fs commands: only workspace files (or a file the
+    // user picked) may be compiled and run. The canonical form is only checked;
+    // compilers get the path as the UI sent it.
+    resolve_in_workspace(&workspace, &path).map_err(|e| RunError::Io(e.to_string()))?;
     let source = std::path::PathBuf::from(&path);
     let runner = runner_for_path(&source)?;
 
@@ -337,7 +351,9 @@ pub fn run_file(
     };
 
     let language = runner.display_name().to_string();
-    let timeout = Duration::from_secs(timeout_secs.unwrap_or(DEFAULT_TIMEOUT_SECS));
+    // Idle timeout: restarted by every line of input. MAX_RUNTIME_SECS caps the total.
+    let idle = idle_timeout(timeout_secs);
+    let policy = Policy::for_run(&ctx.workdir, &scratch);
 
     let app_bg = app.clone();
     let id_bg = run_id.clone();
@@ -365,7 +381,7 @@ pub fn run_file(
                 &app_bg,
                 &id_bg,
                 spec,
-                COMPILE_TIMEOUT,
+                Duration::from_secs(COMPILE_TIMEOUT_SECS),
                 &budget,
                 &stopped_by_user,
                 false,
@@ -393,8 +409,7 @@ pub fn run_file(
             if outcome.timed_out {
                 return finish(RunStatus::Failed {
                     message: format!(
-                        "The compiler did not finish within {} seconds and was stopped.",
-                        COMPILE_TIMEOUT.as_secs()
+                        "The compiler did not finish within {COMPILE_TIMEOUT_SECS} seconds and was stopped."
                     ),
                 });
             }
@@ -420,7 +435,8 @@ pub fn run_file(
             &app_bg,
             &id_bg,
             exec_spec,
-            timeout,
+            &policy,
+            idle,
             &budget,
             &stopped_by_user,
             announce,
@@ -430,11 +446,8 @@ pub fn run_file(
             Err(message) => finish(RunStatus::Failed { message }),
             Ok(outcome) => {
                 let stopped = stopped_by_user.load(Ordering::SeqCst);
-                let hint = if outcome.timed_out {
-                    Some(format!(
-                        "Program was inactive (no user input) for {} seconds and was stopped.",
-                        timeout.as_secs()
-                    ))
+                let hint = if let Some(reason) = outcome.reason {
+                    Some(stop_hint(reason, idle))
                 } else if stopped {
                     None
                 } else {
@@ -460,11 +473,20 @@ pub fn run_file(
 /// A real PTY provides line buffering, real-time unbuffered stdout for prompts
 /// like `printf("Enter: ")`, interactive terminal stdin (`scanf`, `cin`, `input()`),
 /// and clean signals without shell script injection.
+///
+/// The program runs under the OS sandbox (`proc::sandbox`) when this machine
+/// supports it; if the sandbox cannot be set up, the run continues under
+/// supervision only and the student is told so in the output.
+///
+/// Stops the program when `idle` passes without input, or after
+/// [`MAX_RUNTIME_SECS`] regardless of input.
+#[allow(clippy::too_many_arguments)]
 fn supervise_pty(
     app: &AppHandle,
     run_id: &str,
     spec: CommandSpec,
-    timeout: Duration,
+    policy: &Policy,
+    idle: Duration,
     budget: &Arc<OutputBudget>,
     stopped_by_user: &Arc<AtomicBool>,
     on_spawn: impl FnOnce(u32),
@@ -478,19 +500,56 @@ fn supervise_pty(
         })
         .map_err(|e| format!("could not open pseudo-terminal: {e}"))?;
 
-    let mut builder = CommandBuilder::new(&spec.program);
-    builder.args(&spec.args);
-    builder.cwd(&spec.cwd);
-    builder.env("TERM", "xterm-256color");
-    builder.env("PATH", crate::proc::augmented_path());
+    let command = |program: &str, args: &[String]| {
+        let mut builder = CommandBuilder::new(program);
+        builder.args(args);
+        builder.cwd(&spec.cwd);
+        builder.env("TERM", "xterm-256color");
+        builder.env("PATH", crate::proc::augmented_path());
+        builder
+    };
 
-    let child = pair
-        .slave
-        .spawn_command(builder)
-        .map_err(|e| format!("could not start {}: {e}", spec.program))?;
+    let mut notices = Vec::new();
+    let launcher =
+        sandbox::launcher_command(policy, &spec.program, &spec.args).unwrap_or_else(|reason| {
+            notices.push(format!(
+                "Sandbox unavailable ({reason}); running with supervision only."
+            ));
+            None
+        });
+    let spawned = match launcher {
+        Some((exe, args)) => pair.slave.spawn_command(command(&exe, &args)).or_else(|e| {
+            notices.push(format!(
+                "Sandbox launcher could not start ({e}); running with supervision only."
+            ));
+            pair.slave.spawn_command(command(&spec.program, &spec.args))
+        }),
+        None => pair.slave.spawn_command(command(&spec.program, &spec.args)),
+    };
+    let mut child = spawned.map_err(|e| {
+        let text = e.to_string();
+        match os_error_in(&text) {
+            Some(err) => explain_spawn_error(&spec.program, &err),
+            None => format!("Could not start `{}`: {text}", spec.program),
+        }
+    })?;
 
     let pid = child.process_id().unwrap_or(0);
+    let guard = match Guard::attach(policy, pid) {
+        Ok(guard) => Some(Arc::new(guard)),
+        // A program that already finished cannot join a job; nothing to warn about.
+        Err(_) if matches!(child.try_wait(), Ok(Some(_))) => None,
+        Err(reason) => {
+            notices.push(format!(
+                "Resource limits unavailable ({reason}); running with supervision only."
+            ));
+            None
+        }
+    };
     on_spawn(pid);
+    for notice in notices {
+        emit_chunk(app, run_id, "stderr", format!("[CodeUI] {notice}\r\n"));
+    }
 
     let reader = pair
         .master
@@ -519,6 +578,7 @@ fn supervise_pty(
             child: ActiveChild::Pty {
                 child: Arc::clone(&child),
                 pid,
+                guard: guard.clone(),
             },
             stdin: ActiveStdin::Pty(Arc::clone(&writer)),
             stopped_by_user: Arc::clone(stopped_by_user),
@@ -537,21 +597,13 @@ fn supervise_pty(
     );
 
     let started = Instant::now();
-    let hard_ceiling = Duration::from_secs(300);
-    let mut timed_out = false;
+    let max_runtime = Duration::from_secs(MAX_RUNTIME_SECS);
+    let mut reason = None;
 
-    let poll = || -> Result<Option<Option<i32>>, String> {
+    let poll = || -> Result<Option<i32>, String> {
         let mut guard = child.lock().map_err(|e| e.to_string())?;
         match guard.try_wait() {
-            Ok(Some(status)) => {
-                let code = if status.success() {
-                    0
-                } else {
-                    status.exit_code() as i32
-                };
-                Ok(Some(Some(code)))
-            }
-            Ok(None) => Ok(None),
+            Ok(status) => Ok(status.map(|s| pty_exit_code(&s))),
             Err(e) => Err(e.to_string()),
         }
     };
@@ -566,37 +618,26 @@ fn supervise_pty(
         };
 
         if let Some(code) = state {
-            break code;
+            break Some(code);
         }
 
         if stopped_by_user.load(Ordering::SeqCst) {
-            let mut guard = child.lock().expect("pty child");
-            let _ = guard.kill();
-            if pid > 0 {
-                kill_tree_by_pid(pid);
-            }
+            kill_pty_run(&child, pid, guard.as_deref());
             break Some(137);
         }
 
         let now = Instant::now();
-        let inactive = now.duration_since(*last_input.lock().unwrap());
-        if inactive >= timeout {
-            timed_out = true;
-            let mut guard = child.lock().expect("pty child");
-            let _ = guard.kill();
-            if pid > 0 {
-                kill_tree_by_pid(pid);
-            }
-            break Some(124);
-        }
-
-        if now.duration_since(started) >= hard_ceiling {
-            timed_out = true;
-            let mut guard = child.lock().expect("pty child");
-            let _ = guard.kill();
-            if pid > 0 {
-                kill_tree_by_pid(pid);
-            }
+        let since_input = now.duration_since(*last_input.lock().unwrap());
+        let early = if since_input >= idle {
+            Some(StopReason::IdleTimeout)
+        } else if now.duration_since(started) >= max_runtime {
+            Some(StopReason::MaxRuntime)
+        } else {
+            None
+        };
+        if early.is_some() {
+            reason = early;
+            kill_pty_run(&child, pid, guard.as_deref());
             break Some(124);
         }
 
@@ -606,10 +647,38 @@ fn supervise_pty(
     let _ = done_rx.recv_timeout(DRAIN_GRACE);
     app.state::<RunRegistry>().remove(run_id);
 
+    // An OS limit (Windows Job) explains a crash better than its exit code.
+    if reason.is_none() && !stopped_by_user.load(Ordering::SeqCst) {
+        reason = guard.as_ref().and_then(|g| g.limit_hit());
+    }
+
     Ok(Outcome {
         exit_code,
-        timed_out,
+        timed_out: matches!(
+            reason,
+            Some(StopReason::IdleTimeout | StopReason::MaxRuntime)
+        ),
+        reason,
     })
+}
+
+/// Exit code of a PTY child, with signals reported shell-style (128 + n).
+///
+/// portable_pty reports a signalled child as code 1 plus the signal's name,
+/// which would hide every segfault from `crash_hint`.
+fn pty_exit_code(status: &portable_pty::ExitStatus) -> i32 {
+    if status.success() {
+        return 0;
+    }
+    #[cfg(unix)]
+    if let Some(sig) = status
+        .to_string()
+        .strip_prefix("Terminated by ")
+        .and_then(crate::proc::signal_from_name)
+    {
+        return 128 + sig;
+    }
+    status.exit_code() as i32
 }
 
 /// Runs one child to completion under a timeout, streaming its output.
@@ -644,7 +713,7 @@ fn supervise(
 
     let mut child = cmd
         .spawn()
-        .map_err(|e| format!("could not start {}: {e}", spec.program))?;
+        .map_err(|e| explain_spawn_error(&spec.program, &e))?;
 
     // The clock starts here, not when the request arrived: a slow compile must
     // not eat into the student's execution budget.
@@ -740,6 +809,7 @@ fn supervise(
     Ok(Outcome {
         exit_code,
         timed_out,
+        reason: None,
     })
 }
 

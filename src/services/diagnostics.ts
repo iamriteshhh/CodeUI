@@ -26,14 +26,26 @@ export interface SystemDiagnostics {
   pathVar: string;
   defaultShell: string;
   resolvedShell?: string;
+  runPathVar: string;
   activePtySessions: string[];
+  ptySessionCount: number;
   tools: Array<{
     name: string;
     path: string | null;
     available: boolean;
     purpose: string;
     installHint: string;
+    version?: string;
   }>;
+  sandbox: {
+    execution: "Supervised" | "Sandboxed";
+    sandbox: string;
+    network: "Allowed" | "Blocked";
+    filesystem: string;
+    resourceLimits: string[];
+    notes: string[];
+  };
+  extensionPolicyVersion?: string;
 }
 
 export interface CompilerDiagnostic {
@@ -74,12 +86,24 @@ export async function generateDiagnosticsReport(): Promise<string> {
     lines.push(`Current Dir: ${rustDiag.currentDir || "unknown"}`);
     lines.push(`Settings File: ${rustDiag.settingsPath || "unknown"}`);
     lines.push(`Default Shell: ${rustDiag.defaultShell} (Resolved: ${rustDiag.resolvedShell || "NOT FOUND"})`);
-    lines.push(`Active PTY Sessions: ${rustDiag.activePtySessions.length}`);
+    lines.push(`Active PTY Sessions: ${rustDiag.ptySessionCount}`);
+    lines.push(`PATH: ${rustDiag.pathVar}`);
+    lines.push(`Run PATH: ${rustDiag.runPathVar}`);
+    lines.push(`Extension Policy Version: ${rustDiag.extensionPolicyVersion ?? "unversioned"}`);
+
+    const sb = rustDiag.sandbox;
+    lines.push("\n--- Execution Isolation ---");
+    lines.push(`Execution: ${sb.execution}`);
+    lines.push(`Sandbox: ${sb.sandbox}`);
+    lines.push(`Network: ${sb.network}`);
+    lines.push(`Filesystem: ${sb.filesystem}`);
+    for (const limit of sb.resourceLimits) lines.push(`  Limit: ${limit}`);
+    for (const note of sb.notes) lines.push(`  Note: ${note}`);
 
     lines.push("\n--- Toolchain Status ---");
     for (const tool of rustDiag.tools) {
       lines.push(
-        `  ${tool.name.padEnd(10)}: ${tool.available ? "AVAILABLE (" + tool.path + ")" : "MISSING"} - ${tool.purpose}`
+        `  ${tool.name.padEnd(10)}: ${tool.available ? `AVAILABLE (${tool.path}${tool.version ? ", " + tool.version : ""})` : "MISSING"} - ${tool.purpose}`
       );
     }
   } else {
@@ -98,8 +122,8 @@ export async function generateDiagnosticsReport(): Promise<string> {
   }
 
   // Monaco stats
-  if (typeof (window as any).monaco !== "undefined") {
-    const monaco = (window as any).monaco;
+  const monaco = (window as { monaco?: typeof import("../monaco") }).monaco;
+  if (monaco) {
     const editors = monaco.editor.getEditors ? monaco.editor.getEditors().length : 0;
     const models = monaco.editor.getModels ? monaco.editor.getModels().length : 0;
     lines.push(`Monaco Editors Count: ${editors}`);
@@ -258,41 +282,4 @@ export function parseCompilerDiagnostics(
   }
 
   return diagnostics;
-}
-
-/**
- * Applies compiler diagnostics to Monaco model markers
- */
-export function applyCompilerMarkers(
-  monaco: any,
-  model: any,
-  diagnostics: CompilerDiagnostic[]
-) {
-  if (!monaco || !model) return;
-
-  const markers = diagnostics.map((d) => {
-    let severity = monaco.MarkerSeverity.Error;
-    if (d.severity === "warning") severity = monaco.MarkerSeverity.Warning;
-    if (d.severity === "info") severity = monaco.MarkerSeverity.Info;
-
-    return {
-      severity,
-      message: d.message,
-      startLineNumber: d.line,
-      startColumn: d.column,
-      endLineNumber: d.line,
-      endColumn: d.endColumn || d.column + 1,
-      source: "compiler",
-    };
-  });
-
-  monaco.editor.setModelMarkers(model, "codeui-compiler", markers);
-}
-
-/**
- * Clears compiler diagnostics from Monaco model markers
- */
-export function clearCompilerMarkers(monaco: any, model: any) {
-  if (!monaco || !model) return;
-  monaco.editor.setModelMarkers(model, "codeui-compiler", []);
 }
