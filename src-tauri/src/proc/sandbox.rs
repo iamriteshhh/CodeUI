@@ -405,7 +405,19 @@ fn platform_status() -> SandboxStatus {
 
 #[cfg(unix)]
 mod unix {
+    use std::path::PathBuf;
+
     use super::Policy;
+
+    /// Where `execvp` would find `program`, if it exists at all.
+    pub fn resolve_program(program: &str) -> Option<PathBuf> {
+        if program.contains('/') {
+            return Some(PathBuf::from(program)).filter(|p| p.is_file());
+        }
+        std::env::split_paths(&std::env::var_os("PATH")?)
+            .map(|dir| dir.join(program))
+            .find(|p| p.is_file())
+    }
 
     #[cfg(all(target_os = "linux", target_env = "gnu"))]
     pub type Resource = libc::__rlimit_resource_t;
@@ -457,7 +469,7 @@ mod linux {
     use std::os::unix::ffi::OsStrExt;
     use std::path::{Path, PathBuf};
 
-    use super::unix::set_limit;
+    use super::unix::{resolve_program, set_limit};
     use super::Policy;
 
     /// Applies the namespace, Landlock and seccomp layers to the current
@@ -793,15 +805,6 @@ mod linux {
         }
         paths
     }
-
-    fn resolve_program(program: &str) -> Option<PathBuf> {
-        if program.contains('/') {
-            return Some(PathBuf::from(program));
-        }
-        std::env::split_paths(&std::env::var_os("PATH")?)
-            .map(|dir| dir.join(program))
-            .find(|p| p.is_file())
-    }
 }
 
 #[cfg(target_os = "macos")]
@@ -814,9 +817,12 @@ mod macos {
     pub const SANDBOX_EXEC: &str = "/usr/bin/sandbox-exec";
 
     /// The program under `sandbox-exec`, or plain when that is missing
-    /// (`status()` reports it).
+    /// (`status()` reports it). A program that does not exist is also exec'd
+    /// plain: sandbox-exec would hide the NotFound behind its own exit 71.
     pub fn command(policy: &Policy, program: &str, args: &[String]) -> Command {
-        if !std::path::Path::new(SANDBOX_EXEC).exists() {
+        if !std::path::Path::new(SANDBOX_EXEC).exists()
+            || super::unix::resolve_program(program).is_none()
+        {
             let mut cmd = Command::new(program);
             cmd.args(args);
             return cmd;
