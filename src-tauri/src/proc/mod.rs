@@ -316,12 +316,13 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn signal_names_round_trip() {
+        // Copied out: macOS strsignal reuses one static buffer, so a borrowed
+        // pointer would be overwritten by the lookup's own strsignal calls.
         // SAFETY: strsignal is safe to call with any signal number.
-        let name = unsafe { std::ffi::CStr::from_ptr(libc::strsignal(libc::SIGSEGV)) };
-        assert_eq!(
-            signal_from_name(name.to_str().unwrap()),
-            Some(libc::SIGSEGV)
-        );
+        let name = unsafe { std::ffi::CStr::from_ptr(libc::strsignal(libc::SIGSEGV)) }
+            .to_string_lossy()
+            .into_owned();
+        assert_eq!(signal_from_name(&name), Some(libc::SIGSEGV));
         assert_eq!(signal_from_name("Signal 24"), Some(24));
     }
 
