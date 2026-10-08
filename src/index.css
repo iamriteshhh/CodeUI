@@ -30,6 +30,8 @@
   --bg-input: #3c3c3c;
   --bg-hover: #2a2d2e;
   --bg-selected: #37373d;
+  --bg-inset: #181818;
+  --bg-list-active: #094771;
 
   --border-color: #2b2b2b;
   --border-subtle: #383838;
@@ -63,7 +65,7 @@
 [data-theme="light"] {
   --bg-app: #ffffff;
   --bg-titlebar: #dddddd;
-  --bg-activitybar: #2c2c2c;
+  --bg-activitybar: #f8f8f8;
   --bg-sidebar: #f3f3f3;
   --bg-editor: #ffffff;
   --bg-tab-active: #ffffff;
@@ -73,6 +75,8 @@
   --bg-input: #ffffff;
   --bg-hover: #e8e8e8;
   --bg-selected: #e4e6f1;
+  --bg-inset: #ffffff;
+  --bg-list-active: #0060c0;
 
   --border-color: #e5e5e5;
   --border-subtle: #d4d4d4;
@@ -137,7 +141,7 @@ textarea,
 /* Monaco Editor line numbers and margin styling */
 .monaco-editor .margin-view-overlays .line-numbers {
   font-family: var(--font-mono);
-  color: #858585 !important;
+  color: var(--text-muted) !important;
   visibility: visible !important;
   opacity: 1 !important;
   z-index: 5;
@@ -284,7 +288,7 @@ textarea,
 
 .dropdown-item:hover {
   background-color: var(--accent-color);
-  color: #ffffff;
+  color: var(--text-bright);
 }
 
 .dropdown-item-left {
@@ -302,7 +306,7 @@ textarea,
 }
 
 .dropdown-item:hover .dropdown-item-icon {
-  color: #ffffff;
+  color: var(--text-bright);
 }
 
 .dropdown-item-shortcut {
@@ -313,7 +317,7 @@ textarea,
 }
 
 .dropdown-item:hover .dropdown-item-shortcut {
-  color: #e0e0e0;
+  color: var(--text-bright);
 }
 
 .dropdown-divider {
@@ -351,11 +355,11 @@ textarea,
 
 .context-menu-item:hover {
   background-color: var(--accent-color);
-  color: #ffffff;
+  color: var(--text-bright);
 }
 
 .context-menu-item.danger {
-  color: #f14c4c;
+  color: var(--accent-red);
 }
 
 .context-menu-item.danger:hover {
@@ -384,8 +388,8 @@ textarea,
 
 .search-shortcut-badge {
   font-size: 10px;
-  color: #8c8c8c;
-  background-color: #333333;
+  color: var(--text-muted);
+  background-color: var(--bg-tab-inactive);
   padding: 1px 5px;
   border-radius: 3px;
   font-family: var(--font-mono);
@@ -549,7 +553,7 @@ textarea,
   top: 6px;
   bottom: 6px;
   width: 2px;
-  background-color: var(--text-bright);
+  background-color: var(--accent-blue);
 }
 
 /* Sidebar */
@@ -804,7 +808,7 @@ textarea,
   flex-direction: column;
   width: 100%;
   height: 100%;
-  background-color: #181818;
+  background-color: var(--bg-inset);
   overflow: hidden;
   position: relative;
 }
@@ -816,8 +820,8 @@ textarea,
   height: 28px;
   min-height: 28px;
   padding: 0 10px;
-  background-color: #1f1f1f;
-  border-bottom: 1px solid #2d2d2d;
+  background-color: var(--bg-panel);
+  border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
 }
 
@@ -833,7 +837,7 @@ textarea,
   gap: 6px;
   font-size: 11px;
   font-weight: 500;
-  color: #8c8c8c;
+  color: var(--text-muted);
   background-color: transparent;
   padding: 3px 10px;
   border-radius: 3px;
@@ -844,14 +848,14 @@ textarea,
 }
 
 .terminal-tab-pill:hover {
-  color: #cccccc;
-  background-color: #252526;
+  color: var(--text-primary);
+  background-color: var(--bg-hover);
 }
 
 .terminal-tab-pill.active {
-  color: #ffffff;
-  background-color: #282828;
-  border-color: #383838;
+  color: var(--text-bright);
+  background-color: var(--bg-sidebar);
+  border-color: var(--border-subtle);
 }
 
 .terminal-toolbar-right {
@@ -866,7 +870,7 @@ textarea,
   height: calc(100% - 28px);
   min-height: 0;
   padding: 4px 8px 4px 10px;
-  background-color: #181818;
+  background-color: var(--bg-inset);
   overflow: hidden;
   position: relative;
   cursor: text;
@@ -878,7 +882,7 @@ textarea,
 }
 
 .terminal-xterm-viewport .xterm-viewport {
-  background-color: #181818 !important;
+  background-color: var(--bg-inset) !important;
   overflow-y: auto !important;
 }
 
@@ -924,7 +928,7 @@ textarea,
   justify-content: space-between;
   height: var(--statusbar-height);
   background-color: var(--bg-statusbar);
-  color: var(--text-bright);
+  color: #ffffff;
   padding: 0 10px;
   font-size: 12px;
   flex-shrink: 0;
@@ -975,8 +979,8 @@ textarea,
 }
 
 .shortcut-key {
-  background-color: #333333;
-  border: 1px solid #444444;
+  background-color: var(--bg-tab-inactive);
+  border: 1px solid var(--border-subtle);
   padding: 2px 6px;
   border-radius: 3px;
   font-family: var(--font-mono);
@@ -1068,7 +1072,7 @@ textarea,
   gap: 10px;
   background: transparent;
   border: none;
-  color: #3794ff;
+  color: var(--text-link);
   font-size: 13px;
   cursor: pointer;
   padding: 6px 8px;
@@ -1121,7 +1125,7 @@ textarea,
   align-self: flex-start;
   background: transparent;
   border: none;
-  color: #3794ff;
+  color: var(--text-link);
   font-size: 12px;
   cursor: pointer;
   padding: 4px 8px;
@@ -1143,7 +1147,7 @@ textarea,
   align-items: flex-start;
   gap: 14px;
   padding: 14px 16px;
-  background-color: #252526;
+  background-color: var(--bg-sidebar);
   border: 1px solid var(--border-color);
   border-radius: 6px;
   cursor: pointer;
@@ -1151,7 +1155,7 @@ textarea,
 }
 
 .welcome-card:hover {
-  background-color: #2a2d2e;
+  background-color: var(--bg-hover);
   border-color: var(--border-focus);
 }
 
@@ -1190,7 +1194,7 @@ textarea,
   font-weight: 600;
   padding: 1px 6px;
   border-radius: 10px;
-  background-color: #0e639c;
+  background-color: var(--accent-blue-hover);
   color: #ffffff;
   text-transform: uppercase;
 }
@@ -1257,8 +1261,8 @@ textarea,
   width: 600px;
   max-width: 90%;
   max-height: 420px;
-  background-color: #252526;
-  border: 1px solid #454545;
+  background-color: var(--bg-sidebar);
+  border: 1px solid var(--border-subtle);
   border-radius: 6px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
   display: flex;
@@ -1272,8 +1276,8 @@ textarea,
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  border-bottom: 1px solid #333333;
-  background-color: #1e1e1e;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-app);
 }
 
 .quick-open-input {
@@ -1300,13 +1304,13 @@ textarea,
 
 .quick-open-item:hover,
 .quick-open-item.selected {
-  background-color: #094771;
+  background-color: var(--bg-list-active);
   color: #ffffff;
 }
 
 .quick-open-path {
   font-size: 11px;
-  color: #888888;
+  color: var(--text-muted);
   margin-left: auto;
   font-family: var(--font-mono);
 }
@@ -1386,13 +1390,13 @@ textarea,
 
 .extensions-marketplace-note {
   font-size: 10px;
-  color: #888888;
+  color: var(--text-muted);
   line-height: 1.35;
   padding: 0 2px;
 }
 
 .extensions-marketplace-note .settings-link {
-  color: #3794ff;
+  color: var(--text-link);
   cursor: pointer;
   text-decoration: underline;
 }
@@ -1421,7 +1425,7 @@ textarea,
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: #bbbbbb;
+  color: var(--text-primary);
 }
 
 .extensions-group-header:hover {
@@ -1435,8 +1439,8 @@ textarea,
 }
 
 .extensions-count-badge {
-  background-color: #383838;
-  color: #cccccc;
+  background-color: var(--border-subtle);
+  color: var(--text-primary);
   font-size: 10px;
   padding: 1px 6px;
   border-radius: 10px;
@@ -1531,7 +1535,7 @@ textarea,
 }
 
 .extension-list-publisher {
-  color: #8c8c8c;
+  color: var(--text-muted);
 }
 
 .extension-row-gear {
@@ -1540,11 +1544,11 @@ textarea,
 
 .extension-row-gear:hover {
   opacity: 1;
-  color: #ffffff;
+  color: var(--text-bright);
 }
 
 .extension-install-badge-btn {
-  background-color: #0e639c;
+  background-color: var(--accent-blue-hover);
   color: #ffffff;
   border: none;
   font-size: 10px;
@@ -1555,7 +1559,7 @@ textarea,
 }
 
 .extension-install-badge-btn:hover {
-  background-color: #1177bb;
+  background-color: var(--accent-blue);
 }
 
 /* ==========================================================================
@@ -1566,9 +1570,9 @@ textarea,
   flex-direction: column;
   height: 100%;
   width: 100%;
-  background-color: #1e1e1e;
+  background-color: var(--bg-editor);
   overflow-y: auto;
-  color: #cccccc;
+  color: var(--text-primary);
 }
 
 .extension-detail-header {
@@ -1576,7 +1580,7 @@ textarea,
   align-items: flex-start;
   gap: 24px;
   padding: 28px 36px 20px 36px;
-  background-color: #1e1e1e;
+  background-color: var(--bg-editor);
 }
 
 .extension-detail-icon-box {
@@ -1593,7 +1597,7 @@ textarea,
 .extension-detail-title {
   font-size: 24px;
   font-weight: 700;
-  color: #ffffff;
+  color: var(--text-bright);
   margin: 0 0 6px 0;
 }
 
@@ -1602,24 +1606,24 @@ textarea,
   align-items: center;
   gap: 10px;
   font-size: 12px;
-  color: #8c8c8c;
+  color: var(--text-muted);
   margin-bottom: 10px;
 }
 
 .extension-detail-publisher {
-  color: #3794ff;
+  color: var(--text-link);
   font-weight: 500;
   cursor: pointer;
 }
 
 .meta-separator {
-  color: #444444;
+  color: var(--border-subtle);
 }
 
 .extension-detail-downloads {
   display: flex;
   align-items: center;
-  color: #cccccc;
+  color: var(--text-primary);
 }
 
 .extension-detail-rating {
@@ -1628,7 +1632,7 @@ textarea,
 
 .extension-detail-short-desc {
   font-size: 13px;
-  color: #bbbbbb;
+  color: var(--text-primary);
   margin: 0 0 16px 0;
   line-height: 1.5;
 }
@@ -1659,12 +1663,12 @@ textarea,
 }
 
 .extension-btn.primary {
-  background-color: #0e639c;
-  color: #ffffff;
+  background-color: var(--accent-blue-hover);
+  color: var(--text-bright);
 }
 
 .extension-btn.primary:hover {
-  background-color: #1177bb;
+  background-color: var(--accent-blue);
 }
 
 .extension-btn.icon-dropdown {
@@ -1673,18 +1677,18 @@ textarea,
 }
 
 .extension-btn.secondary {
-  background-color: #3c3c3c;
-  color: #ffffff;
+  background-color: var(--bg-input);
+  color: var(--text-bright);
   border-radius: 3px;
 }
 
 .extension-btn.secondary:hover {
-  background-color: #4a4a4a;
+  background-color: var(--border-subtle);
 }
 
 .extension-btn.install {
-  background-color: #0e639c;
-  color: #ffffff;
+  background-color: var(--accent-blue-hover);
+  color: var(--text-bright);
   border-radius: 3px;
 }
 
@@ -1693,7 +1697,7 @@ textarea,
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #cccccc;
+  color: var(--text-primary);
   margin-left: 8px;
   cursor: pointer;
 }
@@ -1703,13 +1707,13 @@ textarea,
 }
 
 .extension-auto-update-toggle .check-icon {
-  color: #4ec9b0;
+  color: var(--accent-green);
 }
 
 .extension-settings-btn {
   background: transparent;
   border: none;
-  color: #8c8c8c;
+  color: var(--text-muted);
   cursor: pointer;
   padding: 4px;
   border-radius: 3px;
@@ -1718,7 +1722,7 @@ textarea,
 }
 
 .extension-settings-btn:hover {
-  color: #ffffff;
+  color: var(--text-bright);
   background-color: rgba(255, 255, 255, 0.1);
 }
 
@@ -1727,8 +1731,8 @@ textarea,
   display: flex;
   gap: 20px;
   padding: 0 36px;
-  border-bottom: 1px solid #2b2b2b;
-  background-color: #1e1e1e;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-editor);
 }
 
 .extension-subtab {
@@ -1738,7 +1742,7 @@ textarea,
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: #8c8c8c;
+  color: var(--text-muted);
   padding: 8px 0;
   cursor: pointer;
   border-bottom: 2px solid transparent;
@@ -1746,12 +1750,12 @@ textarea,
 }
 
 .extension-subtab:hover {
-  color: #ffffff;
+  color: var(--text-bright);
 }
 
 .extension-subtab.active {
-  color: #ffffff;
-  border-bottom: 2px solid #007acc;
+  color: var(--text-bright);
+  border-bottom: 2px solid var(--accent-blue);
 }
 
 /* Body layout: 2 Columns */
@@ -1773,23 +1777,23 @@ textarea,
 .extension-markdown-content {
   font-size: 14px;
   line-height: 1.65;
-  color: #cccccc;
+  color: var(--text-primary);
   word-break: break-word;
 }
 
 .extension-markdown-content h1 {
   font-size: 22px;
   font-weight: 700;
-  color: #ffffff;
+  color: var(--text-bright);
   margin: 20px 0 16px 0;
   padding-bottom: 8px;
-  border-bottom: 1px solid #333333;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .extension-markdown-content h2 {
   font-size: 18px;
   font-weight: 600;
-  color: #ffffff;
+  color: var(--text-bright);
   margin: 24px 0 12px 0;
   padding-bottom: 6px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
@@ -1798,7 +1802,7 @@ textarea,
 .extension-markdown-content h3 {
   font-size: 15px;
   font-weight: 600;
-  color: #f0f0f0;
+  color: var(--text-bright);
   margin: 20px 0 10px 0;
 }
 
@@ -1807,18 +1811,18 @@ textarea,
 .extension-markdown-content h6 {
   font-size: 13.5px;
   font-weight: 600;
-  color: #e0e0e0;
+  color: var(--text-bright);
   margin: 16px 0 8px 0;
 }
 
 .extension-markdown-content p {
   margin: 0 0 14px 0;
   line-height: 1.65;
-  color: #cccccc;
+  color: var(--text-primary);
 }
 
 .extension-markdown-content a {
-  color: #3794ff;
+  color: var(--text-link);
   text-decoration: none;
   transition: text-decoration 0.15s;
 }
@@ -1829,12 +1833,12 @@ textarea,
 
 .extension-markdown-content strong {
   font-weight: 600;
-  color: #ffffff;
+  color: var(--text-bright);
 }
 
 .extension-markdown-content em {
   font-style: italic;
-  color: #e2e8f0;
+  color: var(--text-bright);
 }
 
 .extension-markdown-content ul {
@@ -1852,12 +1856,12 @@ textarea,
 .extension-markdown-content li {
   margin-bottom: 6px;
   line-height: 1.55;
-  color: #cccccc;
+  color: var(--text-primary);
 }
 
 .extension-markdown-content pre {
-  background-color: #1e1e1e;
-  border: 1px solid #333333;
+  background-color: var(--bg-editor);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   padding: 14px 18px;
   margin: 16px 0;
@@ -1865,7 +1869,7 @@ textarea,
   font-family: var(--font-mono, "Consolas", monospace);
   font-size: 12.5px;
   line-height: 1.5;
-  color: #d4d4d4;
+  color: var(--text-primary);
 }
 
 .extension-markdown-content pre code {
@@ -1881,7 +1885,7 @@ textarea,
   font-family: var(--font-mono, "Consolas", monospace);
   font-size: 12px;
   background-color: rgba(255, 255, 255, 0.08);
-  color: #ce9178;
+  color: var(--accent-orange);
   padding: 2px 6px;
   border-radius: 4px;
   border: 1px solid rgba(255, 255, 255, 0.06);
@@ -1890,16 +1894,16 @@ textarea,
 .extension-markdown-content blockquote {
   margin: 14px 0;
   padding: 8px 16px;
-  border-left: 3px solid #007acc;
+  border-left: 3px solid var(--accent-blue);
   background-color: rgba(0, 122, 204, 0.08);
-  color: #b0c4de;
+  color: var(--text-primary);
   border-radius: 0 4px 4px 0;
 }
 
 .extension-markdown-content hr {
   border: 0;
   height: 1px;
-  background-color: #333333;
+  background-color: var(--border-color);
   margin: 24px 0;
 }
 
@@ -1916,8 +1920,8 @@ textarea,
   width: 100%;
   border-collapse: collapse;
   margin: 16px 0;
-  background-color: #222222;
-  border: 1px solid #333333;
+  background-color: var(--bg-sidebar);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   overflow: hidden;
   font-size: 13px;
@@ -1926,18 +1930,18 @@ textarea,
 .extension-markdown-content th,
 .extension-markdown-content td {
   padding: 8px 12px;
-  border: 1px solid #333333;
+  border: 1px solid var(--border-color);
   text-align: left;
 }
 
 .extension-markdown-content th {
-  background-color: #2a2a2a;
-  color: #ffffff;
+  background-color: var(--bg-tab-inactive);
+  color: var(--text-bright);
   font-weight: 600;
 }
 
 .extension-markdown-content td {
-  color: #cccccc;
+  color: var(--text-primary);
 }
 
 /* Loading state for official readme */
@@ -1950,20 +1954,20 @@ textarea,
   background: rgba(0, 122, 204, 0.08);
   border: 1px solid rgba(0, 122, 204, 0.2);
   border-radius: 6px;
-  color: #9cdcfe;
+  color: var(--text-primary);
   font-size: 13px;
 }
 
 .extension-no-readme {
   padding: 24px 0;
-  color: #888888;
+  color: var(--text-muted);
   font-size: 13.5px;
 }
 
 /* Changelog tab styling */
 .extension-changelog-placeholder {
-  background-color: #252526;
-  border: 1px solid #2d2d2d;
+  background-color: var(--bg-sidebar);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 24px;
   max-width: 600px;
@@ -1973,8 +1977,8 @@ textarea,
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background-color: #0e639c;
-  color: #ffffff;
+  background-color: var(--accent-blue-hover);
+  color: var(--text-bright);
   padding: 8px 16px;
   border-radius: 4px;
   font-size: 13px;
@@ -1985,8 +1989,8 @@ textarea,
 }
 
 .extension-repo-link-btn:hover {
-  background-color: #1177bb;
-  color: #ffffff;
+  background-color: var(--accent-blue);
+  color: var(--text-bright);
   text-decoration: none;
 }
 
@@ -1997,8 +2001,8 @@ textarea,
 }
 
 .changelog-entry {
-  background-color: #252526;
-  border: 1px solid #2d2d2d;
+  background-color: var(--bg-sidebar);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   padding: 16px;
 }
@@ -2012,20 +2016,20 @@ textarea,
 
 .changelog-version {
   font-weight: 600;
-  color: #3794ff;
+  color: var(--text-link);
   font-size: 14px;
 }
 
 .changelog-date {
   font-size: 12px;
-  color: #8c8c8c;
+  color: var(--text-muted);
 }
 
 .changelog-bullets {
   margin: 0;
   padding-left: 20px;
   font-size: 13px;
-  color: #bbbbbb;
+  color: var(--text-primary);
 }
 
 /* Right Sidebar Metadata */
@@ -2046,7 +2050,7 @@ textarea,
 .sidebar-meta-title {
   font-size: 12px;
   font-weight: 700;
-  color: #ffffff;
+  color: var(--text-bright);
   margin: 0 0 4px 0;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -2060,11 +2064,11 @@ textarea,
 }
 
 .sidebar-meta-label {
-  color: #8c8c8c;
+  color: var(--text-muted);
 }
 
 .sidebar-meta-value {
-  color: #cccccc;
+  color: var(--text-primary);
 }
 
 .sidebar-meta-value.code {
@@ -2073,7 +2077,7 @@ textarea,
 }
 
 .sidebar-meta-value.highlight {
-  color: #3794ff;
+  color: var(--text-link);
 }
 
 .sidebar-categories-pills {
@@ -2084,8 +2088,8 @@ textarea,
 
 .category-pill {
   font-size: 11px;
-  background-color: #2d2d2d;
-  color: #cccccc;
+  background-color: var(--bg-tab-inactive);
+  color: var(--text-primary);
   padding: 2px 8px;
   border-radius: 12px;
 }
@@ -2101,7 +2105,7 @@ textarea,
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #3794ff;
+  color: var(--text-link);
   text-decoration: none;
 }
 
@@ -2115,23 +2119,23 @@ textarea,
 .markdown-body {
   font-size: 14px;
   line-height: 1.6;
-  color: #cccccc;
+  color: var(--text-primary);
   margin-bottom: 24px;
 }
 
 .markdown-h1 {
   font-size: 22px;
   font-weight: 700;
-  color: #ffffff;
+  color: var(--text-bright);
   margin: 0 0 16px 0;
   padding-bottom: 8px;
-  border-bottom: 1px solid #333333;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .markdown-h2 {
   font-size: 18px;
   font-weight: 600;
-  color: #ffffff;
+  color: var(--text-bright);
   margin: 24px 0 12px 0;
   padding-bottom: 6px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
@@ -2140,14 +2144,14 @@ textarea,
 .markdown-h3 {
   font-size: 15px;
   font-weight: 600;
-  color: #f0f0f0;
+  color: var(--text-bright);
   margin: 20px 0 10px 0;
 }
 
 .markdown-h4 {
   font-size: 14px;
   font-weight: 600;
-  color: #e0e0e0;
+  color: var(--text-bright);
   margin: 16px 0 8px 0;
 }
 
@@ -2172,24 +2176,24 @@ textarea,
 .markdown-ol li {
   margin-bottom: 6px;
   line-height: 1.55;
-  color: #cccccc;
+  color: var(--text-primary);
 }
 
 .markdown-strong {
   font-weight: 600;
-  color: #ffffff;
+  color: var(--text-bright);
 }
 
 .markdown-em {
   font-style: italic;
-  color: #e2e8f0;
+  color: var(--text-bright);
 }
 
 .markdown-inline-code {
   font-family: var(--font-mono, "Consolas", monospace);
   font-size: 12.5px;
   background-color: rgba(255, 255, 255, 0.08);
-  color: #ce9178;
+  color: var(--accent-orange);
   padding: 2px 6px;
   border-radius: 4px;
   border: 1px solid rgba(255, 255, 255, 0.06);
@@ -2198,21 +2202,21 @@ textarea,
 .markdown-blockquote {
   margin: 14px 0;
   padding: 8px 16px;
-  border-left: 3px solid #007acc;
+  border-left: 3px solid var(--accent-blue);
   background-color: rgba(0, 122, 204, 0.08);
-  color: #b0c4de;
+  color: var(--text-primary);
   border-radius: 0 4px 4px 0;
 }
 
 .markdown-hr {
   border: 0;
   height: 1px;
-  background-color: #333333;
+  background-color: var(--border-color);
   margin: 24px 0;
 }
 
 .markdown-link {
-  color: #3794ff;
+  color: var(--text-link);
   text-decoration: none;
 }
 
@@ -2224,13 +2228,13 @@ textarea,
   max-width: 100%;
   border-radius: 6px;
   margin: 12px 0;
-  border: 1px solid #333;
+  border: 1px solid var(--border-color);
 }
 
 /* Code block container */
 .markdown-codeblock-container {
-  background-color: #181818;
-  border: 1px solid #2d2d2d;
+  background-color: var(--bg-inset);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   margin: 16px 0;
   overflow: hidden;
@@ -2241,14 +2245,14 @@ textarea,
   justify-content: space-between;
   align-items: center;
   padding: 6px 12px;
-  background-color: #222222;
-  border-bottom: 1px solid #2d2d2d;
+  background-color: var(--bg-sidebar);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .codeblock-lang {
   font-size: 11px;
   font-family: var(--font-mono, monospace);
-  color: #8c8c8c;
+  color: var(--text-muted);
   text-transform: lowercase;
 }
 
@@ -2256,7 +2260,7 @@ textarea,
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 4px;
-  color: #cccccc;
+  color: var(--text-primary);
   font-size: 11px;
   padding: 2px 8px;
   cursor: pointer;
@@ -2268,7 +2272,7 @@ textarea,
 
 .codeblock-copy-btn:hover {
   background-color: rgba(255, 255, 255, 0.1);
-  color: #ffffff;
+  color: var(--text-bright);
 }
 
 .markdown-pre {
@@ -2278,7 +2282,7 @@ textarea,
   font-family: var(--font-mono, "Consolas", monospace);
   font-size: 12.5px;
   line-height: 1.5;
-  color: #d4d4d4;
+  color: var(--text-primary);
 }
 
 /* Extension dropdown menu */
@@ -2293,8 +2297,8 @@ textarea,
   position: absolute;
   top: 100%;
   margin-top: 6px;
-  background-color: #252526;
-  border: 1px solid #454545;
+  background-color: var(--bg-sidebar);
+  border: 1px solid var(--border-subtle);
   border-radius: 4px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   padding: 4px 0;
@@ -2309,7 +2313,7 @@ textarea,
   width: 100%;
   padding: 6px 12px;
   font-size: 12px;
-  color: #cccccc;
+  color: var(--text-primary);
   background: transparent;
   border: none;
   cursor: pointer;
@@ -2317,13 +2321,13 @@ textarea,
 }
 
 .extension-dropdown-item:hover {
-  background-color: #094771;
-  color: #ffffff;
+  background-color: var(--bg-list-active);
+  color: var(--text-bright);
 }
 
 .extension-dropdown-divider {
   height: 1px;
-  background-color: #333333;
+  background-color: var(--border-color);
   margin: 4px 0;
 }
 
@@ -2331,8 +2335,8 @@ textarea,
   position: fixed;
   bottom: 30px;
   right: 30px;
-  background-color: #0e639c;
-  color: #ffffff;
+  background-color: var(--accent-blue-hover);
+  color: var(--text-bright);
   font-size: 12px;
   padding: 8px 16px;
   border-radius: 4px;
@@ -2362,10 +2366,10 @@ textarea,
   gap: 8px;
   padding: 10px 14px;
   font-size: 12px;
-  color: #858585;
+  color: var(--text-muted);
 }
 
 
 
 /* Explorer indent guides (positioned per level by FileTree) */
-.tree-indent-guide { position: absolute; top: 0; bottom: 0; width: 1px; background: #585858; pointer-events: none; }
+.tree-indent-guide { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--border-subtle); pointer-events: none; }

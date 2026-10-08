@@ -83,18 +83,18 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       {/* Search Input Box */}
-      <div style={{ padding: "10px 14px", borderBottom: "1px solid #2d2d2d" }}>
+      <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border-subtle)" }}>
         <div
           style={{
             display: "flex",
             alignItems: "center",
-            background: "#3c3c3c",
-            border: "1px solid #444",
+            background: "var(--bg-input)",
+            border: "1px solid var(--border-subtle)",
             borderRadius: 3,
             padding: "2px 6px",
           }}
         >
-          <Search size={14} color="#8c8c8c" style={{ marginRight: 6, flexShrink: 0 }} />
+          <Search size={14} color="var(--text-muted)" style={{ marginRight: 6, flexShrink: 0 }} />
           <input
             type="text"
             placeholder="Search files (e.g. function, class)..."
@@ -105,7 +105,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
               background: "transparent",
               border: "none",
               outline: "none",
-              color: "#fff",
+              color: "var(--text-bright)",
               fontSize: 12,
             }}
           />
@@ -125,7 +125,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
             onClick={() => setCaseSensitive(!caseSensitive)}
             style={{
               padding: 2,
-              color: caseSensitive ? "#007acc" : "#8c8c8c",
+              color: caseSensitive ? "var(--accent-blue)" : "var(--text-muted)",
               backgroundColor: caseSensitive ? "rgba(0,122,204,0.2)" : "transparent",
               borderRadius: 2,
             }}
@@ -135,7 +135,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
         </div>
 
         {/* Status Line */}
-        <div style={{ marginTop: 8, fontSize: 11, color: "#8c8c8c", display: "flex", alignItems: "center", gap: 6 }}>
+        <div style={{ marginTop: 8, fontSize: 11, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 6 }}>
           {loading ? (
             <>
               <Loader2 size={12} className="spin" />
@@ -169,8 +169,8 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                   padding: "4px 10px",
                   cursor: "pointer",
                   fontSize: 12,
-                  color: "#e0e0e0",
-                  backgroundColor: "#202020",
+                  color: "var(--text-bright)",
+                  backgroundColor: "var(--bg-app)",
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 6, overflow: "hidden" }}>
@@ -183,10 +183,10 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                 <span
                   style={{
                     fontSize: 10,
-                    backgroundColor: "rgba(255,255,255,0.1)",
+                    backgroundColor: "var(--bg-hover)",
                     padding: "1px 5px",
                     borderRadius: 10,
-                    color: "#aaa",
+                    color: "var(--text-muted)",
                   }}
                 >
                   {group.matches.length}
@@ -208,14 +208,14 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                         padding: "3px 12px 3px 26px",
                         cursor: "pointer",
                         fontSize: 12,
-                        color: "#bbb",
+                        color: "var(--text-primary)",
                         fontFamily: "var(--font-mono)",
                         whiteSpace: "nowrap",
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                       }}
                     >
-                      <span style={{ fontSize: 10, color: "#777", minWidth: 24, textAlign: "right" }}>
+                      <span style={{ fontSize: 10, color: "var(--text-muted)", minWidth: 24, textAlign: "right" }}>
                         {m.lineNumber}
                       </span>
                       <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>

@@ -77,7 +77,7 @@ export const RunDebugBar: React.FC<RunDebugBarProps> = ({
               title={runLabel}
               onClick={isHtml ? onTogglePreview : onRunFile}
             >
-              {isHtml ? <Globe size={13} /> : <Play size={13} fill="#ffffff" />}
+              {isHtml ? <Globe size={13} /> : <Play size={13} fill="var(--text-bright)" />}
               <span>{runLabel}</span>
             </button>
           )}
@@ -87,7 +87,7 @@ export const RunDebugBar: React.FC<RunDebugBarProps> = ({
               className="icon-btn"
               title="Toggle Live Web Preview"
               onClick={onTogglePreview}
-              style={{ color: previewActive ? "#007acc" : "#cccccc" }}
+              style={{ color: previewActive ? "var(--accent-blue)" : "var(--text-primary)" }}
             >
               <Globe size={15} />
             </button>
@@ -97,7 +97,7 @@ export const RunDebugBar: React.FC<RunDebugBarProps> = ({
             className="icon-btn"
             title={isSplit ? "Close Split Editor" : "Split Editor Right"}
             onClick={onToggleSplit}
-            style={{ color: isSplit ? "#007acc" : "#cccccc" }}
+            style={{ color: isSplit ? "var(--accent-blue)" : "var(--text-primary)" }}
           >
             <SplitSquareVertical size={15} />
           </button>

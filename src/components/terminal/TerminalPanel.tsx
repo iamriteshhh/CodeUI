@@ -49,30 +49,66 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
   const shellUnlistenRef = useRef<{ data?: () => void; exit?: () => void }>({});
   const runUnlistenRef = useRef<{ output?: () => void; status?: () => void; data?: () => void }>({});
 
-  const XTERM_OPTIONS = {
-    theme: {
-      background: "#181818",
-      foreground: "#cccccc",
-      cursor: "#ffffff",
-      cursorAccent: "#181818",
-      selectionBackground: "rgba(0, 122, 204, 0.35)",
-      black: "#000000",
-      red: "#cd3131",
-      green: "#0dbc79",
-      yellow: "#e5e510",
-      blue: "#2472c8",
-      magenta: "#bc3fbc",
-      cyan: "#11a8cd",
-      white: "#e5e5e5",
-      brightBlack: "#666666",
-      brightRed: "#f14c4c",
-      brightGreen: "#23d18b",
-      brightYellow: "#f5f543",
-      brightBlue: "#3b8eea",
-      brightMagenta: "#d670d6",
-      brightCyan: "#29b8db",
-      brightWhite: "#ffffff",
-    },
+  const XTERM_DARK_THEME = {
+    background: "#181818",
+    foreground: "#cccccc",
+    cursor: "#ffffff",
+    cursorAccent: "#181818",
+    selectionBackground: "rgba(0, 122, 204, 0.35)",
+    black: "#000000",
+    red: "#cd3131",
+    green: "#0dbc79",
+    yellow: "#e5e510",
+    blue: "#2472c8",
+    magenta: "#bc3fbc",
+    cyan: "#11a8cd",
+    white: "#e5e5e5",
+    brightBlack: "#858585",
+    brightRed: "#f14c4c",
+    brightGreen: "#23d18b",
+    brightYellow: "#f5f543",
+    brightBlue: "#3b8eea",
+    brightMagenta: "#d670d6",
+    brightCyan: "#29b8db",
+    brightWhite: "#ffffff",
+  };
+
+  const XTERM_LIGHT_THEME = {
+    background: "#ffffff",
+    foreground: "#333333",
+    cursor: "#333333",
+    cursorAccent: "#ffffff",
+    selectionBackground: "#add6ff",
+    black: "#000000",
+    red: "#cd3131",
+    green: "#008000",
+    yellow: "#795e26",
+    blue: "#0451a5",
+    magenta: "#bc05bc",
+    cyan: "#0598bc",
+    white: "#555555",
+    brightBlack: "#666666",
+    brightRed: "#cd3131",
+    brightGreen: "#008000",
+    brightYellow: "#795e26",
+    brightBlue: "#0451a5",
+    brightMagenta: "#bc05bc",
+    brightCyan: "#0598bc",
+    brightWhite: "#a5a5a5",
+  };
+
+  const getXtermTheme = () => {
+    if (
+      typeof document !== "undefined" &&
+      (document.documentElement.getAttribute("data-theme") === "light" ||
+        document.documentElement.dataset.theme === "light")
+    ) {
+      return XTERM_LIGHT_THEME;
+    }
+    return XTERM_DARK_THEME;
+  };
+
+  const XTERM_BASE_OPTIONS = {
     fontFamily: '"CodeUI Mono", Consolas, "Courier New", monospace',
     fontSize: 13,
     lineHeight: 1.25,
@@ -146,7 +182,10 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
     let isDisposed = false;
 
     // 1. Shell terminal
-    const shellTerm = new Terminal(XTERM_OPTIONS);
+    const shellTerm = new Terminal({
+      ...XTERM_BASE_OPTIONS,
+      theme: getXtermTheme(),
+    });
     const shellFit = new FitAddon();
     shellTerm.loadAddon(shellFit);
     shellTerm.open(shellContainerRef.current);
@@ -165,7 +204,10 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
     });
 
     // 2. Run terminal (dedicated for build & program execution)
-    const runTerm = new Terminal(XTERM_OPTIONS);
+    const runTerm = new Terminal({
+      ...XTERM_BASE_OPTIONS,
+      theme: getXtermTheme(),
+    });
     const runFit = new FitAddon();
     runTerm.loadAddon(runFit);
     runTerm.open(runContainerRef.current);
@@ -384,6 +426,29 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
     };
   }, []);
 
+  // Synchronize terminal theme dynamically with the application theme
+  useEffect(() => {
+    const updateTheme = () => {
+      const theme = getXtermTheme();
+      if (shellTermRef.current) shellTermRef.current.options.theme = theme;
+      if (runTermRef.current) runTermRef.current.options.theme = theme;
+    };
+    if (typeof document === "undefined") return;
+    const observer = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        if (m.attributeName === "data-theme") {
+          updateTheme();
+          break;
+        }
+      }
+    });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+    return () => observer.disconnect();
+  }, []);
+
   // Re-fit when switching tabs
   useEffect(() => {
     requestAnimationFrame(() => {
@@ -474,7 +539,7 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
             onClick={() => setActiveTab("shell")}
             title="Interactive Shell Session"
           >
-            <TerminalIcon size={12} color={activeTab === "shell" ? "#007acc" : "#8c8c8c"} />
+            <TerminalIcon size={12} color={activeTab === "shell" ? "var(--accent-blue)" : "var(--text-muted)"} />
             <span>1: {shellName}</span>
           </button>
 
@@ -484,7 +549,7 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
             onClick={() => setActiveTab("run")}
             title="Dedicated Run Output and Interactive Stdin"
           >
-            <Play size={12} color={runActive ? "#4ec9b0" : activeTab === "run" ? "#007acc" : "#8c8c8c"} />
+            <Play size={12} color={runActive ? "var(--accent-green)" : activeTab === "run" ? "var(--accent-blue)" : "var(--text-muted)"} />
             <span>Run{runFileName ? `: ${runFileName}` : ""}</span>
             {runActive && (
               <span
@@ -492,7 +557,7 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
                   width: 6,
                   height: 6,
                   borderRadius: "50%",
-                  backgroundColor: "#4ec9b0",
+                  backgroundColor: "var(--accent-green)",
                   display: "inline-block",
                 }}
               />
@@ -506,9 +571,9 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
               className="icon-btn"
               title="Stop Running Program (Ctrl+C)"
               onClick={handleStopRun}
-              style={{ color: "#f14c4c" }}
+              style={{ color: "var(--accent-red)" }}
             >
-              <Square size={13} fill="#f14c4c" />
+              <Square size={13} fill="var(--accent-red)" />
             </button>
           )}
 

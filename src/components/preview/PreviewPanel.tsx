@@ -74,17 +74,17 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
           alignItems: "center",
           justifyContent: "space-between",
           padding: "4px 12px",
-          background: "#252526",
-          borderBottom: "1px solid #2d2d2d",
+          background: "var(--bg-sidebar)",
+          borderBottom: "1px solid var(--border-subtle)",
           fontSize: 12,
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <Globe size={14} color="#007acc" />
-          <span style={{ fontWeight: 500, color: "#fff" }}>
+          <Globe size={14} color="var(--accent-blue)" />
+          <span style={{ fontWeight: 500, color: "var(--text-bright)" }}>
             {htmlFile ? htmlFile.name : "No HTML file open"}
           </span>
-          <span style={{ fontSize: 11, color: "#888" }}>
+          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
             Updated {lastUpdated.toLocaleTimeString()}
           </span>
         </div>
@@ -97,7 +97,7 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
               alignItems: "center",
               gap: 5,
               cursor: "pointer",
-              color: autoRefresh ? "#4ec9b0" : "#888",
+              color: autoRefresh ? "var(--accent-green)" : "var(--text-muted)",
               fontSize: 11,
             }}
           >
@@ -118,7 +118,7 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
       </div>
 
       {/* Preview Iframe (Sandboxed Option B) */}
-      <div style={{ flex: 1, backgroundColor: "#ffffff", overflow: "hidden" }}>
+      <div style={{ flex: 1, backgroundColor: "var(--text-bright)", overflow: "hidden" }}>
         {htmlFile ? (
           <iframe
             title="CodeUI Live Web Preview"
@@ -128,7 +128,7 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
               width: "100%",
               height: "100%",
               border: "none",
-              backgroundColor: "#ffffff",
+              backgroundColor: "var(--text-bright)",
             }}
           />
         ) : (
@@ -139,8 +139,8 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
               alignItems: "center",
               justifyContent: "center",
               height: "100%",
-              color: "#666",
-              backgroundColor: "#1e1e1e",
+              color: "var(--text-muted)",
+              backgroundColor: "var(--bg-app)",
               gap: 8,
             }}
           >

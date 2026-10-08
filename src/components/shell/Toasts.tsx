@@ -30,7 +30,7 @@ export const Toasts: React.FC = () => {
         let Icon = Info;
 
         if (toast.type === "error") {
-          accent = "#f14c4c";
+          accent = "var(--accent-red)";
           Icon = AlertCircle;
         } else if (toast.type === "warning") {
           accent = "#e5c07b";
@@ -50,8 +50,8 @@ export const Toasts: React.FC = () => {
               alignItems: "flex-start",
               gap: 10,
               padding: "10px 14px",
-              background: "#252526",
-              color: "#cccccc",
+              background: "var(--bg-sidebar)",
+              color: "var(--text-primary)",
               border: `1px solid ${accent}40`,
               borderLeft: `4px solid ${accent}`,
               borderRadius: 6,
@@ -62,11 +62,11 @@ export const Toasts: React.FC = () => {
           >
             <Icon size={16} color={accent} style={{ flexShrink: 0, marginTop: 2 }} />
             <div style={{ flex: 1, minWidth: 0, fontSize: 13 }}>
-              <div style={{ fontWeight: 600, color: "#ffffff", marginBottom: toast.detail ? 2 : 0 }}>
+              <div style={{ fontWeight: 600, color: "var(--text-bright)", marginBottom: toast.detail ? 2 : 0 }}>
                 {toast.title}
               </div>
               {toast.detail && (
-                <div style={{ color: "#a0a0a0", fontSize: 12, wordBreak: "break-word", lineHeight: 1.4 }}>
+                <div style={{ color: "var(--text-muted)", fontSize: 12, wordBreak: "break-word", lineHeight: 1.4 }}>
                   {toast.detail}
                 </div>
               )}
@@ -79,7 +79,7 @@ export const Toasts: React.FC = () => {
               style={{
                 background: "transparent",
                 border: "none",
-                color: "#858585",
+                color: "var(--text-muted)",
                 cursor: "pointer",
                 padding: 0,
                 marginTop: 2,

@@ -89,7 +89,7 @@ export const QuickOpenModal: React.FC<QuickOpenModalProps> = ({
         onKeyDown={handleKeyDown}
       >
         <div className="quick-open-input-wrapper">
-          <Search size={15} color="#8c8c8c" />
+          <Search size={15} color="var(--text-muted)" />
           <input
             ref={inputRef}
             className="quick-open-input"
@@ -98,7 +98,7 @@ export const QuickOpenModal: React.FC<QuickOpenModalProps> = ({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          <span style={{ fontSize: 11, color: "#666", fontFamily: "var(--font-mono)" }}>
+          <span style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
             Esc to close
           </span>
         </div>
@@ -126,7 +126,7 @@ export const QuickOpenModal: React.FC<QuickOpenModalProps> = ({
               );
             })
           ) : (
-            <div style={{ padding: "16px", textAlign: "center", color: "#777", fontSize: 12 }}>
+            <div style={{ padding: "16px", textAlign: "center", color: "var(--text-muted)", fontSize: 12 }}>
               No matching files found
             </div>
           )}

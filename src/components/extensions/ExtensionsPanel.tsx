@@ -144,18 +144,18 @@ export const ExtensionsPanel: React.FC<ExtensionsPanelProps> = ({
           style={{
             margin: "6px 0 6px 0",
             padding: "6px 8px",
-            background: "#1e1e1e",
-            border: "1px solid #2d2d2d",
-            borderLeft: "3px solid #007acc",
+            background: "var(--bg-app)",
+            border: "1px solid var(--border-subtle)",
+            borderLeft: "3px solid var(--accent-blue)",
             borderRadius: 2,
             lineHeight: 1.35,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#cccccc", fontWeight: 600, fontSize: 11 }}>
-            <Shield size={12} style={{ color: "#007acc", flexShrink: 0 }} />
+          <div style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--text-primary)", fontWeight: 600, fontSize: 11 }}>
+            <Shield size={12} style={{ color: "var(--accent-blue)", flexShrink: 0 }} />
             <span>Security Policy</span>
           </div>
-          <div style={{ color: "#858585", fontSize: 10.5, marginTop: 2 }}>
+          <div style={{ color: "var(--text-muted)", fontSize: 10.5, marginTop: 2 }}>
             AI extensions and AI code completion cannot be installed.
           </div>
         </div>
@@ -176,7 +176,7 @@ export const ExtensionsPanel: React.FC<ExtensionsPanelProps> = ({
             >
               <div className="extensions-group-title">
                 {toolchainsOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                <Cpu size={13} style={{ marginRight: 4, color: "#4ec9b0" }} />
+                <Cpu size={13} style={{ marginRight: 4, color: "var(--accent-green)" }} />
                 <span>Toolchains & Compilers</span>
               </div>
               <span className="extensions-count-badge">
@@ -194,8 +194,8 @@ export const ExtensionsPanel: React.FC<ExtensionsPanelProps> = ({
                       alignItems: "flex-start",
                       justifyContent: "space-between",
                       padding: "6px 8px",
-                      background: tool.available ? "#1f2328" : "#251c1c",
-                      border: `1px solid ${tool.available ? "#30363d" : "#442727"}`,
+                      background: "var(--bg-app)",
+                      border: `1px solid ${tool.available ? "var(--border-subtle)" : "var(--accent-red)"}`,
                       borderRadius: 4,
                       marginBottom: 4,
                       fontSize: 11,
@@ -208,14 +208,14 @@ export const ExtensionsPanel: React.FC<ExtensionsPanelProps> = ({
                         ) : (
                           <AlertCircle size={13} style={{ color: "#f85149", flexShrink: 0 }} />
                         )}
-                        <span style={{ fontWeight: 600, color: "#e6edf3" }}>{tool.name}</span>
-                        <span style={{ color: "#8b949e", fontSize: 10 }}>{tool.purpose}</span>
+                        <span style={{ fontWeight: 600, color: "var(--text-bright)" }}>{tool.name}</span>
+                        <span style={{ color: "var(--text-muted)", fontSize: 10 }}>{tool.purpose}</span>
                       </div>
 
                       {tool.available && tool.path && (
                         <div
                           style={{
-                            color: "#8b949e",
+                            color: "var(--text-muted)",
                             fontSize: 10,
                             marginTop: 2,
                             overflow: "hidden",
@@ -245,9 +245,9 @@ export const ExtensionsPanel: React.FC<ExtensionsPanelProps> = ({
                           fontSize: 10,
                           marginLeft: 6,
                           flexShrink: 0,
-                          background: "#333",
+                          background: "var(--border-color)",
                           borderRadius: 3,
-                          color: copiedTool === tool.name ? "#3fb950" : "#ccc",
+                          color: copiedTool === tool.name ? "#3fb950" : "var(--text-primary)",
                         }}
                       >
                         {copiedTool === tool.name ? "Copied" : <Copy size={11} />}
@@ -298,18 +298,18 @@ export const ExtensionsPanel: React.FC<ExtensionsPanelProps> = ({
                       <div className="extension-list-publisher-row">
                         <div style={{ display: "flex", alignItems: "center", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           <span className="extension-list-publisher">{ext.publisher}</span>
-                          <span style={{ fontSize: 10.5, color: "#777777", marginLeft: 4 }}>
+                          <span style={{ fontSize: 10.5, color: "var(--text-muted)", marginLeft: 4 }}>
                             v{ext.version}
                           </span>
                           {!ext.enabled ? (
                             <span style={{ fontSize: 10, color: "#e5c07b", marginLeft: 6 }}>• Disabled</span>
                           ) : ext.installedInfo?.builtin ? (
-                            <span style={{ fontSize: 10, color: "#4ec9b0", marginLeft: 6 }}>
+                            <span style={{ fontSize: 10, color: "var(--accent-green)", marginLeft: 6 }}>
                               • Built-in
                             </span>
                           ) : ext.systemDetected ? (
                             <span
-                              style={{ fontSize: 10, color: "#858585", marginLeft: 6 }}
+                              style={{ fontSize: 10, color: "var(--text-muted)", marginLeft: 6 }}
                               title={ext.systemToolPath ? `System binary: ${ext.systemToolPath}` : "Installed on system"}
                             >
                               • System
@@ -333,7 +333,7 @@ export const ExtensionsPanel: React.FC<ExtensionsPanelProps> = ({
               })}
 
               {visibleInstalled.length === 0 && (
-                <div style={{ padding: "8px 16px", color: "#666666", fontSize: 12 }}>
+                <div style={{ padding: "8px 16px", color: "var(--text-muted)", fontSize: 12 }}>
                   {isSearching ? "No installed extensions match this search." : "No extensions installed."}
                 </div>
               )}
@@ -381,9 +381,9 @@ export const ExtensionsPanel: React.FC<ExtensionsPanelProps> = ({
                             <span
                               style={{
                                 fontSize: 10.5,
-                                color: "#858585",
-                                background: "#252526",
-                                border: "1px solid #333333",
+                                color: "var(--text-muted)",
+                                background: "var(--bg-sidebar)",
+                                border: "1px solid var(--border-subtle)",
                                 padding: "1px 6px",
                                 borderRadius: 2,
                                 display: "inline-flex",
@@ -393,7 +393,7 @@ export const ExtensionsPanel: React.FC<ExtensionsPanelProps> = ({
                               }}
                               title={ext.blockReason || "Restricted by security policy: AI assistants disabled"}
                             >
-                              <Shield size={10} style={{ color: "#6e7681" }} />
+                              <Shield size={10} style={{ color: "var(--text-muted)" }} />
                               Restricted
                             </span>
                           ) : (
@@ -427,7 +427,7 @@ export const ExtensionsPanel: React.FC<ExtensionsPanelProps> = ({
             >
               <div className="extensions-group-title">
                 {marketplaceOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                <Globe size={13} style={{ marginRight: 4, color: "#007acc" }} />
+                <Globe size={13} style={{ marginRight: 4, color: "var(--accent-blue)" }} />
                 <span>Marketplace</span>
               </div>
               <span className="extensions-count-badge">
@@ -468,20 +468,20 @@ export const ExtensionsPanel: React.FC<ExtensionsPanelProps> = ({
 
                           <div className="extension-list-publisher-row">
                             <span className="extension-list-publisher">{ext.publisher}</span>
-                            <span style={{ fontSize: 11, color: "#777777", marginLeft: 4 }}>
+                            <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 4 }}>
                               v{ext.version}
                             </span>
                             {isInstalled ? (
-                              <span style={{ fontSize: 11, color: "#858585", display: "flex", alignItems: "center", gap: 3 }}>
+                              <span style={{ fontSize: 11, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 3 }}>
                                 <Check size={11} /> Installed
                               </span>
                             ) : ext.blockedByPolicy || isAiExtension(ext) ? (
                               <span
                                 style={{
                                   fontSize: 10.5,
-                                  color: "#858585",
-                                  background: "#252526",
-                                  border: "1px solid #333333",
+                                  color: "var(--text-muted)",
+                                  background: "var(--bg-sidebar)",
+                                  border: "1px solid var(--border-subtle)",
                                   padding: "1px 6px",
                                   borderRadius: 2,
                                   display: "inline-flex",
@@ -491,7 +491,7 @@ export const ExtensionsPanel: React.FC<ExtensionsPanelProps> = ({
                                 }}
                                 title={ext.blockReason || "Restricted by security policy: AI assistants disabled"}
                               >
-                                <Shield size={10} style={{ color: "#6e7681" }} />
+                                <Shield size={10} style={{ color: "var(--text-muted)" }} />
                                 Restricted
                               </span>
                             ) : (
@@ -513,7 +513,7 @@ export const ExtensionsPanel: React.FC<ExtensionsPanelProps> = ({
                   })}
 
                 {!isSearchingMarketplace && marketplaceResults.length === 0 && query.trim().length >= 2 && (
-                  <div style={{ padding: "10px 16px", color: "#666666", fontSize: 12 }}>
+                  <div style={{ padding: "10px 16px", color: "var(--text-muted)", fontSize: 12 }}>
                     No matching marketplace extensions found on Open VSX.
                   </div>
                 )}

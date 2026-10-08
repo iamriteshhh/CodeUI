@@ -364,8 +364,8 @@ export const FileTree: React.FC<FileTreeProps> = ({
               paddingLeft: rowPad(level),
               paddingRight: 8,
               cursor: "pointer",
-              backgroundColor: isActive ? "#37373d" : "transparent",
-              color: isActive ? "#ffffff" : "#cccccc",
+              backgroundColor: isActive ? "var(--bg-selected)" : "transparent",
+              color: isActive ? "var(--text-bright)" : "var(--text-primary)",
               fontSize: 12.5,
               userSelect: "none",
             }}
@@ -389,7 +389,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
                     style={{
                       display: "flex",
                       alignItems: "center",
-                      color: "#8c8c8c",
+                      color: "var(--text-muted)",
                       width: 14,
                       justifyContent: "center",
                     }}
@@ -425,9 +425,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
                     onBlur={() => setRenamingPath(null)}
                     style={{
                       width: "100%",
-                      background: "#3c3c3c",
-                      border: "1px solid #007acc",
-                      color: "#fff",
+                      background: "var(--bg-input)",
+                      border: "1px solid var(--accent-blue)",
+                      color: "var(--text-bright)",
                       padding: "1px 4px",
                       fontSize: 12,
                       borderRadius: 2,
@@ -471,9 +471,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
                     }}
                     style={{
                       flex: 1,
-                      background: "#3c3c3c",
-                      border: "1px solid #007acc",
-                      color: "#fff",
+                      background: "var(--bg-input)",
+                      border: "1px solid var(--accent-blue)",
+                      color: "var(--text-bright)",
                       padding: "2px 6px",
                       fontSize: 12,
                       borderRadius: 2,
@@ -498,7 +498,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
                 style={{
                   position: "relative",
                   fontSize: 11,
-                  color: "#666",
+                  color: "var(--text-muted)",
                   paddingTop: 2,
                   paddingBottom: 2,
                   paddingLeft: rowPad(level + 1) + 19,
@@ -527,8 +527,8 @@ export const FileTree: React.FC<FileTreeProps> = ({
           justifyContent: "space-between",
           padding: "6px 12px",
           cursor: "pointer",
-          backgroundColor: "#202020",
-          borderBottom: "1px solid #2d2d2d",
+          backgroundColor: "var(--bg-app)",
+          borderBottom: "1px solid var(--border-color)",
         }}
       >
         <div
@@ -539,7 +539,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
             gap: 6,
             fontWeight: 600,
             fontSize: 11,
-            color: "#e0e0e0",
+            color: "var(--text-bright)",
             textTransform: "uppercase",
             overflow: "hidden",
             textOverflow: "ellipsis",
@@ -665,9 +665,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
                     }}
                     style={{
                       flex: 1,
-                      background: "#3c3c3c",
-                      border: "1px solid #007acc",
-                      color: "#fff",
+                      background: "var(--bg-input)",
+                      border: "1px solid var(--accent-blue)",
+                      color: "var(--text-bright)",
                       padding: "2px 6px",
                       fontSize: 12,
                       borderRadius: 2,
@@ -681,14 +681,14 @@ export const FileTree: React.FC<FileTreeProps> = ({
             {entries.length > 0 ? (
               renderTreeNodes(entries, workspacePath, 0)
             ) : (
-              <div style={{ padding: "20px 16px", textAlign: "center", color: "#777", fontSize: 12 }}>
+              <div style={{ padding: "20px 16px", textAlign: "center", color: "var(--text-muted)", fontSize: 12 }}>
                 <p>No files in workspace</p>
                 <button
                   onClick={onOpenFolderDialog}
                   style={{
                     marginTop: 10,
-                    background: "#007acc",
-                    color: "#fff",
+                    background: "var(--accent-blue)",
+                    color: "#ffffff",
                     border: "none",
                     padding: "4px 10px",
                     borderRadius: 3,
@@ -705,7 +705,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
       </div>
 
       {/* Code Outline Section */}
-      <div style={{ borderTop: "1px solid #2d2d2d" }}>
+      <div style={{ borderTop: "1px solid var(--border-color)" }}>
         <div
           onClick={() => setOutlineExpanded(!outlineExpanded)}
           style={{
@@ -715,15 +715,15 @@ export const FileTree: React.FC<FileTreeProps> = ({
             padding: "6px 12px",
             fontSize: 11,
             fontWeight: 600,
-            color: "#8c8c8c",
+            color: "var(--text-muted)",
             cursor: "pointer",
-            backgroundColor: "#202020",
+            backgroundColor: "var(--bg-app)",
           }}
         >
           {outlineExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           <span>OUTLINE</span>
           {activeFile && (
-            <span style={{ fontSize: 10, color: "#666", marginLeft: 4 }}>
+            <span style={{ fontSize: 10, color: "var(--text-muted)", marginLeft: 4 }}>
               ({activeFile.name})
             </span>
           )}
@@ -742,7 +742,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
                     justifyContent: "space-between",
                     padding: "3px 12px 3px 20px",
                     fontSize: 12,
-                    color: "#bbb",
+                    color: "var(--text-primary)",
                     cursor: "pointer",
                   }}
                   className="outline-item"
@@ -757,11 +757,11 @@ export const FileTree: React.FC<FileTreeProps> = ({
                       {sym.name}
                     </span>
                   </div>
-                  <span style={{ fontSize: 10, color: "#666" }}>:{sym.line}</span>
+                  <span style={{ fontSize: 10, color: "var(--text-muted)" }}>:{sym.line}</span>
                 </div>
               ))
             ) : (
-              <div style={{ padding: "8px 16px", color: "#666", fontSize: 11 }}>
+              <div style={{ padding: "8px 16px", color: "var(--text-muted)", fontSize: 11 }}>
                 {activeFile ? "No symbols detected in current file." : "No file open."}
               </div>
             )}
@@ -842,7 +842,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
                   }}
                 >
                   <div className="context-menu-item-left">
-                    <Trash2 size={14} color="#f14c4c" />
+                    <Trash2 size={14} color="var(--accent-red)" />
                     <span>Delete</span>
                   </div>
                   <span className="context-menu-shortcut">Del</span>
@@ -928,7 +928,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
                   }}
                 >
                   <div className="context-menu-item-left">
-                    <Trash2 size={14} color="#f14c4c" />
+                    <Trash2 size={14} color="var(--accent-red)" />
                     <span>Delete</span>
                   </div>
                   <span className="context-menu-shortcut">Del</span>
@@ -1054,8 +1054,8 @@ export const FileTree: React.FC<FileTreeProps> = ({
         >
           <div
             style={{
-              background: "#252526",
-              border: "1px solid #3c3c3c",
+              background: "var(--bg-sidebar)",
+              border: "1px solid var(--border-subtle)",
               borderRadius: 6,
               padding: 20,
               maxWidth: 380,
@@ -1064,18 +1064,18 @@ export const FileTree: React.FC<FileTreeProps> = ({
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 style={{ margin: "0 0 10px 0", fontSize: 15, color: "#f14c4c" }}>
+            <h3 style={{ margin: "0 0 10px 0", fontSize: 15, color: "var(--accent-red)" }}>
               Delete Confirmation
             </h3>
-            <p style={{ margin: "0 0 16px 0", fontSize: 13, color: "#cccccc", lineHeight: 1.4 }}>
+            <p style={{ margin: "0 0 16px 0", fontSize: 13, color: "var(--text-primary)", lineHeight: 1.4 }}>
               Are you sure you want to permanently delete <strong>{deleteTarget.name}</strong>? Any open tabs will be closed.
             </p>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
               <button
                 style={{
-                  background: "#3c3c3c",
+                  background: "var(--bg-input)",
                   border: "none",
-                  color: "#ffffff",
+                  color: "var(--text-bright)",
                   padding: "6px 14px",
                   borderRadius: 4,
                   fontSize: 12,

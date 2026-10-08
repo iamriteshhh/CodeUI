@@ -128,9 +128,9 @@ export const ExtensionDetailView: React.FC<ExtensionDetailViewProps> = ({
             {isBuiltin ? (
               <>
                 <span className="meta-separator">|</span>
-                <span style={{ color: "#4ec9b0", fontWeight: 500, fontSize: 12 }}>Built-in Extension</span>
+                <span style={{ color: "var(--accent-green)", fontWeight: 500, fontSize: 12 }}>Built-in Extension</span>
                 <span className="meta-separator">|</span>
-                <span style={{ color: "#8c8c8c", fontSize: 12 }}>Core Language Toolchain</span>
+                <span style={{ color: "var(--text-muted)", fontSize: 12 }}>Core Language Toolchain</span>
               </>
             ) : (
               <>
@@ -168,15 +168,15 @@ export const ExtensionDetailView: React.FC<ExtensionDetailViewProps> = ({
                 gap: 6,
                 margin: "4px 0 10px 0",
                 padding: "3px 8px",
-                background: "#1e1e1e",
-                border: "1px solid #2d2d2d",
+                background: "var(--bg-app)",
+                border: "1px solid var(--border-subtle)",
                 borderRadius: 2,
                 fontSize: 11,
-                color: "#858585",
+                color: "var(--text-muted)",
               }}
             >
               <span>System binary:</span>
-              <code style={{ color: "#cccccc", fontFamily: "Consolas, monospace" }}>
+              <code style={{ color: "var(--text-primary)", fontFamily: "Consolas, monospace" }}>
                 {extension.systemToolPath}
               </code>
             </div>
@@ -188,19 +188,19 @@ export const ExtensionDetailView: React.FC<ExtensionDetailViewProps> = ({
               style={{
                 margin: "8px 0 12px 0",
                 padding: "8px 12px",
-                background: "#1e1e1e",
-                border: "1px solid #2d2d2d",
-                borderLeft: "3px solid #6e7681",
+                background: "var(--bg-app)",
+                border: "1px solid var(--border-subtle)",
+                borderLeft: "3px solid var(--border-subtle)",
                 borderRadius: 2,
                 fontSize: 11,
                 lineHeight: 1.4,
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#cccccc", fontWeight: 600 }}>
-                <Shield size={13} style={{ color: "#6e7681", flexShrink: 0 }} />
+              <div style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--text-primary)", fontWeight: 600 }}>
+                <Shield size={13} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
                 <span>Restricted by Policy</span>
               </div>
-              <div style={{ color: "#858585", marginTop: 2 }}>
+              <div style={{ color: "var(--text-muted)", marginTop: 2 }}>
                 AI extensions cannot be installed in CodeUI. Reason:{" "}
                 {aiReason(extension) ?? extension.blockReason ?? "AI assistant"}.
               </div>
@@ -214,9 +214,9 @@ export const ExtensionDetailView: React.FC<ExtensionDetailViewProps> = ({
                 className="extension-btn"
                 disabled
                 style={{
-                  background: "#252526",
-                  color: "#858585",
-                  border: "1px solid #3c3c3c",
+                  background: "var(--bg-sidebar)",
+                  color: "var(--text-muted)",
+                  border: "1px solid var(--border-subtle)",
                   cursor: "not-allowed",
                   display: "inline-flex",
                   alignItems: "center",
@@ -257,18 +257,18 @@ export const ExtensionDetailView: React.FC<ExtensionDetailViewProps> = ({
               style={{
                 margin: "10px 0 0 0",
                 padding: "8px 12px",
-                background: "#1e1e1e",
-                border: "1px solid #2d2d2d",
-                borderLeft: "3px solid #007acc",
+                background: "var(--bg-app)",
+                border: "1px solid var(--border-subtle)",
+                borderLeft: "3px solid var(--accent-blue)",
                 borderRadius: 2,
                 fontSize: 11,
                 lineHeight: 1.5,
-                color: "#a0a0a0",
+                color: "var(--text-muted)",
                 maxWidth: 640,
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#cccccc", fontWeight: 600 }}>
-                <Info size={12} style={{ color: "#007acc" }} />
+              <div style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--text-primary)", fontWeight: 600 }}>
+                <Info size={12} style={{ color: "var(--accent-blue)" }} />
                 <span>In CodeUI</span>
               </div>
               <div>
@@ -375,8 +375,8 @@ export const ExtensionDetailView: React.FC<ExtensionDetailViewProps> = ({
                 </div>
               ) : (
                 <div className="extension-changelog-placeholder">
-                  <h3 style={{ color: "#ffffff", fontSize: 16, margin: "0 0 8px 0" }}>Release History</h3>
-                  <p style={{ color: "#999999", fontSize: 13, lineHeight: 1.6, margin: "0 0 16px 0" }}>
+                  <h3 style={{ color: "var(--text-bright)", fontSize: 16, margin: "0 0 8px 0" }}>Release History</h3>
+                  <p style={{ color: "var(--text-muted)", fontSize: 13, lineHeight: 1.6, margin: "0 0 16px 0" }}>
                     Full changelog and releases are published directly on the extension repository.
                   </p>
                   {cleanRepoUrl ? (

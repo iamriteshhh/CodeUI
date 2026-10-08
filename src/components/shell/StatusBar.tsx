@@ -93,7 +93,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
             title="Laboratory Restricted Practical Mode Active (Click for details)"
             onClick={() => setShowRestrictedModal(true)}
           >
-            <ShieldCheck size={13} color="#4ec9b0" />
+            <ShieldCheck size={13} color="var(--accent-green)" />
             <span>Restricted Mode</span>
           </div>
 
@@ -103,11 +103,11 @@ export const StatusBar: React.FC<StatusBarProps> = ({
             title="Errors & Warnings (Click to toggle Bottom Panel)"
             onClick={onTogglePanel}
           >
-            <XCircle size={13} color={errorCount > 0 ? "#f14c4c" : "#cccccc"} />
+            <XCircle size={13} color={errorCount > 0 ? "var(--accent-red)" : "var(--text-primary)"} />
             <span>{errorCount}</span>
             <AlertTriangle
               size={13}
-              color={warningCount > 0 ? "#cca700" : "#cccccc"}
+              color={warningCount > 0 ? "var(--accent-yellow)" : "var(--text-primary)"}
               style={{ marginLeft: 4 }}
             />
             <span>{warningCount}</span>
@@ -205,7 +205,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
             overflowY: "auto",
           }}
         >
-          <div style={{ padding: "4px 10px", fontSize: 11, color: "#8c8c8c", fontWeight: 600 }}>
+          <div style={{ padding: "4px 10px", fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>
             Select Language Mode
           </div>
           <div className="context-menu-divider" />
@@ -216,7 +216,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
               onClick={() => handleLanguageSelect(lang.id)}
             >
               <span>{lang.name}</span>
-              {currentLanguage.toLowerCase() === lang.id && <Check size={13} color="#4ec9b0" />}
+              {currentLanguage.toLowerCase() === lang.id && <Check size={13} color="var(--accent-green)" />}
             </div>
           ))}
         </div>
@@ -229,11 +229,11 @@ export const StatusBar: React.FC<StatusBarProps> = ({
             position: "fixed",
             bottom: 30,
             right: 12,
-            background: "#252526",
+            background: "var(--bg-sidebar)",
             border: "1px solid #007acc",
             borderRadius: 4,
             padding: "8px 14px",
-            color: "#fff",
+            color: "var(--text-bright)",
             fontSize: 12,
             boxShadow: "0 4px 16px rgba(0,0,0,0.5)",
             zIndex: 4000,
@@ -242,7 +242,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
             gap: 8,
           }}
         >
-          <Info size={14} color="#007acc" />
+          <Info size={14} color="var(--accent-blue)" />
           <span>CodeUI is running in distraction-free exam mode. All systems normal.</span>
         </div>
       )}
@@ -257,8 +257,8 @@ export const StatusBar: React.FC<StatusBarProps> = ({
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <ShieldCheck size={20} color="#4ec9b0" />
-                <span style={{ fontSize: 15, fontWeight: 600, color: "#ffffff" }}>
+                <ShieldCheck size={20} color="var(--accent-green)" />
+                <span style={{ fontSize: 15, fontWeight: 600, color: "var(--text-bright)" }}>
                   Laboratory Restricted Practical Mode
                 </span>
               </div>
@@ -270,19 +270,19 @@ export const StatusBar: React.FC<StatusBarProps> = ({
               </button>
             </div>
 
-            <div style={{ fontSize: 12.5, color: "#a0a0a0", lineHeight: 1.6, marginBottom: 16 }}>
+            <div style={{ fontSize: 12.5, color: "var(--text-muted)", lineHeight: 1.6, marginBottom: 16 }}>
               <p style={{ marginBottom: 10 }}>
                 This workspace is configured for college computer lab practicals, competitive programming, and exam assessments.
               </p>
               <ul style={{ paddingLeft: 18, display: "flex", flexDirection: "column", gap: 6 }}>
                 <li>
-                  <strong style={{ color: "#fff" }}>No Autocomplete & Copilot:</strong> IntelliSense suggestion popups and AI assistants are intentionally disabled to verify student understanding.
+                  <strong style={{ color: "var(--text-bright)" }}>No Autocomplete & Copilot:</strong> IntelliSense suggestion popups and AI assistants are intentionally disabled to verify student understanding.
                 </li>
                 <li>
-                  <strong style={{ color: "#fff" }}>Supervised Execution:</strong> Programs run under OS resource limits. Linux (and macOS, untested) also restrict network and file access where the kernel supports it; Windows does not isolate network or files. Help &gt; Copy Diagnostics shows what this machine enforces.
+                  <strong style={{ color: "var(--text-bright)" }}>Supervised Execution:</strong> Programs run under OS resource limits. Linux (and macOS, untested) also restrict network and file access where the kernel supports it; Windows does not isolate network or files. Help &gt; Copy Diagnostics shows what this machine enforces.
                 </li>
                 <li>
-                  <strong style={{ color: "#fff" }}>Execution Timeouts:</strong> A program is stopped after 30 seconds without input by default (configurable idle timeout) and after 300 seconds in total, so runaway loops cannot freeze the workstation.
+                  <strong style={{ color: "var(--text-bright)" }}>Execution Timeouts:</strong> A program is stopped after 30 seconds without input by default (configurable idle timeout) and after 300 seconds in total, so runaway loops cannot freeze the workstation.
                 </li>
               </ul>
             </div>
@@ -291,8 +291,8 @@ export const StatusBar: React.FC<StatusBarProps> = ({
               <button
                 onClick={() => setShowRestrictedModal(false)}
                 style={{
-                  background: "#007acc",
-                  color: "#fff",
+                  background: "var(--accent-blue)",
+                  color: "#ffffff",
                   border: "none",
                   padding: "6px 16px",
                   borderRadius: 4,

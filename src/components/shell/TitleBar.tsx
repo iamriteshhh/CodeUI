@@ -255,7 +255,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
       { label: "Previous Editor Tab", shortcut: "Ctrl+PageUp", action: onPrevTab },
     ],
     Run: [
-      { label: "Run Active File", shortcut: "F5", icon: <Play size={14} fill="#4ec9b0" color="#4ec9b0" />, action: onRunFile },
+      { label: "Run Active File", shortcut: "F5", icon: <Play size={14} fill="var(--accent-green)" color="var(--accent-green)" />, action: onRunFile },
       { divider: true, label: "" },
       { label: "Detect Installed Toolchains", icon: <Layers size={14} />, action: onRefreshTools },
     ],
@@ -310,7 +310,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
                   onMouseEnter={() => handleMenuHover(name)}
                   style={{
                     backgroundColor: isOpen ? "rgba(255, 255, 255, 0.15)" : undefined,
-                    color: isOpen ? "#ffffff" : undefined,
+                    color: isOpen ? "var(--text-bright)" : undefined,
                     cursor: "pointer",
                   }}
                 >
@@ -374,7 +374,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
             className="titlebar-action-btn"
             title="Toggle Primary Sidebar (Ctrl+B)"
             onClick={onToggleSidebar}
-            style={{ color: sidebarVisible ? "#007acc" : undefined }}
+            style={{ color: sidebarVisible ? "var(--accent-blue)" : undefined }}
           >
             <PanelLeft size={15} />
           </button>
@@ -382,7 +382,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
             className="titlebar-action-btn"
             title="Toggle Bottom Panel (Ctrl+`)"
             onClick={onTogglePanel}
-            style={{ color: panelVisible ? "#007acc" : undefined }}
+            style={{ color: panelVisible ? "var(--accent-blue)" : undefined }}
           >
             <Sliders size={15} />
           </button>

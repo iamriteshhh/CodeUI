@@ -38,7 +38,7 @@ export const TabStrip: React.FC<TabStripProps> = ({
           className={`tab ${isWelcomeActive && !isExtensionActive ? "active" : ""}`}
           onClick={onSelectWelcome}
         >
-          <Code2 size={13} color="#007acc" />
+          <Code2 size={13} color="var(--accent-blue)" />
           <span>Welcome</span>
           <div
             className="tab-close"
@@ -58,7 +58,7 @@ export const TabStrip: React.FC<TabStripProps> = ({
           className={`tab ${isExtensionActive ? "active" : ""}`}
           onClick={onSelectExtension}
         >
-          <Blocks size={13} color="#3794ff" />
+          <Blocks size={13} color="var(--text-link)" />
           <span>Extension: {activeExtension.displayName}</span>
           <div
             className="tab-close"

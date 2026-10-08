@@ -76,23 +76,23 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
               <h2 className="welcome-section-heading">Start</h2>
               <div className="welcome-action-list">
                 <button className="welcome-action-item" onClick={onNewFile}>
-                  <FilePlus size={16} color="#3794ff" />
+                  <FilePlus size={16} color="var(--text-link)" />
                   <span>New File...</span>
                 </button>
                 <button className="welcome-action-item" onClick={onOpenFile}>
-                  <FileCode size={16} color="#3794ff" />
+                  <FileCode size={16} color="var(--text-link)" />
                   <span>Open File...</span>
                 </button>
                 <button className="welcome-action-item" onClick={onOpenFolder}>
-                  <FolderOpen size={16} color="#3794ff" />
+                  <FolderOpen size={16} color="var(--text-link)" />
                   <span>Open Folder...</span>
                 </button>
                 <button className="welcome-action-item" onClick={onOpenInFileManager}>
-                  <ExternalLink size={16} color="#3794ff" />
+                  <ExternalLink size={16} color="var(--text-link)" />
                   <span>Reveal in File Explorer</span>
                 </button>
                 <button className="welcome-action-item" onClick={onOpenTerminal}>
-                  <Terminal size={16} color="#3794ff" />
+                  <Terminal size={16} color="var(--text-link)" />
                   <span>Open Terminal Panel</span>
                 </button>
               </div>

@@ -13,7 +13,7 @@ const ExtensionDetailView = React.lazy(() =>
 );
 
 const EditorFallback = () => (
-  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", width: "100%", color: "#666", fontSize: 13 }}>
+  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", width: "100%", color: "var(--text-muted)", fontSize: 13 }}>
     Loading editor...
   </div>
 );

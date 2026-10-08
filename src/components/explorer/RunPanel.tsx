@@ -21,17 +21,17 @@ export const RunPanel: React.FC<RunPanelProps> = ({
   runTimeoutSecs,
 }) => {
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "16px", color: "#ccc" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "16px", color: "var(--text-primary)" }}>
       {/* Active Target Header */}
       <div style={{ marginBottom: 16 }}>
-        <span style={{ fontSize: 11, fontWeight: 600, color: "#8c8c8c", textTransform: "uppercase" }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase" }}>
           Target File
         </span>
-        <div style={{ marginTop: 6, padding: "8px 12px", background: "#202020", borderRadius: 4, border: "1px solid #333" }}>
+        <div style={{ marginTop: 6, padding: "8px 12px", background: "var(--bg-app)", borderRadius: 4, border: "1px solid var(--border-subtle)" }}>
           {activeFile ? (
             <div>
-              <div style={{ fontWeight: 600, color: "#fff", fontSize: 13 }}>{activeFile.name}</div>
-              <div style={{ fontSize: 11, color: "#777", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <div style={{ fontWeight: 600, color: "var(--text-bright)", fontSize: 13 }}>{activeFile.name}</div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {activeFile.path}
               </div>
               <div style={{ marginTop: 6, display: "inline-block", fontSize: 10, padding: "1px 6px", background: "rgba(0,122,204,0.25)", color: "#61dafb", borderRadius: 3 }}>
@@ -39,7 +39,7 @@ export const RunPanel: React.FC<RunPanelProps> = ({
               </div>
             </div>
           ) : (
-            <div style={{ fontSize: 12, color: "#777" }}>No active file selected to run</div>
+            <div style={{ fontSize: 12, color: "var(--text-muted)" }}>No active file selected to run</div>
           )}
         </div>
       </div>
@@ -53,8 +53,8 @@ export const RunPanel: React.FC<RunPanelProps> = ({
           alignItems: "center",
           justifyContent: "center",
           gap: 8,
-          background: activeFile ? "#1f8a4c" : "#333",
-          color: activeFile ? "#fff" : "#666",
+          background: activeFile ? "#1f8a4c" : "var(--border-color)",
+          color: activeFile ? "#ffffff" : "var(--text-muted)",
           border: "none",
           padding: "10px",
           borderRadius: 4,
@@ -65,14 +65,14 @@ export const RunPanel: React.FC<RunPanelProps> = ({
           transition: "background 0.15s ease",
         }}
       >
-        <Play size={16} fill={activeFile ? "#fff" : "#666"} />
+        <Play size={16} fill={activeFile ? "#ffffff" : "var(--text-muted)"} />
         <span>Run Current File (F5)</span>
       </button>
 
       {/* Toolchain Health */}
       <div style={{ marginBottom: 20, flex: 1, overflowY: "auto" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-          <span style={{ fontSize: 11, fontWeight: 600, color: "#8c8c8c", textTransform: "uppercase" }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase" }}>
             Detected Toolchains
           </span>
           <button
@@ -94,22 +94,22 @@ export const RunPanel: React.FC<RunPanelProps> = ({
                 alignItems: "center",
                 justifyContent: "space-between",
                 padding: "8px 10px",
-                background: "#252526",
+                background: "var(--bg-sidebar)",
                 borderRadius: 4,
-                border: "1px solid #333",
+                border: "1px solid var(--border-subtle)",
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 {tool.available ? (
-                  <CheckCircle2 size={15} color="#4ec9b0" />
+                  <CheckCircle2 size={15} color="var(--accent-green)" />
                 ) : (
-                  <AlertCircle size={15} color="#ce9178" />
+                  <AlertCircle size={15} color="var(--accent-orange)" />
                 )}
                 <div>
-                  <div style={{ fontSize: 12, fontWeight: 500, color: "#fff" }}>
+                  <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text-bright)" }}>
                     {tool.name}
                   </div>
-                  <div style={{ fontSize: 10, color: "#888" }}>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)" }}>
                     {tool.available ? tool.path || "Installed" : "Not Found"}
                   </div>
                 </div>
@@ -122,7 +122,7 @@ export const RunPanel: React.FC<RunPanelProps> = ({
                   padding: "2px 6px",
                   borderRadius: 3,
                   backgroundColor: tool.available ? "rgba(78,201,176,0.15)" : "rgba(206,145,120,0.15)",
-                  color: tool.available ? "#4ec9b0" : "#ce9178",
+                  color: tool.available ? "var(--accent-green)" : "var(--accent-orange)",
                 }}
               >
                 {tool.available ? "Ready" : "Missing"}
@@ -133,8 +133,8 @@ export const RunPanel: React.FC<RunPanelProps> = ({
       </div>
 
       {/* Execution Protection & Terminal */}
-      <div style={{ borderTop: "1px solid #333", paddingTop: 14 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#888", marginBottom: 10 }}>
+      <div style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--text-muted)", marginBottom: 10 }}>
           <Clock size={13} />
           <span>Lab-Safe: programs idle for {runTimeoutSecs}s are stopped</span>
         </div>
@@ -147,8 +147,8 @@ export const RunPanel: React.FC<RunPanelProps> = ({
             justifyContent: "center",
             gap: 6,
             background: "transparent",
-            border: "1px solid #444",
-            color: "#ccc",
+            border: "1px solid var(--border-subtle)",
+            color: "var(--text-primary)",
             padding: "6px 12px",
             borderRadius: 4,
             fontSize: 12,

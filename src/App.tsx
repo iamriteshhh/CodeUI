@@ -818,7 +818,7 @@ export function App() {
                 >
                   <Suspense
                     fallback={
-                      <div style={{ padding: "12px", color: "#888", fontSize: "12px" }}>
+                      <div style={{ padding: "12px", color: "var(--text-muted)", fontSize: "12px" }}>
                         Loading terminal...
                       </div>
                     }
@@ -842,7 +842,7 @@ export function App() {
                 >
                   <Suspense
                     fallback={
-                      <div style={{ padding: "12px", color: "#888", fontSize: "12px" }}>
+                      <div style={{ padding: "12px", color: "var(--text-muted)", fontSize: "12px" }}>
                         Loading preview...
                       </div>
                     }
@@ -923,8 +923,8 @@ export function App() {
         >
           <div
             style={{
-              background: "#252526",
-              border: "1px solid #3c3c3c",
+              background: "var(--bg-sidebar)",
+              border: "1px solid var(--border-color)",
               borderRadius: 6,
               padding: 20,
               maxWidth: 380,
@@ -933,7 +933,7 @@ export function App() {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 style={{ margin: "0 0 12px 0", fontSize: 15, color: "#ffffff" }}>
+            <h3 style={{ margin: "0 0 12px 0", fontSize: 15, color: "var(--text-bright)" }}>
               New File
             </h3>
             <form onSubmit={handleConfirmNewFile}>
@@ -946,9 +946,9 @@ export function App() {
                 style={{
                   width: "100%",
                   boxSizing: "border-box",
-                  background: "#3c3c3c",
-                  border: "1px solid #555555",
-                  color: "#ffffff",
+                  background: "var(--bg-input)",
+                  border: "1px solid var(--border-subtle)",
+                  color: "var(--text-bright)",
                   padding: "8px 10px",
                   borderRadius: 4,
                   fontSize: 13,
@@ -960,9 +960,9 @@ export function App() {
                 <button
                   type="button"
                   style={{
-                    background: "#3c3c3c",
+                    background: "var(--bg-input)",
                     border: "none",
-                    color: "#ffffff",
+                    color: "var(--text-bright)",
                     padding: "6px 14px",
                     borderRadius: 4,
                     fontSize: 12,
@@ -975,7 +975,7 @@ export function App() {
                 <button
                   type="submit"
                   style={{
-                    background: "#0e639c",
+                    background: "var(--accent-blue-hover)",
                     border: "none",
                     color: "#ffffff",
                     padding: "6px 14px",

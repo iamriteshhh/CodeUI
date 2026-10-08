@@ -247,7 +247,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               type="checkbox"
               checked={showWelcome}
               onChange={(e) => setShowWelcome(e.target.checked)}
-              style={{ width: 16, height: 16, accentColor: "#007acc", cursor: "pointer" }}
+              style={{ width: 16, height: 16, accentColor: "var(--accent-blue)", cursor: "pointer" }}
             />
           </div>
         </div>
