@@ -98,7 +98,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SALIVO_SDK_TAG: salivo-sdk-v1.0.16
+          SALIVO_SDK_TAG: salivo-sdk-v1.0.19
         run: |
           case "${{ matrix.platform }}" in
             windows-*) pattern='*-windows-x64.zip' ;;
