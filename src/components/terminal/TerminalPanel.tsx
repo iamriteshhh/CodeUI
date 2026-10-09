@@ -4,7 +4,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import { ptyService } from "../../services/ptyService";
 import { processService } from "../../services/processService";
-import { parseCompilerDiagnostics } from "../../services/diagnostics";
+import { rewriteCompilerOutput } from "../../services/diagnostics";
 import { editorService } from "../../services/editorService";
 import { markTerminalReady, WORKSPACE_RESET_EVENT } from "../../services/terminalReady";
 import { Trash2, RotateCw, Terminal as TerminalIcon, Plus, Play, Square } from "lucide-react";
@@ -325,12 +325,20 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
 
       let unOut: (() => void) | undefined;
       let unStat: (() => void) | undefined;
-      let stderr = "";
+      // Compiler output is held until the build ends, then shown with each error on
+      // the line that needs the fix (the compiler often names the next line instead).
+      let compileOutput: string | null = "";
+      const flushCompileOutput = () => {
+        if (compileOutput === null) return;
+        const source = editorService.getText(path) ?? undefined;
+        if (compileOutput) rTerm.write(rewriteCompilerOutput(language, compileOutput, path, source));
+        compileOutput = null;
+      };
 
       processService
         .onRunOutput(runId, (chunk) => {
-          if (chunk.stream === "stderr") stderr += chunk.chunk;
-          rTerm.write(chunk.chunk);
+          if (compileOutput !== null) compileOutput += chunk.chunk;
+          else rTerm.write(chunk.chunk);
         })
         .then((un) => {
           unOut = un;
@@ -338,16 +346,13 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
 
       processService
         .onRunStatus(runId, (status) => {
+          if (status.phase !== "compiling") flushCompileOutput();
           if (status.phase === "running") {
             rTerm.writeln(`\r\n\x1b[32m[Running ${name} (PID: ${status.pid})]\x1b[0m\r\n`);
           } else if (status.phase === "compileFailed") {
             rTerm.writeln(
               `\r\n\x1b[31m[Build failed (exit code ${status.exitCode ?? 1})]\x1b[0m\r\n`
             );
-            const source = editorService.getText(path) ?? undefined;
-            for (const d of parseCompilerDiagnostics(language, stderr, path, source)) {
-              if (d.hint) rTerm.writeln(`\x1b[33m[Likely cause] ${d.hint}\x1b[0m\r\n`);
-            }
             setRunActive(false);
           } else if (status.phase === "finished") {
             const dur = status.durationMs ?? 0;

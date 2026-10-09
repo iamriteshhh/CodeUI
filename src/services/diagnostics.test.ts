@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findBraceProblem, parseCompilerDiagnostics } from "./diagnostics";
+import { findBraceProblem, parseCompilerDiagnostics, rewriteCompilerOutput } from "./diagnostics";
 
 describe("parseCompilerDiagnostics", () => {
   describe("gcc / g++ / clang diagnostics", () => {
@@ -17,6 +17,7 @@ describe("parseCompilerDiagnostics", () => {
         endColumn: 10,
         severity: "error",
         message: "expected ';' before 'return'",
+        outputLine: 0,
       });
     });
 
@@ -62,6 +63,7 @@ C:\\codes\\a.c:7:13: error: expected ';' before 'x'`;
         endColumn: 19,
         severity: "warning",
         message: "unused variable 'x' [-Wunused-variable]",
+        outputLine: 0,
       });
     });
   });
@@ -202,5 +204,87 @@ Main.java:9: error: class, interface, enum, or record expected`;
       "}",
     ].join("\n");
     expect(findBraceProblem(src.split("\n"))).toBeNull();
+  });
+});
+
+describe("errors reported on the line after the mistake (real g++ 14, gcc 14, sf output)", () => {
+  const cpp = [
+    "class info {",
+    "public:",
+    "    void get() {",
+    "        cout << \"name : \" << endl",
+    "        cin >> name;",
+    "    }",
+    "};",
+  ].join("\r\n");
+  // g++ 14 still names the next statement for a missing ';' in C++.
+  const gxx = [
+    "C:\\codes\\a.cpp: In member function 'void info::get()':",
+    "C:\\codes\\a.cpp:5:9: error: expected ';' before 'cin'",
+    "    5 |         cin >> name;",
+    "      |         ^~~",
+  ].join("\n");
+
+  it("moves the marker to the end of the line that is missing ';'", () => {
+    const [d] = parseCompilerDiagnostics("cpp", gxx, "C:\\codes\\a.cpp", cpp);
+    expect(d).toMatchObject({ line: 4, column: 34, reportedLine: 5, message: "missing ';' at the end of line 4" });
+  });
+
+  it("rewrites the terminal output to name that line and quote it", () => {
+    expect(rewriteCompilerOutput("cpp", gxx, "C:\\codes\\a.cpp", cpp).split("\r\n")).toEqual([
+      "C:\\codes\\a.cpp: In member function 'void info::get()':",
+      "C:\\codes\\a.cpp:4:34: error: missing ';' at the end of line 4",
+      "    4 |         cout << \"name : \" << endl",
+      "      |                                  ^",
+    ]);
+  });
+
+  it("handles the old gcc quote format and \"',' or ';'\" wording", () => {
+    const c = "int main() {\n    int a = 5\n    printf(\"%d\", a);\n}";
+    const out = "a.c:3:5: error: expected ',' or ';' before 'printf'\n     printf(\"%d\", a);\n     ^~~~~~\na.c:9:1: error: something else";
+    expect(rewriteCompilerOutput("c", out, "a.c", c).split("\r\n")).toEqual([
+      "a.c:2:14: error: missing ',' or ';' at the end of line 2",
+      "    2 |     int a = 5",
+      "      |              ^",
+      "a.c:9:1: error: something else",
+    ]);
+  });
+
+  it("does the same for Salivo parser errors", () => {
+    const sal = "func main() {\n    let a = 5\n    outln($\"{a}\");\n}";
+    const out = [
+      "Parser Error(s):",
+      "  Line 3, Col 5: UnexpectedToken { expected: \"Semicolon\", found: \"Identifier\" }: Expected Semicolon, but found Identifier",
+      "    --> outln($\"{a}\");",
+    ].join("\n");
+    expect(parseCompilerDiagnostics("salivo", out, "a.sal", sal)[0]).toMatchObject({ line: 2, column: 14 });
+    expect(rewriteCompilerOutput("salivo", out, "a.sal", sal).split("\r\n")).toEqual([
+      "Parser Error(s):",
+      "  Line 2, Col 14: missing ';' at the end of line 2",
+      "    --> let a = 5",
+    ]);
+  });
+
+  it("reads Salivo semantic errors without moving them", () => {
+    const out = "Semantic Error(s):\n  Line 3, Col 11: Undeclared variable 'b'\n    --> outln($\"{b}\");";
+    const [d] = parseCompilerDiagnostics("salivo", out, "a.sal", "func main() {\n\n    outln($\"{b}\");\n}");
+    expect(d).toMatchObject({ line: 3, column: 11, message: "Undeclared variable 'b'" });
+    expect(d.reportedLine).toBeUndefined();
+  });
+
+  it("puts a missing brace first, before the compiler's later errors", () => {
+    const src = "int main() {\n    for (;;)\n        f();\n    }\n    return 0;\n}";
+    const out = "a.c:5:5: error: expected identifier or '(' before 'return'";
+    expect(rewriteCompilerOutput("c", out, "a.c", src).split("\r\n").slice(0, 4)).toEqual([
+      "a.c:2:13: error: missing '{' at the end of line 2",
+      "    2 |     for (;;)",
+      "      |             ^",
+      "note: Line 2 is missing '{' at the end. Without it, the '}' on line 4 closes the block from line 1 instead, so the compiler reports errors further down.",
+    ]);
+  });
+
+  it("leaves output that already points at the right line unchanged (clang)", () => {
+    const out = "a.c:2:14: error: expected ';' at end of declaration\n    2 |     int a = 5\n      |              ^";
+    expect(rewriteCompilerOutput("c", out, "a.c", "int main() {\n    int a = 5\n}")).toBe(out.split("\n").join("\r\n"));
   });
 });

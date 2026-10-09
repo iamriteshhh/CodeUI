@@ -57,17 +57,39 @@ export interface CompilerDiagnostic {
   message: string;
   /** Line the compiler printed, when the marker was moved to where the fix belongs. */
   reportedLine?: number;
-  /** Plain-language explanation printed under the raw compiler output. */
+  /** Index of the compiler output line this diagnostic was read from. */
+  outputLine?: number;
+  /** Plain-language explanation printed with the error in the Run terminal. */
   hint?: string;
 }
 
+const SALIVO_TOKENS: Record<string, string> = {
+  Semicolon: "';'",
+  "';' after statement": "';'",
+  RParen: "')'",
+  RBracket: "']'",
+  RBrace: "'}'",
+  Comma: "','",
+  Colon: "':'",
+};
+
+/** The token a "missing token" error asks for ("';'", "',' or ';'"), or null for any other error. */
+function missingToken(message: string): string | null {
+  const gcc = /^expected ((?:'[^']+'(?:,? or |, )?)+) before/.exec(message);
+  if (gcc) return gcc[1];
+  const salivo = /Expected (.+?), but found/.exec(message);
+  return salivo ? SALIVO_TOKENS[salivo[1]] ?? null : null;
+}
+
 /**
- * Older gcc (e.g. MinGW 6.x on Windows) reports a missing ';' or ')' at the next
- * token, so a semicolon missing on line 16 shows up as "17:5: expected ';' before '}'".
- * When that token starts its line, the fix belongs at the end of the previous code line.
+ * gcc/g++ (every version for C++, older ones for C) and Salivo report a missing ';' or ')'
+ * at the next token, so a semicolon missing on line 17 shows up as
+ * "18:5: expected ';' before 'cin'". When that token starts its line, the fix belongs at
+ * the end of the previous code line, which is where clang and javac already point.
  */
-function remapExpectedBefore(d: CompilerDiagnostic, sourceLines: string[]): CompilerDiagnostic {
-  if (!/^expected '[^']+' before/.test(d.message)) return d;
+function remapMissingToken(d: CompilerDiagnostic, sourceLines: string[]): CompilerDiagnostic {
+  const token = missingToken(d.message);
+  if (!token) return d;
   const current = sourceLines[d.line - 1];
   if (current === undefined || current.slice(0, d.column - 1).trim() !== "") return d;
   for (let i = d.line - 2; i >= 0; i--) {
@@ -80,7 +102,7 @@ function remapExpectedBefore(d: CompilerDiagnostic, sourceLines: string[]): Comp
       column: text.length + 1,
       endColumn: text.length + 2,
       reportedLine: d.line,
-      hint: `"${d.message}" at line ${d.line} means the fix belongs at the end of line ${i + 1}.`,
+      message: `missing ${token} at the end of line ${i + 1}`,
     };
   }
   return d;
@@ -385,8 +407,9 @@ export function parseCompilerDiagnostics(
             endColumn: column + 5,
             severity,
             message,
+            outputLine: i,
           };
-          diagnostics.push(sourceLines ? remapExpectedBefore(diag, sourceLines) : diag);
+          diagnostics.push(sourceLines ? remapMissingToken(diag, sourceLines) : diag);
         }
       }
     }
@@ -417,9 +440,28 @@ export function parseCompilerDiagnostics(
             endColumn: column + 4,
             severity: sevStr === "warning" ? "warning" : "error",
             message,
+            outputLine: i,
           });
         }
       }
+    }
+  } else if (language === "salivo") {
+    // sf: "  Line 3, Col 5: UnexpectedToken { ... }: Expected Semicolon, but found Identifier"
+    const salivoRegex = /^Line (\d+), Col (\d+): (?:\w+ \{.*\}: )?(.*)$/;
+    for (let i = 0; i < lines.length; i++) {
+      const match = salivoRegex.exec(lines[i].trim());
+      if (!match) continue;
+      const column = parseInt(match[2], 10);
+      const diag: CompilerDiagnostic = {
+        file: targetFilePath,
+        line: parseInt(match[1], 10),
+        column,
+        endColumn: column + 5,
+        severity: "error",
+        message: match[3].trim(),
+        outputLine: i,
+      };
+      diagnostics.push(sourceLines ? remapMissingToken(diag, sourceLines) : diag);
     }
   } else if (language === "python") {
     // Python traceback & SyntaxError format
@@ -471,4 +513,61 @@ export function parseCompilerDiagnostics(
   }
 
   return diagnostics;
+}
+
+/**
+ * Compiler output as the Run terminal shows it. Errors the compiler puts on the wrong line
+ * (see remapMissingToken) are rewritten to the line that needs the fix, quoting that line;
+ * a missing brace (findBraceProblem) is reported first. Every other line is unchanged.
+ */
+export function rewriteCompilerOutput(
+  language: string,
+  output: string,
+  targetFilePath: string,
+  source?: string
+): string {
+  const lines = output.split(/\r?\n/);
+  if (source === undefined) return lines.join("\r\n");
+  const sourceLines = source.split(/\r?\n/);
+  const diagnostics = parseCompilerDiagnostics(language, output, targetFilePath, source);
+  const salivo = language === "salivo";
+
+  const header = (d: CompilerDiagnostic) =>
+    salivo
+      ? `  Line ${d.line}, Col ${d.column}: ${d.message}`
+      : language === "java"
+        ? `${targetFilePath.split(/[/\\]/).pop()}:${d.line}: error: ${d.message}`
+        : `${targetFilePath}:${d.line}:${d.column}: error: ${d.message}`;
+  const quote = (d: CompilerDiagnostic) => {
+    const text = (sourceLines[d.line - 1] ?? "").trimEnd();
+    if (salivo) return [`    --> ${text.trim()}`];
+    const caret = text.slice(0, d.column - 1).replace(/[^\t]/g, " ") + "^";
+    return [`${String(d.line).padStart(5)} | ${text}`, `      | ${caret}`];
+  };
+
+  const out: string[] = [];
+  const brace = diagnostics.find((d) => d.hint);
+  if (brace) out.push(header(brace), ...quote(brace), `note: ${brace.hint}`, "");
+
+  const moved = new Map<number, CompilerDiagnostic>();
+  for (const d of diagnostics) {
+    if (d.reportedLine !== undefined && d.outputLine !== undefined) moved.set(d.outputLine, d);
+  }
+  for (let i = 0; i < lines.length; i++) {
+    const d = moved.get(i);
+    if (!d) {
+      out.push(lines[i]);
+      continue;
+    }
+    out.push(
+      salivo
+        ? lines[i].replace(/Line \d+, Col \d+: .*$/, `Line ${d.line}, Col ${d.column}: ${d.message}`)
+        : lines[i].replace(/:\d+:\d+:(\s+(?:fatal error|error|warning):\s+).*$/i, `:${d.line}:${d.column}:$1${d.message}`),
+      ...quote(d)
+    );
+    // Drop the compiler's own quote of the wrong line.
+    const quoted = salivo ? /^\s+-->/ : /^\s+\S/;
+    while (i + 1 < lines.length && quoted.test(lines[i + 1])) i++;
+  }
+  return out.join("\r\n");
 }
