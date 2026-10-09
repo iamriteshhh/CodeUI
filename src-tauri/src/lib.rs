@@ -78,6 +78,7 @@ pub fn run() {
             commands::process::stop_run,
             commands::process::write_run_stdin,
             commands::process::close_run_stdin,
+            commands::process::resize_run,
             commands::terminal::spawn_pty,
             commands::terminal::write_pty,
             commands::terminal::resize_pty,

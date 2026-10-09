@@ -155,6 +155,15 @@ const MonacoEditorGroupComponent: React.FC<MonacoEditorGroupProps> = ({
               editorService.setActiveEditor(editor);
             });
 
+            // Closing the split (or the last tab) disposes this editor: menu actions,
+            // Find and Go to Line must move to the editor that is still on screen.
+            editor.onDidDispose(() => {
+              if (editorService.getActiveEditor() === editor) {
+                const other = monaco.editor.getEditors().find((e) => e !== editor);
+                editorService.setActiveEditor((other as Monaco.editor.IStandaloneCodeEditor | undefined) ?? null);
+              }
+            });
+
             // Track live cursor position
             editor.onDidChangeCursorPosition((e) => {
               editorService.notifyCursorChange(e.position.lineNumber, e.position.column);

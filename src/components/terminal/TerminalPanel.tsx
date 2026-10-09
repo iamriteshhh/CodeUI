@@ -4,6 +4,8 @@ import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import { ptyService } from "../../services/ptyService";
 import { processService } from "../../services/processService";
+import { parseCompilerDiagnostics } from "../../services/diagnostics";
+import { editorService } from "../../services/editorService";
 import { markTerminalReady, WORKSPACE_RESET_EVENT } from "../../services/terminalReady";
 import { Trash2, RotateCw, Terminal as TerminalIcon, Plus, Play, Square } from "lucide-react";
 
@@ -13,6 +15,8 @@ interface RunStartDetail {
   name: string;
   language: string;
   path: string;
+  /** Set here: the size the program's terminal starts with. */
+  size?: { cols: number; rows: number };
 }
 
 interface TerminalPanelProps {
@@ -275,7 +279,8 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
 
     // Listen for codeui-run-start events from workspace store
     const handleRunStart = (e: Event) => {
-      const { runId, name, language } = (e as CustomEvent<RunStartDetail>).detail;
+      const detail = (e as CustomEvent<RunStartDetail>).detail;
+      const { runId, name, language, path } = detail;
       setActiveTab("run");
       setRunFileName(name);
       setActiveRunId(runId);
@@ -283,6 +288,18 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
 
       const rTerm = runTermRef.current;
       if (!rTerm) return;
+
+      // Hidden (shell tab active) the Run terminal cannot measure itself; both tabs
+      // share one viewport, so take the shell terminal's size instead.
+      const shown = shellTermRef.current;
+      if (rTerm.element?.offsetParent === null && shown) {
+        rTerm.resize(shown.cols, shown.rows);
+      } else {
+        try {
+          runFitRef.current?.fit();
+        } catch {}
+      }
+      detail.size = { cols: rTerm.cols, rows: rTerm.rows };
 
       rTerm.clear();
       rTerm.writeln(`\x1b[36m[Compiling ${language}...]\x1b[0m\r\n`);
@@ -308,9 +325,11 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
 
       let unOut: (() => void) | undefined;
       let unStat: (() => void) | undefined;
+      let stderr = "";
 
       processService
         .onRunOutput(runId, (chunk) => {
+          if (chunk.stream === "stderr") stderr += chunk.chunk;
           rTerm.write(chunk.chunk);
         })
         .then((un) => {
@@ -325,6 +344,10 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
             rTerm.writeln(
               `\r\n\x1b[31m[Build failed (exit code ${status.exitCode ?? 1})]\x1b[0m\r\n`
             );
+            const source = editorService.getText(path) ?? undefined;
+            for (const d of parseCompilerDiagnostics(language, stderr, path, source)) {
+              if (d.hint) rTerm.writeln(`\x1b[33m[Likely cause] ${d.hint}\x1b[0m\r\n`);
+            }
             setRunActive(false);
           } else if (status.phase === "finished") {
             const dur = status.durationMs ?? 0;
@@ -344,10 +367,17 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
           unStat = un;
         });
 
+      const resizeDisp = rTerm.onResize(({ cols, rows }) => {
+        processService.resizeRun(runId, cols, rows).catch(() => {});
+      });
+
       runUnlistenRef.current = {
         output: () => unOut?.(),
         status: () => unStat?.(),
-        data: () => dataDisp.dispose(),
+        data: () => {
+          dataDisp.dispose();
+          resizeDisp.dispose();
+        },
       };
     };
 
@@ -403,6 +433,7 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
     });
 
     if (shellContainerRef.current) resizeObserver.observe(shellContainerRef.current);
+    if (runContainerRef.current) resizeObserver.observe(runContainerRef.current);
 
     return () => {
       isDisposed = true;

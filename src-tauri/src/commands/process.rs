@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use portable_pty::{native_pty_system, CommandBuilder, PtySize};
+use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -109,6 +109,8 @@ struct ActiveRun {
     stdin: ActiveStdin,
     stopped_by_user: Arc<AtomicBool>,
     last_input: Arc<Mutex<Instant>>,
+    /// Program terminal of the execution phase; `None` while compiling.
+    pty_master: Option<Arc<Mutex<Box<dyn MasterPty + Send>>>>,
 }
 
 #[derive(Default)]
@@ -196,6 +198,30 @@ impl RunRegistry {
                 }
             }
         }
+    }
+
+    /// Keeps the program's terminal as wide as the Run panel. Without it the
+    /// PTY stays 80x24 and Windows ConPTY re-wraps output and moves the cursor
+    /// to positions that do not exist in the panel.
+    pub fn resize(&self, id: &str, cols: u16, rows: u16) -> Result<(), RunError> {
+        let master = {
+            let runs = self.runs.lock().expect("run registry");
+            let run = runs
+                .get(id)
+                .ok_or_else(|| RunError::UnknownRun(id.to_string()))?;
+            run.pty_master.clone()
+        };
+        let Some(master) = master else {
+            return Ok(());
+        };
+        let size = PtySize {
+            rows: rows.max(4),
+            cols: cols.max(20),
+            pixel_width: 0,
+            pixel_height: 0,
+        };
+        let result = master.lock().expect("pty master").resize(size);
+        result.map_err(|e| RunError::Io(e.to_string()))
     }
 
     pub fn close_stdin(&self, id: &str) -> Result<(), RunError> {
@@ -311,6 +337,8 @@ pub fn run_file(
     path: String,
     run_id: Option<String>,
     timeout_secs: Option<u64>,
+    cols: Option<u16>,
+    rows: Option<u16>,
 ) -> Result<String, RunError> {
     // Same scope rule as the fs commands: only workspace files (or a file the
     // user picked) may be compiled and run. The canonical form is only checked;
@@ -354,6 +382,12 @@ pub fn run_file(
     // Idle timeout: restarted by every line of input. MAX_RUNTIME_SECS caps the total.
     let idle = idle_timeout(timeout_secs);
     let policy = Policy::for_run(&ctx.workdir, &scratch);
+    let size = PtySize {
+        rows: rows.unwrap_or(24).max(4),
+        cols: cols.unwrap_or(80).max(20),
+        pixel_width: 0,
+        pixel_height: 0,
+    };
 
     let app_bg = app.clone();
     let id_bg = run_id.clone();
@@ -435,6 +469,7 @@ pub fn run_file(
             &app_bg,
             &id_bg,
             exec_spec,
+            size,
             &policy,
             idle,
             &budget,
@@ -485,6 +520,7 @@ fn supervise_pty(
     app: &AppHandle,
     run_id: &str,
     spec: CommandSpec,
+    size: PtySize,
     policy: &Policy,
     idle: Duration,
     budget: &Arc<OutputBudget>,
@@ -492,12 +528,7 @@ fn supervise_pty(
     on_spawn: impl FnOnce(u32),
 ) -> Result<Outcome, String> {
     let pair = native_pty_system()
-        .openpty(PtySize {
-            rows: 24,
-            cols: 80,
-            pixel_width: 0,
-            pixel_height: 0,
-        })
+        .openpty(size)
         .map_err(|e| format!("could not open pseudo-terminal: {e}"))?;
 
     let command = |program: &str, args: &[String]| {
@@ -583,6 +614,7 @@ fn supervise_pty(
             stdin: ActiveStdin::Pty(Arc::clone(&writer)),
             stopped_by_user: Arc::clone(stopped_by_user),
             last_input: Arc::clone(&last_input),
+            pty_master: Some(Arc::new(Mutex::new(pair.master))),
         },
     );
 
@@ -732,6 +764,7 @@ fn supervise(
             stdin: ActiveStdin::Piped(Arc::new(Mutex::new(stdin))),
             stopped_by_user: Arc::clone(stopped_by_user),
             last_input: Arc::new(Mutex::new(Instant::now())),
+            pty_master: None,
         },
     );
 
@@ -956,6 +989,17 @@ pub fn write_run_stdin(
 ///
 /// Programs that loop until EOF (`while (scanf(...) != EOF)`, `sys.stdin.read()`)
 /// never terminate otherwise, because the pipe stays open for the whole run.
+/// Resizes the running program's terminal to match the Run panel.
+#[tauri::command]
+pub fn resize_run(
+    registry: State<'_, RunRegistry>,
+    run_id: String,
+    cols: u16,
+    rows: u16,
+) -> Result<(), RunError> {
+    registry.resize(&run_id, cols, rows)
+}
+
 #[tauri::command]
 pub fn close_run_stdin(registry: State<'_, RunRegistry>, run_id: String) -> Result<(), RunError> {
     registry.close_stdin(&run_id)

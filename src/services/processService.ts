@@ -18,12 +18,24 @@ async function getEvent() {
 }
 
 export const processService = {
-  async runFile(path: string, runId?: string, timeoutSecs?: number): Promise<string> {
+  async runFile(
+    path: string,
+    runId?: string,
+    timeoutSecs?: number,
+    size?: { cols: number; rows: number }
+  ): Promise<string> {
     const invoke = await getInvoke();
     if (invoke) {
-      return await invoke<string>("run_file", { path, runId, timeoutSecs });
+      return await invoke<string>("run_file", { path, runId, timeoutSecs, cols: size?.cols, rows: size?.rows });
     }
     return runId || "mock-run-id";
+  },
+
+  async resizeRun(runId: string, cols: number, rows: number): Promise<void> {
+    const invoke = await getInvoke();
+    if (invoke) {
+      return await invoke<void>("resize_run", { runId, cols, rows });
+    }
   },
 
   async stopRun(runId: string): Promise<void> {

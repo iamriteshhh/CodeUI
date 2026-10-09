@@ -307,6 +307,11 @@ export function useWorkspace() {
         setActiveFilePath(path);
         editorService.focusActive();
       } catch (err) {
+        if ((err as { kind?: string })?.kind === "NotUtf8") {
+          // Compiled programs (.exe, .o, .class) sit next to sources; clicking one is not an error.
+          notify.warning("Binary File", `${name || basename(path)} is not a text file and cannot be opened in the editor.`);
+          return;
+        }
         console.error("Failed to open file:", err);
         notify.error("File Open Error", formatError(err));
       }
@@ -823,7 +828,12 @@ export function useWorkspace() {
     const unStatus = await processService.onRunStatus(runId, (status) => {
       if (status.phase === "compileFailed") {
         // Parse compiler errors and attach red squiggles in Monaco
-        const diagnostics = parseCompilerDiagnostics(active.language, compileStderr, active.path);
+        const diagnostics = parseCompilerDiagnostics(
+          active.language,
+          compileStderr,
+          active.path,
+          editorService.getText(active.path) ?? undefined
+        );
         if (diagnostics.length > 0) {
           editorService.setMarkers(active.path, diagnostics);
         }
@@ -845,20 +855,18 @@ export function useWorkspace() {
 
     // 6. Notify TerminalPanel to bind to this run in the dedicated Run tab
     await terminalReady;
-    window.dispatchEvent(
-      new CustomEvent("codeui-run-start", {
-        detail: {
-          runId,
-          name: active.name,
-          language: active.language,
-          path: active.path,
-        },
-      })
-    );
+    // TerminalPanel fills in `size` (the Run terminal's cols/rows) while handling the event.
+    const runStart: { runId: string; name: string; language: string; path: string; size?: { cols: number; rows: number } } = {
+      runId,
+      name: active.name,
+      language: active.language,
+      path: active.path,
+    };
+    window.dispatchEvent(new CustomEvent("codeui-run-start", { detail: runStart }));
 
     // 7. Invoke Rust supervised runner (executes in its own dedicated PTY, completely separate from shell)
     try {
-      await processService.runFile(active.path, runId, settings.runTimeoutSecs);
+      await processService.runFile(active.path, runId, settings.runTimeoutSecs, runStart.size);
     } catch (err) {
       notify.error("Run Error", formatError(err));
       cleanup();

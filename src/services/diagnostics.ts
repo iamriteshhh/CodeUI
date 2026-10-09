@@ -55,6 +55,178 @@ export interface CompilerDiagnostic {
   endColumn?: number;
   severity: "error" | "warning" | "info";
   message: string;
+  /** Line the compiler printed, when the marker was moved to where the fix belongs. */
+  reportedLine?: number;
+  /** Plain-language explanation printed under the raw compiler output. */
+  hint?: string;
+}
+
+/**
+ * Older gcc (e.g. MinGW 6.x on Windows) reports a missing ';' or ')' at the next
+ * token, so a semicolon missing on line 16 shows up as "17:5: expected ';' before '}'".
+ * When that token starts its line, the fix belongs at the end of the previous code line.
+ */
+function remapExpectedBefore(d: CompilerDiagnostic, sourceLines: string[]): CompilerDiagnostic {
+  if (!/^expected '[^']+' before/.test(d.message)) return d;
+  const current = sourceLines[d.line - 1];
+  if (current === undefined || current.slice(0, d.column - 1).trim() !== "") return d;
+  for (let i = d.line - 2; i >= 0; i--) {
+    const text = sourceLines[i].trimEnd();
+    const code = text.trim();
+    if (!code || code.startsWith("//") || code.startsWith("*") || code.startsWith("/*")) continue;
+    return {
+      ...d,
+      line: i + 1,
+      column: text.length + 1,
+      endColumn: text.length + 2,
+      reportedLine: d.line,
+      hint: `"${d.message}" at line ${d.line} means the fix belongs at the end of line ${i + 1}.`,
+    };
+  }
+  return d;
+}
+
+/** Compiler messages that a misplaced or missing brace produces further down the file. */
+const BRACE_SYMPTOM =
+  /end of input|expected identifier or '\('|expected declaration|expected unqualified-id|expected '[{}]'|reached end of file while parsing|class, interface, enum, or record expected|illegal start of (type|expression)|extraneous closing brace|<identifier> expected/;
+
+/** Source lines with comments removed and string/char contents blanked; columns are kept. */
+function codeOnly(lines: string[]): string[] {
+  let inComment = false;
+  return lines.map((line) => {
+    let out = "";
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (inComment) {
+        if (c === "*" && line[i + 1] === "/") {
+          inComment = false;
+          out += " ";
+          i++;
+        }
+        out += " ";
+      } else if (c === "/" && line[i + 1] === "/") {
+        break;
+      } else if (c === "/" && line[i + 1] === "*") {
+        inComment = true;
+        out += "  ";
+        i++;
+      } else if (c === '"' || c === "'") {
+        out += c;
+        for (i++; i < line.length && line[i] !== c; i++) {
+          if (line[i] === "\\") {
+            out += " ";
+            i++;
+          }
+          out += " ";
+        }
+        out += c;
+      } else {
+        out += c;
+      }
+    }
+    return out.trimEnd();
+  });
+}
+
+function indentOf(line: string): number {
+  let width = 0;
+  for (const ch of line) {
+    if (ch === " ") width++;
+    else if (ch === "\t") width += 4 - (width % 4);
+    else break;
+  }
+  return width;
+}
+
+/**
+ * Finds a missing '{' or '}' the way an IDE does: by comparing braces with indentation.
+ * The compiler cannot: without the '{' after `for (...)` the code is still valid C up to
+ * the point where an early '}' closes the function, so gcc complains lines later.
+ * Returns null unless the answer is clear.
+ * ponytail: indentation heuristic, a real parser would also catch unindented code.
+ */
+export function findBraceProblem(sourceLines: string[]): { line: number; column: number; message: string; hint: string } | null {
+  const code = codeOnly(sourceLines);
+  const stack: { line: number; indent: number; block: boolean; indented?: boolean }[] = [];
+  const nextCode = (i: number) => code.findIndex((t, j) => j > i && t.trim() !== "");
+  const prevCode = (i: number) => {
+    for (let j = i - 1; j >= 0; j--) if (code[j].trim()) return j;
+    return -1;
+  };
+
+  // A header such as `for (...)`, `if (...)`, `int main()` or `else` with no '{',
+  // at `indent`, whose next line is indented as if a block had been opened.
+  const headerWithoutBrace = (from: number, to: number, indent: number) => {
+    for (let j = to - 1; j >= from; j--) {
+      const t = code[j].trim();
+      if (!t || indentOf(code[j]) !== indent || t.includes("{")) continue;
+      if (!/\)$|^(\}\s*)?(else|do)$/.test(t)) continue;
+      const next = nextCode(j);
+      if (next !== -1 && indentOf(code[next]) > indent) return j;
+    }
+    return -1;
+  };
+  const missingOpen = (header: number, close: number, opener?: number) => ({
+    line: header + 1,
+    column: code[header].length + 1,
+    message: `missing '{' at the end of line ${header + 1}`,
+    hint:
+      `Line ${header + 1} is missing '{' at the end. ` +
+      (opener === undefined
+        ? `Without it, the '}' on line ${close + 1} has nothing to close.`
+        : `Without it, the '}' on line ${close + 1} closes the block from line ${opener + 1} instead, so the compiler reports errors further down.`),
+  });
+  const missingClose = (opener: number, before: number) => {
+    const last = prevCode(before);
+    return {
+      line: last + 1,
+      column: code[last].length + 1,
+      message: `missing '}' to close the '{' on line ${opener + 1}`,
+      hint:
+        before < code.length
+          ? `The '{' on line ${opener + 1} is never closed: add '}' after line ${last + 1}.`
+          : `The '{' on line ${opener + 1} is never closed: add '}' at the end of the file.`,
+    };
+  };
+
+  for (let i = 0; i < code.length; i++) {
+    const t = code[i].trim();
+    if (!t || t.startsWith("#")) continue;
+    const indent = indentOf(code[i]);
+    const top = stack[stack.length - 1];
+
+    if (top && !t.startsWith("}")) {
+      // Only blocks whose body is indented can tell where they should have ended.
+      if (top.indented === undefined) top.indented = indent > top.indent;
+      const isLabel = /^(case\b|default\b|[A-Za-z_]\w*\s*:(?!:))/.test(t);
+      if (top.block && top.indented && indent <= top.indent && !isLabel) {
+        return missingClose(top.line, i);
+      }
+    }
+
+    const lineStart = code[i].length - code[i].trimStart().length;
+    for (let k = lineStart; k < code[i].length; k++) {
+      const c = code[i][k];
+      if (c === "{") {
+        const before = code[i].slice(0, k).trim();
+        stack.push({ line: i, indent, block: !/([=,([]|\breturn)$/.test(before) });
+      } else if (c === "}") {
+        const open = stack.pop();
+        if (!open) {
+          const header = headerWithoutBrace(0, i, indent);
+          if (header >= 0) return missingOpen(header, i);
+          return { line: i + 1, column: k + 1, message: "unmatched '}'", hint: `The '}' on line ${i + 1} has no matching '{'.` };
+        }
+        if (k === lineStart && open.block && open.indent !== indent) {
+          const header = headerWithoutBrace(open.line + 1, i, indent);
+          if (header >= 0) return missingOpen(header, i, open.line);
+        }
+      }
+    }
+  }
+
+  const open = stack[stack.length - 1];
+  return open ? missingClose(open.line, code.length) : null;
 }
 
 export async function fetchSystemDiagnostics(): Promise<SystemDiagnostics | null> {
@@ -168,12 +340,14 @@ function normalizePathForCompare(p: string): string {
 export function parseCompilerDiagnostics(
   language: string,
   output: string,
-  targetFilePath: string
+  targetFilePath: string,
+  source?: string
 ): CompilerDiagnostic[] {
   const diagnostics: CompilerDiagnostic[] = [];
   const lines = output.split(/\r?\n/);
   const targetNorm = normalizePathForCompare(targetFilePath);
   const targetBase = targetFilePath.split(/[/\\]/).pop()?.toLowerCase() || "";
+  const sourceLines = source?.split(/\r?\n/);
 
   const isMatchingFile = (cand: string) => {
     const candNorm = normalizePathForCompare(cand);
@@ -204,14 +378,15 @@ export function parseCompilerDiagnostics(
           if (sevStr === "warning") severity = "warning";
           else if (sevStr === "note") severity = "info";
 
-          diagnostics.push({
+          const diag: CompilerDiagnostic = {
             file: targetFilePath,
             line,
             column,
             endColumn: column + 5,
             severity,
             message,
-          });
+          };
+          diagnostics.push(sourceLines ? remapExpectedBefore(diag, sourceLines) : diag);
         }
       }
     }
@@ -278,6 +453,20 @@ export function parseCompilerDiagnostics(
           });
         }
       }
+    }
+  }
+
+  // A brace error surfaces lines later; put the real location first, as an IDE would.
+  const firstError = diagnostics.find((d) => d.severity === "error");
+  if (sourceLines && language !== "python" && firstError && diagnostics.some((d) => BRACE_SYMPTOM.test(d.message))) {
+    const problem = findBraceProblem(sourceLines);
+    if (problem && problem.line <= (firstError.reportedLine ?? firstError.line)) {
+      diagnostics.unshift({
+        file: targetFilePath,
+        ...problem,
+        endColumn: problem.column + 1,
+        severity: "error",
+      });
     }
   }
 
