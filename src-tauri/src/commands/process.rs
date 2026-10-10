@@ -608,6 +608,9 @@ fn supervise_pty(
         builder.cwd(&spec.cwd);
         builder.env("TERM", "xterm-256color");
         builder.env("PATH", crate::proc::augmented_path());
+        // .NET (C#, F#, PowerShell) maps code through a memory file whose size trips the
+        // sandbox file-size limit (SIGXFSZ, exit 153); plain mappings avoid it.
+        builder.env("DOTNET_EnableWriteXorExecute", "0");
         // Programs print UTF-8 for the terminal even where no UTF-8 locale is set.
         if let Some(lang) = crate::proc::utf8_locale_override() {
             builder.env("LANG", lang);

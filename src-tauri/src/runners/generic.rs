@@ -19,6 +19,25 @@ struct Lang {
     run: &'static [Tool],
 }
 
+/// Folders under $HOME a tool must be able to create files in (see
+/// `sandbox::tool_cache_dirs`). Created before the run so the sandbox can allow them.
+fn home_dirs(lang: &str) -> &'static [&'static str] {
+    match lang {
+        "C#" | "F#" | "PowerShell" => &[
+            ".dotnet",
+            ".nuget",
+            ".cache",
+            ".local/share",
+            ".config/powershell",
+        ],
+        "Dart" => &[".dart-tool", ".dartServer", ".pub-cache"],
+        "Zig" | "Nim" | "Go" | "Swift" | "Kotlin" => &[".cache"],
+        "Scala" => &[".scalac", ".cache"],
+        "Haskell" => &[".ghc", ".cache"],
+        _ => &[],
+    }
+}
+
 const fn t(program: &'static str, args: &'static [&'static str]) -> Tool {
     Tool { program, args }
 }
@@ -72,8 +91,10 @@ static LANGS: &[Lang] = &[
     Lang {
         exts: &["cs"],
         name: "C#",
-        compile: &[],
-        run: &[t("dotnet", &["run", "{src}"])],
+        // The build (outside the sandbox) restores packages over the network; the run
+        // itself is offline, as every student program is.
+        compile: &[t("dotnet", &["build", "{src}"])],
+        run: &[t("dotnet", &["run", "--no-build", "{src}"])],
     },
     Lang {
         exts: &["fsx"],
@@ -91,7 +112,8 @@ static LANGS: &[Lang] = &[
         exts: &["dart"],
         name: "Dart",
         compile: &[],
-        run: &[t("dart", &["run", "{src}"])],
+        // `dart file.dart` runs the file directly; `dart run` waits on pub.
+        run: &[t("dart", &["{src}"])],
     },
     Lang {
         exts: &["rb"],
@@ -157,13 +179,16 @@ static LANGS: &[Lang] = &[
         exts: &["clj"],
         name: "Clojure",
         compile: &[],
-        run: &[t("clojure", &["-M", "{src}"]), t("clj", &["-M", "{src}"])],
+        run: &[t("clojure", &["{src}"]), t("clj", &["{src}"])],
     },
     Lang {
         exts: &["scala", "sc"],
         name: "Scala",
         compile: &[],
-        run: &[t("scala-cli", &["run", "{src}"]), t("scala", &["{src}"])],
+        run: &[
+            t("scala-cli", &["run", "{src}"]),
+            t("scala", &["-nc", "{src}"]),
+        ],
     },
     Lang {
         exts: &["groovy"],
@@ -249,6 +274,11 @@ pub struct GenericRunner {
 impl GenericRunner {
     /// First installed tool of `tools`, with placeholders filled in.
     fn pick(&self, tools: &[Tool], ctx: &RunContext) -> Result<CommandSpec, RunnerError> {
+        if let Some(home) = std::env::var_os("HOME") {
+            for dir in home_dirs(self.lang.name) {
+                let _ = std::fs::create_dir_all(std::path::Path::new(&home).join(dir));
+            }
+        }
         let out = ctx
             .scratch
             .join(format!("{}{}", ctx.stem(), std::env::consts::EXE_SUFFIX))

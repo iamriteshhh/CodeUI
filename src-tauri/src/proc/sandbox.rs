@@ -67,6 +67,50 @@ pub struct Policy {
     pub writable: Vec<PathBuf>,
 }
 
+/// Per-user folders where toolchains keep caches and settings (.NET, Dart, Zig, Nim,
+/// Scala, GHC, Cargo, npm, ...). A run may write there, or the first run of such a
+/// language fails with "permission denied"; the student's own files stay read-only.
+/// Only folders that exist are listed; runners create the ones their tool needs.
+pub fn tool_cache_dirs() -> Vec<PathBuf> {
+    const DIRS: &[&str] = &[
+        ".cache",
+        ".local/share",
+        ".config/powershell",
+        ".dotnet",
+        ".nuget",
+        ".dart-tool",
+        ".dartServer",
+        ".pub-cache",
+        ".scalac",
+        ".ghc",
+        ".cabal",
+        ".stack",
+        ".nimble",
+        ".cargo",
+        ".rustup",
+        ".m2",
+        ".gradle",
+        ".julia",
+        ".deno",
+        ".bun",
+        ".npm",
+        ".mix",
+        ".hex",
+        ".ivy2",
+        ".sbt",
+        ".kotlin",
+        ".konan",
+        ".swiftpm",
+    ];
+    let Some(home) = std::env::var_os("HOME") else {
+        return Vec::new();
+    };
+    DIRS.iter()
+        .map(|d| Path::new(&home).join(d))
+        .filter(|p| p.is_dir())
+        .collect()
+}
+
 impl Policy {
     pub fn for_run(workdir: &Path, scratch: &Path) -> Self {
         Policy {
@@ -75,7 +119,11 @@ impl Policy {
             file_size_bytes: FILE_SIZE_LIMIT_BYTES,
             open_files: OPEN_FILES_LIMIT,
             processes: PROCESS_LIMIT,
-            writable: vec![workdir.to_path_buf(), scratch.to_path_buf()],
+            writable: {
+                let mut w = vec![workdir.to_path_buf(), scratch.to_path_buf()];
+                w.extend(tool_cache_dirs());
+                w
+            },
         }
     }
 
@@ -777,7 +825,9 @@ mod linux {
             "/proc", "/sys",
         ];
         let mut paths: Vec<PathBuf> = SYSTEM.iter().map(PathBuf::from).collect();
-        paths.extend(["/snap", "/nix"].map(PathBuf::from));
+        // /var/lib: Debian keeps toolchain data there (GHC's package database is a symlink
+        // into /var/lib/ghc); /var/cache: system font and package caches.
+        paths.extend(["/snap", "/nix", "/var/lib", "/var/cache"].map(PathBuf::from));
         for var in ["PATH", "LD_LIBRARY_PATH"] {
             if let Some(value) = std::env::var_os(var) {
                 paths.extend(std::env::split_paths(&value));
