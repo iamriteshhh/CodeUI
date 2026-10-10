@@ -61,8 +61,19 @@ impl WorkspaceState {
     /// that do not exist yet are resolved through their nearest existing
     /// ancestor.
     pub fn resolve(&self, path: &str) -> Result<PathBuf, FsError> {
-        let resolved = resolve_lexical_tail(checked_input(path)?)?;
-        self.check(path, resolved, true)
+        let input = checked_input(path)?;
+        let mut result = self.check(path, resolve_lexical_tail(input)?, true);
+        // While another save replaces the file, Windows can report the old copy's path
+        // (moved to a hidden system folder until its handles close), which fails the
+        // containment check. Resolve again before refusing; real escapes stay refused.
+        for _ in 0..4 {
+            if !matches!(result, Err(FsError::PermissionDenied(_))) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            result = self.check(path, resolve_lexical_tail(input)?, true);
+        }
+        result
     }
 
     /// Like [`resolve`](Self::resolve) but does not follow the last component,
