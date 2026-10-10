@@ -2,7 +2,7 @@
   "name": "salivo",
   "displayName": "Salivo",
   "description": "Official high-performance language support for Salivo: sub-30ms warm execution caching (ExecCache), exclusive stream header syntax (><), postfix try operator (?), RAII Drop cleanup, modern camelCase stdlib, syntax highlighting, formatting, linting, checking, testing, and native execution.",
-  "version": "1.0.16",
+  "version": "1.0.20",
   "license": "BSL-1.1",
   "publisher": "salivo",
   "icon": "icons/salivo.png",
