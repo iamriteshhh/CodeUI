@@ -267,6 +267,25 @@ pub fn runner_for_ext(ext: &str) -> Option<GenericRunner> {
         .map(|lang| GenericRunner { lang })
 }
 
+/// Whether the .NET SDK at `dotnet` is 10 or newer (file-based apps), probed once.
+fn dotnet_runs_single_files(dotnet: &str) -> bool {
+    static OK: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *OK.get_or_init(|| {
+        let mut cmd = std::process::Command::new(dotnet);
+        cmd.arg("--version").env("DOTNET_NOLOGO", "1");
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+        }
+        cmd.output()
+            .ok()
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .and_then(|v| v.trim().split('.').next()?.parse::<u32>().ok())
+            .is_some_and(|major| major >= 10)
+    })
+}
+
 pub struct GenericRunner {
     lang: &'static Lang,
 }
@@ -301,6 +320,11 @@ impl GenericRunner {
                 crate::proc::resolve_tool(&[tool.program]).map(|p| p.to_string_lossy().into_owned())
             };
             if let Some(program) = program {
+                // Single-file C# (`dotnet build/run file.cs`) needs .NET 10; older SDKs fail
+                // with an unrelated "specify a project" error, so say what is needed instead.
+                if self.lang.name == "C#" && !dotnet_runs_single_files(&program) {
+                    return Err(RunnerError::ToolMissing("dotnet (.NET 10 or newer)".into()));
+                }
                 let args = tool.args.iter().map(|a| fill(a)).collect();
                 return Ok(CommandSpec::new(program, args, ctx.workdir.clone()));
             }
