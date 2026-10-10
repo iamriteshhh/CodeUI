@@ -16,17 +16,21 @@ impl LanguageRunner for CRunner {
         let out = ctx
             .scratch
             .join(format!("{}{}", ctx.stem(), std::env::consts::EXE_SUFFIX));
-        Ok(Some(CommandSpec::new(
-            compiler,
-            vec![
-                "-Wall".into(),
-                "-g".into(),
-                "-o".into(),
-                out.to_string_lossy().into_owned(),
-                ctx.source_str(),
-            ],
-            ctx.workdir.clone(),
-        )))
+        #[allow(unused_mut)]
+        let mut args = vec![
+            "-Wall".into(),
+            "-g".into(),
+            "-o".into(),
+            out.to_string_lossy().into_owned(),
+            ctx.source_str(),
+        ];
+        // glibc keeps sqrt/pow/... in libm, which gcc does not link by default: without this
+        // every program using <math.h> fails with "undefined reference to `sqrt'" on Linux.
+        // After the source, as the linker resolves left to right. (MinGW links it implicitly,
+        // and clang with the MSVC linker on Windows would reject -lm.)
+        #[cfg(not(windows))]
+        args.push("-lm".into());
+        Ok(Some(CommandSpec::new(compiler, args, ctx.workdir.clone())))
     }
 
     fn execute(&self, ctx: &RunContext) -> Result<CommandSpec, RunnerError> {

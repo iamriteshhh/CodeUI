@@ -29,10 +29,8 @@ export function formatError(err: unknown): string {
 
   if (typeof err === "object") {
     const obj = err as Record<string, unknown>;
+    // Backend errors are { kind, message } with message a complete sentence; kind is for code.
     if (typeof obj.message === "string") {
-      if (typeof obj.kind === "string" && obj.kind.trim()) {
-        return `${obj.kind}: ${obj.message}`;
-      }
       return obj.message;
     }
     if (err instanceof Error) {

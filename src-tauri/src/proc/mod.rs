@@ -7,7 +7,8 @@
 //!
 //! - compile step: [`COMPILE_TIMEOUT_SECS`], wall clock, supervisor.
 //! - program idle: the `run_timeout_secs` setting (default
-//!   [`DEFAULT_TIMEOUT_SECS`]), restarted by every line the student types,
+//!   [`DEFAULT_TIMEOUT_SECS`]), restarted by every line the student types and
+//!   by any output,
 //!   supervisor.
 //! - program total: [`MAX_RUNTIME_SECS`], wall clock, never restarted,
 //!   supervisor.
@@ -21,14 +22,14 @@ pub mod sandbox;
 pub mod toolpath;
 
 pub use kill::{kill_tree, kill_tree_by_pid, KillOutcome};
-pub use toolpath::{augmented_path, resolve_tool, set_bundled_bin};
+pub use toolpath::{augmented_path, resolve_tool, set_bundled_bin, utf8_locale_override};
 
 /// Grace period between SIGTERM and SIGKILL.
 pub const TERM_GRACE_MS: u64 = 500;
 
 /// Default idle timeout for a student program: it is stopped once this long
-/// has passed without the student typing input (the clock starts at launch
-/// and restarts on every write to stdin). Backs the `run_timeout_secs`
+/// has passed with no input and no output (the clock starts at launch
+/// and restarts on every write to stdin and every chunk of output). Backs the `run_timeout_secs`
 /// setting.
 pub const DEFAULT_TIMEOUT_SECS: u64 = 30;
 
@@ -76,7 +77,7 @@ pub fn stop_hint(reason: StopReason, idle: Duration) -> String {
     const MB: u64 = 1024 * 1024;
     match reason {
         StopReason::IdleTimeout => format!(
-            "Program was stopped after {} seconds without input from you (idle timeout). \
+            "Program was stopped after {} seconds without output or input (idle timeout). \
              If it needs longer, raise the run timeout in Settings.",
             idle.as_secs()
         ),
@@ -285,7 +286,7 @@ mod tests {
     #[test]
     fn stop_hints_name_the_real_reason() {
         let idle = Duration::from_secs(30);
-        assert!(stop_hint(StopReason::IdleTimeout, idle).contains("without input"));
+        assert!(stop_hint(StopReason::IdleTimeout, idle).contains("without output or input"));
         assert!(stop_hint(StopReason::MaxRuntime, idle).contains("maximum run time"));
         assert!(stop_hint(StopReason::CpuLimit, idle).contains("CPU"));
         assert!(stop_hint(StopReason::MemoryLimit, idle).contains("memory"));

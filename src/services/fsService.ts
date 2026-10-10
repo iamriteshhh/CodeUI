@@ -14,7 +14,7 @@ async function getInvoke() {
 // In-memory fallback workspace for testing outside Tauri webview
 const mockFs = new Map<string, string>();
 
-// In-flight save locks to prevent race conditions during rapid saves (Y2)
+// Saves per path run one after another, in call order (Y2).
 const activeSavePromises = new Map<string, Promise<void>>();
 
 export const fsService = {
@@ -32,34 +32,30 @@ export const fsService = {
 
   async readFile(path: string): Promise<string> {
     const invoke = await getInvoke();
+    // Line endings are kept: the editor detects CRLF/LF and saves the file the way it was.
     if (invoke) {
-      const raw = await invoke<string>("read_file", { path });
-      return raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+      return await invoke<string>("read_file", { path });
     }
     if (mockFs.has(path)) {
-      return mockFs.get(path)!.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+      return mockFs.get(path)!;
     }
     throw new Error(`File not found: ${path}`);
   },
 
   async writeFile(path: string, contents: string): Promise<void> {
-    // If a save is already in-flight for this path, chain behind it
-    const existing = activeSavePromises.get(path);
-    if (existing) {
-      try {
-        await existing;
-      } catch {
-        // Ignore prior save failure so subsequent save can proceed
-      }
-    }
-
-    const savePromise = (async () => {
-      const invoke = await getInvoke();
-      if (invoke) {
-        return await invoke<void>("write_file", { path, contents });
-      }
-      mockFs.set(path, contents);
-    })();
+    // Chain behind the latest save of this path, registered before any await so that a burst
+    // of saves (Ctrl+S held down) never reaches the backend two at a time. A failed earlier
+    // save does not stop this one.
+    const previous = activeSavePromises.get(path) ?? Promise.resolve();
+    const savePromise = previous
+      .catch(() => {})
+      .then(async () => {
+        const invoke = await getInvoke();
+        if (invoke) {
+          return await invoke<void>("write_file", { path, contents });
+        }
+        mockFs.set(path, contents);
+      });
 
     activeSavePromises.set(path, savePromise);
     try {

@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { ExtensionItem, InstalledExtension } from "../types";
 import { aiBlockReason } from "./aiPolicy";
 
@@ -60,6 +60,25 @@ function saveStoredLiveExtensions(data: Record<string, Partial<ExtensionItem>>) 
 }
 
 /**
+ * GETs an Open VSX API URL as text. In the app this goes through the Rust client, which
+ * honours the system proxy variables and certificate store; the Linux webview drops HTTPS
+ * through some proxies. Throws on network errors and non-2xx answers.
+ */
+async function openVsxGet(url: string): Promise<string> {
+  if (isTauri()) return invoke<string>("open_vsx_get", { url });
+  const res = await fetch(url, { headers: { "User-Agent": "CodeUI-IDE" } });
+  if (!res.ok) throw new Error(`Open VSX answered ${res.status}`);
+  return res.text();
+}
+
+const errorText = (err: unknown) =>
+  err instanceof Error
+    ? err.message
+    : typeof err === "object" && err && "message" in err
+      ? String((err as { message: unknown }).message)
+      : String(err);
+
+/**
  * Fetches live extension metadata and README from Open VSX Registry
  */
 export async function fetchLiveExtensionDetails(id: string): Promise<Partial<ExtensionItem> | null> {
@@ -69,17 +88,7 @@ export async function fetchLiveExtensionDetails(id: string): Promise<Partial<Ext
   if (!registryPath) return null;
 
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 8000);
-
-    const response = await fetch(`https://open-vsx.org/api/${registryPath}`, {
-      headers: { "User-Agent": "CodeUI-IDE" },
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
-
-    if (!response.ok) return null;
-    const data = await response.json();
+    const data = JSON.parse(await openVsxGet(`https://open-vsx.org/api/${registryPath}`));
 
     const partial: Partial<ExtensionItem> = {
       version: data.version || undefined,
@@ -104,18 +113,9 @@ export async function fetchLiveExtensionDetails(id: string): Promise<Partial<Ext
     // Fetch publisher's real README
     if (data.files?.readme) {
       try {
-        const readmeCtrl = new AbortController();
-        const readmeTimer = setTimeout(() => readmeCtrl.abort(), 8000);
-        const readmeRes = await fetch(data.files.readme, {
-          headers: { "User-Agent": "CodeUI-IDE" },
-          signal: readmeCtrl.signal,
-        });
-        clearTimeout(readmeTimer);
-        if (readmeRes.ok) {
-          const readmeText = await readmeRes.text();
-          if (readmeText && readmeText.trim().length > 20) {
-            partial.overviewMarkdown = readmeText.trim();
-          }
+        const readmeText = await openVsxGet(data.files.readme);
+        if (readmeText && readmeText.trim().length > 20) {
+          partial.overviewMarkdown = readmeText.trim();
         }
       } catch {
         // Retain existing markdown overview if readme fetch fails
@@ -215,61 +215,53 @@ interface OpenVsxSearchItem {
   repository?: string;
 }
 
+/**
+ * Throws when Open VSX cannot be reached (offline, blocked network, proxy), so the panel can
+ * say so instead of showing "no results".
+ */
 export async function searchOpenVsxMarketplace(query: string): Promise<ExtensionItem[]> {
   if (!query.trim()) return [];
 
+  let json;
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 7000);
-
-    const res = await fetch(
-      `https://open-vsx.org/api/-/search?query=${encodeURIComponent(query)}&size=20`,
-      {
-        headers: { "User-Agent": "CodeUI-IDE" },
-        signal: controller.signal,
-      }
-    );
-    clearTimeout(timer);
-
-    if (!res.ok) return [];
-    const json = await res.json();
-
-    if (!json.extensions || !Array.isArray(json.extensions)) return [];
-
-    return json.extensions.map((item: OpenVsxSearchItem) => {
-      const id = `${item.namespace}.${item.name}`;
-      const name = item.name;
-      const displayName = item.displayName || item.name;
-      const publisher = item.namespaceDisplayName || item.namespace;
-      const description = item.description || "No description provided";
-      const categories = item.categories || ["Tools"];
-      const blocked = isAiExtension({ id, name, displayName, publisher, description, categories });
-
-      return {
-        id,
-        name,
-        displayName,
-        publisher,
-        version: item.version || "1.0.0",
-        description,
-        downloads: typeof item.downloadCount === "number" ? item.downloadCount.toLocaleString() : "0",
-        rating: typeof item.averageRating === "number" ? Math.round(item.averageRating * 10) / 10 : 0,
-        ratingCount: typeof item.reviewCount === "number" ? item.reviewCount : 0,
-        installed: false,
-        enabled: !blocked,
-        blockedByPolicy: blocked,
-        blockReason: blocked ? "Restricted by security policy: AI assistants are disabled." : undefined,
-        lastUpdated: formatTimestamp(item.timestamp),
-        license: item.license || "Open Source",
-        categories,
-        overviewMarkdown: "", // Dynamically fetched when opened
-        iconUrl: item.files?.icon,
-        repositoryUrl: item.repository || undefined,
-      };
-    });
-  } catch {
-    return [];
+    json = JSON.parse(await openVsxGet(`https://open-vsx.org/api/-/search?query=${encodeURIComponent(query)}&size=20`));
+  } catch (err) {
+    throw new Error(`Could not reach open-vsx.org (${errorText(err)})`);
   }
+
+  if (!json.extensions || !Array.isArray(json.extensions)) return [];
+
+  return json.extensions.map((item: OpenVsxSearchItem) => {
+    const id = `${item.namespace}.${item.name}`;
+    const name = item.name;
+    const displayName = item.displayName || item.name;
+    const publisher = item.namespaceDisplayName || item.namespace;
+    const description = item.description || "No description provided";
+    const categories = item.categories || ["Tools"];
+    const blocked = isAiExtension({ id, name, displayName, publisher, description, categories });
+
+    return {
+      id,
+      name,
+      displayName,
+      publisher,
+      version: item.version || "1.0.0",
+      description,
+      downloads: typeof item.downloadCount === "number" ? item.downloadCount.toLocaleString() : "0",
+      rating: typeof item.averageRating === "number" ? Math.round(item.averageRating * 10) / 10 : 0,
+      ratingCount: typeof item.reviewCount === "number" ? item.reviewCount : 0,
+      installed: false,
+      enabled: !blocked,
+      blockedByPolicy: blocked,
+      blockReason: blocked ? "Restricted by security policy: AI assistants are disabled." : undefined,
+      lastUpdated: formatTimestamp(item.timestamp),
+      license: item.license || "Open Source",
+      categories,
+      overviewMarkdown: "", // Dynamically fetched when opened
+      iconUrl: item.files?.icon,
+      repositoryUrl: item.repository || undefined,
+    };
+  });
 }
 
 // --- Real installs (Rust backend: src-tauri/src/commands/extensions.rs) ---

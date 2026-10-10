@@ -13,11 +13,23 @@ impl LanguageRunner for JavaRunner {
 
     fn compile(&self, ctx: &RunContext) -> Result<Option<CommandSpec>, RunnerError> {
         require_tool("javac")?;
+        let source = std::fs::read_to_string(&ctx.source)
+            .map_err(|e| RunnerError::SourceUnreadable(e.to_string()))?;
+        // javac compiles the other classes the program uses from here: the file's folder, or
+        // for `package com.demo;` the folder that holds `com/`. Without it a class in the same
+        // package is "cannot find symbol".
+        let source_root = package_root(&ctx.source, detect_package(&source).as_deref());
         Ok(Some(CommandSpec::new(
             "javac",
             vec![
+                // CodeUI saves UTF-8; JDK 17 and older would read the source in the Windows
+                // code page and reject any non-ASCII string ("unmappable character").
+                "-encoding".into(),
+                "UTF-8".into(),
                 "-d".into(),
                 ctx.scratch.to_string_lossy().into_owned(),
+                "-sourcepath".into(),
+                source_root.to_string_lossy().into_owned(),
                 ctx.source_str(),
             ],
             ctx.workdir.clone(),
@@ -84,6 +96,24 @@ impl LanguageRunner for JavaRunner {
 }
 
 /// Reads the `package a.b.c;` declaration, if the file has one.
+/// The folder javac should look for sources in: for `package a.b;` in `<root>/a/b/X.java`
+/// that is `<root>`; otherwise (or if the folders do not match the package) the file's folder.
+pub fn package_root(source: &std::path::Path, package: Option<&str>) -> std::path::PathBuf {
+    let dir = source
+        .parent()
+        .unwrap_or(std::path::Path::new("."))
+        .to_path_buf();
+    let Some(package) = package else { return dir };
+    let mut root = dir.clone();
+    for part in package.split('.').rev() {
+        if root.file_name().and_then(|n| n.to_str()) != Some(part) {
+            return dir;
+        }
+        root.pop();
+    }
+    root
+}
+
 pub fn detect_package(source: &str) -> Option<String> {
     let cleaned = strip_comments_and_literals(source);
     let mut tokens = cleaned.split_whitespace();
@@ -278,6 +308,20 @@ fn strip_comments_and_literals(source: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn package_root_is_the_folder_above_the_package_path() {
+        use std::path::{Path, PathBuf};
+        let src = Path::new("/w/pkg/com/demo/Main.java");
+        assert_eq!(package_root(src, Some("com.demo")), PathBuf::from("/w/pkg"));
+        // No package: the file's own folder.
+        assert_eq!(package_root(src, None), PathBuf::from("/w/pkg/com/demo"));
+        // Folders that do not match the package: fall back to the file's folder.
+        assert_eq!(
+            package_root(Path::new("/w/src/Main.java"), Some("com.demo")),
+            PathBuf::from("/w/src")
+        );
+    }
 
     fn name_of(src: &str) -> Option<String> {
         detect_main_class(src).map(|d| d.name)

@@ -50,8 +50,10 @@ impl CommandSpec {
 #[serde(tag = "kind", content = "message")]
 pub enum RunnerError {
     #[error(
-        "CodeUI cannot run this file type. Run works for C (.c), C++ (.cpp, .cc, .cxx), \
-         Java (.java), Python (.py) and Salivo (.sal) files."
+        "CodeUI cannot run this file type. Run works for C, C++, Java, Python, Salivo, \
+         JavaScript, TypeScript, Rust, Go, Kotlin, C#, Swift, Dart, Ruby, PHP, Perl, Lua, R, \
+         Julia, Haskell, OCaml, Elixir, Erlang, Clojure, Scala, Groovy, Zig, Nim, D, Fortran, \
+         Pascal, shell, PowerShell and batch files; use the terminal for anything else."
     )]
     UnsupportedLanguage,
     #[error(

@@ -67,7 +67,8 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   const [showRestrictedModal, setShowRestrictedModal] = useState(false);
   const [showLanguageMenu, setShowLanguageMenu] = useState(false);
   const [showNotificationToast, setShowNotificationToast] = useState(false);
-  const [crlfMode, setCrlfMode] = useState<"CRLF" | "LF">("CRLF");
+  // Re-render after converting line endings (the model, not React state, holds them).
+  const [, setEolVersion] = useState(0);
 
   React.useEffect(() => {
     return editorService.onCursorChange((line, col) => {
@@ -160,14 +161,23 @@ export const StatusBar: React.FC<StatusBarProps> = ({
             <span>UTF-8</span>
           </div>
 
-          {/* End of Line */}
-          <div
-            className="statusbar-item"
-            title="Click to toggle End-of-Line sequence (CRLF / LF)"
-            onClick={() => setCrlfMode((prev) => (prev === "CRLF" ? "LF" : "CRLF"))}
-          >
-            <span>{crlfMode}</span>
-          </div>
+          {/* End of Line: the open file's real line endings; clicking converts them. */}
+          {activeFile && (() => {
+            const eol =
+              editorService.getEol(activeFile.path) ?? (activeFile.content.includes("\r\n") ? "CRLF" : "LF");
+            return (
+              <div
+                className="statusbar-item"
+                title={`Line endings: ${eol}. Click to convert to ${eol === "CRLF" ? "LF" : "CRLF"}.`}
+                onClick={() => {
+                  editorService.setEol(activeFile.path, eol === "CRLF" ? "LF" : "CRLF");
+                  setEolVersion((v) => v + 1);
+                }}
+              >
+                <span>{eol}</span>
+              </div>
+            );
+          })()}
 
           {/* Interactive Language Selector */}
           <div
@@ -282,7 +292,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
                   <strong style={{ color: "var(--text-bright)" }}>Supervised Execution:</strong> Programs run under OS resource limits. Linux (and macOS, untested) also restrict network and file access where the kernel supports it; Windows does not isolate network or files. Help &gt; Copy Diagnostics shows what this machine enforces.
                 </li>
                 <li>
-                  <strong style={{ color: "var(--text-bright)" }}>Execution Timeouts:</strong> A program is stopped after 30 seconds without input by default (configurable idle timeout) and after 300 seconds in total, so runaway loops cannot freeze the workstation.
+                  <strong style={{ color: "var(--text-bright)" }}>Execution Timeouts:</strong> A program is stopped after 30 seconds without input or output by default (configurable idle timeout) and after 300 seconds in total, so runaway loops cannot freeze the workstation.
                 </li>
               </ul>
             </div>

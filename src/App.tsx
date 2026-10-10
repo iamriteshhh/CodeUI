@@ -11,7 +11,7 @@ import { useWorkspace } from "./store/useWorkspaceStore";
 import { fsService } from "./services/fsService";
 import { editorService } from "./services/editorService";
 import { ptyService } from "./services/ptyService";
-import { X, Maximize2, Minimize2 } from "lucide-react";
+import { X, Maximize2, Minimize2, PanelRight, PanelBottom } from "lucide-react";
 import { EXTENSIONS_DATA } from "./data/extensionsData";
 import { ExtensionItem, InstalledExtension } from "./types";
 import {
@@ -69,12 +69,105 @@ const QuickOpenModal = lazy(() =>
   }))
 );
 
+type PanelPosition = "bottom" | "right";
+/** Editor space (px) a resized or maximized panel always leaves. */
+const PANEL_MIN_EDITOR = 60;
+
+const readStored = (key: string) => {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+const writeStored = (key: string, value: string) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch {}
+};
+
+/** Where a panel dragged to (clientX, clientY) over `area` would dock, or null for nowhere. */
+const panelDropTarget = (area: DOMRect, clientX: number, clientY: number): PanelPosition | null => {
+  const fx = (clientX - area.left) / area.width;
+  const fy = (clientY - area.top) / area.height;
+  if (fx > 0.65 && fx >= fy) return "right";
+  if (fy > 0.65) return "bottom";
+  return null;
+};
+
 export function App() {
   const [quickOpenVisible, setQuickOpenVisible] = useState(false);
   const [errorCount, setErrorCount] = useState(0);
   const [warningCount, setWarningCount] = useState(0);
   const [tabSize, setTabSize] = useState(4);
   const [isPanelMaximized, setIsPanelMaximized] = useState(false);
+  // Panel docks below the editor (default) or beside it; drag its header to move it.
+  const [panelPosition, setPanelPositionState] = useState<PanelPosition>(() =>
+    readStored("codeui.panelPosition") === "right" ? "right" : "bottom"
+  );
+  const [panelWidth, setPanelWidth] = useState(() => Number(readStored("codeui.panelWidth")) || 480);
+  const [panelDrop, setPanelDrop] = useState<PanelPosition | "none" | null>(null);
+  const editorPanelAreaRef = useRef<HTMLDivElement>(null);
+  const preMaxSizeRef = useRef(240);
+  const panelWidthRef = useRef(panelWidth);
+  panelWidthRef.current = panelWidth;
+  const setPanelPosition = (position: PanelPosition) => {
+    // Leaving a maximized panel: give the old side its size back, or it stays huge
+    // while the button offers to maximize it.
+    if (isPanelMaximized) {
+      if (panelPosition === "right") setPanelWidth(preMaxSizeRef.current);
+      else setPanelHeight(preMaxSizeRef.current);
+      setIsPanelMaximized(false);
+    }
+    setPanelPositionState(position);
+    writeStored("codeui.panelPosition", position);
+  };
+  const panelRight = panelPosition === "right";
+
+  // Pointer capture (taken once the drag starts, so clicks on the tabs still land on the tabs)
+  // keeps the release coming here even outside the window. `buttons` is not usable for that:
+  // WebKitGTK sends a stray buttons=0 move after a layout change mid-drag.
+  const startPanelDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0 || (e.target as HTMLElement).closest("button")) return;
+    const header = e.currentTarget;
+    const pointerId = e.pointerId;
+    const x0 = e.clientX;
+    const y0 = e.clientY;
+    let dragging = false;
+    let target: PanelPosition | null = null;
+    const move = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return;
+      const area = editorPanelAreaRef.current;
+      if (!area) return;
+      if (!dragging) {
+        if (Math.hypot(ev.clientX - x0, ev.clientY - y0) < 6) return;
+        dragging = true;
+        try {
+          header.setPointerCapture(pointerId);
+        } catch {}
+      }
+      target = panelDropTarget(area.getBoundingClientRect(), ev.clientX, ev.clientY);
+      setPanelDrop(target ?? "none");
+    };
+    const end = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return;
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+      setPanelDrop(null);
+      if (dragging && target && ev.type === "pointerup") setPanelPosition(target);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+  };
+  /** Resize handles: capture the pointer so the release is seen even outside the window. */
+  const captureResize = (e: React.PointerEvent<HTMLDivElement>) => {
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {}
+  };
+
   // Terminal (xterm + a shell process) and preview load on first open, not at startup.
   const [panelMounted, setPanelMounted] = useState(false);
   const [extensionsList, setExtensionsList] = useState<ExtensionItem[]>(() => {
@@ -138,6 +231,7 @@ export function App() {
     switchToNextTab,
     switchToPrevTab,
     ptySessionId,
+    setPtySessionId,
     setSidebarTab,
     setSidebarVisible,
     setSidebarWidth,
@@ -185,6 +279,8 @@ export function App() {
   useEffect(() => {
     let chordAt = 0;
     const onKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+K is "clear line" in a shell; typing "f" after it must not close the folder.
+      if ((e.target as HTMLElement | null)?.closest?.(".xterm")) return;
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "k") {
         chordAt = Date.now();
         return;
@@ -506,11 +602,22 @@ export function App() {
         e.preventDefault();
         handleCloseActiveFile();
       }
+      // Ctrl+Shift+` : New Terminal. By physical key (e.code): on many layouts that key does not type "`".
+      else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.code === "Backquote") {
+        e.preventDefault();
+        handleNewTerminal();
+      }
       // Ctrl+` : Toggle Terminal Panel
-      else if ((e.ctrlKey || e.metaKey) && e.key === "`") {
+      else if ((e.ctrlKey || e.metaKey) && (e.code === "Backquote" || e.key === "`")) {
         e.preventDefault();
         setPanelVisible(!panelVisible);
         if (!panelVisible) setActivePanelTab("terminal");
+      }
+      // Ctrl+PageDown / Ctrl+PageUp : Next / Previous editor tab
+      else if (e.ctrlKey && (e.key === "PageDown" || e.key === "PageUp")) {
+        e.preventDefault();
+        if (e.key === "PageDown") switchToNextTab();
+        else switchToPrevTab();
       }
       // Ctrl+B : Toggle Sidebar
       else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
@@ -556,6 +663,11 @@ export function App() {
     runActiveFile,
     activeFilePath,
     openFiles,
+    // Read by the handlers above; a switched folder must not leave a stale closure behind.
+    workspacePath,
+    ensurePtySession,
+    switchToNextTab,
+    switchToPrevTab,
   ]);
 
   // Sidebar drag resizing
@@ -565,12 +677,16 @@ export function App() {
         const newWidth = Math.max(180, Math.min(600, e.clientX - 48));
         setSidebarWidth(newWidth);
       } else if (isResizingPanel) {
-        const newHeight = Math.max(120, Math.min(600, window.innerHeight - e.clientY - 22));
-        setPanelHeight(newHeight);
+        // The panel can grow until only a sliver of editor is left, in either position.
+        const area = editorPanelAreaRef.current?.getBoundingClientRect();
+        if (!area) return;
+        if (panelRight) setPanelWidth(Math.max(220, Math.min(area.width - PANEL_MIN_EDITOR, area.right - e.clientX)));
+        else setPanelHeight(Math.max(120, Math.min(area.height - PANEL_MIN_EDITOR, area.bottom - e.clientY)));
       }
     };
 
     const handleMouseUp = () => {
+      if (isResizingPanel && panelRight) writeStored("codeui.panelWidth", String(panelWidthRef.current));
       setIsResizingSidebar(false);
       setIsResizingPanel(false);
     };
@@ -583,7 +699,7 @@ export function App() {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [isResizingSidebar, isResizingPanel, setSidebarWidth, setPanelHeight]);
+  }, [isResizingSidebar, isResizingPanel, panelRight, setSidebarWidth, setPanelHeight]);
 
   const activeFile = openFiles.find((f) => f.path === activeFilePath);
 
@@ -691,6 +807,7 @@ export function App() {
             {/* Sidebar horizontal resizer */}
             <div
               className={`resizer-x ${isResizingSidebar ? "active" : ""}`}
+              onPointerDown={captureResize}
               onMouseDown={() => setIsResizingSidebar(true)}
             />
           </>
@@ -720,8 +837,14 @@ export function App() {
             previewActive={panelVisible && activePanelTab === "preview"}
           />
 
+          {/* Editor + panel: the panel docks below (column) or beside (row) the editor */}
+          <div
+            ref={editorPanelAreaRef}
+            className="editor-panel-area"
+            style={{ flexDirection: panelRight ? "row" : "column" }}
+          >
           {/* Monaco Editor Container (supports split & Welcome screen) */}
-          <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+          <div style={{ flex: 1, display: "flex", overflow: "hidden", minWidth: 0, minHeight: 0 }}>
             <SplitEditorContainer
               isSplit={isSplit}
               openFiles={openFiles}
@@ -754,19 +877,31 @@ export function App() {
           <>
             {/* Panel vertical resizer */}
             <div
-              className={`resizer-y ${isResizingPanel ? "active" : ""}`}
+              className={`${panelRight ? "resizer-x" : "resizer-y"} ${isResizingPanel ? "active" : ""}`}
               style={{ display: panelVisible ? "block" : "none" }}
-              onMouseDown={() => setIsResizingPanel(true)}
+              onPointerDown={captureResize}
+              onMouseDown={() => {
+                setIsResizingPanel(true);
+                setIsPanelMaximized(false);
+              }}
             />
             <div
-              className="bottom-panel"
+              className={`bottom-panel ${panelRight ? "right" : ""}`}
               style={{
-                height: panelHeight,
+                ...(panelRight ? { width: panelWidth } : { height: panelHeight }),
                 display: panelVisible ? "flex" : "none",
                 flexDirection: "column",
               }}
             >
-              <div className="panel-header">
+              <div
+                className="panel-header"
+                onPointerDown={startPanelDrag}
+                // No text selection while dragging the header (clicks on the tabs still fire).
+                onMouseDown={(e) => {
+                  if (!(e.target as HTMLElement).closest("button")) e.preventDefault();
+                }}
+                title="Drag to move the panel below or beside the editor"
+              >
                 <div className="panel-tabs">
                   <div
                     className={`panel-tab ${activePanelTab === "terminal" ? "active" : ""}`}
@@ -785,13 +920,25 @@ export function App() {
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <button
                     className="icon-btn"
+                    title={panelRight ? "Move Panel to Bottom" : "Move Panel to Right"}
+                    onClick={() => setPanelPosition(panelRight ? "bottom" : "right")}
+                  >
+                    {panelRight ? <PanelBottom size={13} /> : <PanelRight size={13} />}
+                  </button>
+                  <button
+                    className="icon-btn"
                     title={isPanelMaximized ? "Restore Panel Size" : "Maximize Panel Size"}
                     onClick={() => {
+                      const area = editorPanelAreaRef.current;
                       if (isPanelMaximized) {
-                        setPanelHeight(240);
+                        // Back to the size it had before maximizing.
+                        if (panelRight) setPanelWidth(preMaxSizeRef.current);
+                        else setPanelHeight(preMaxSizeRef.current);
                         setIsPanelMaximized(false);
-                      } else {
-                        setPanelHeight(Math.min(window.innerHeight * 0.75, 600));
+                      } else if (area) {
+                        preMaxSizeRef.current = panelRight ? panelWidth : panelHeight;
+                        if (panelRight) setPanelWidth(area.clientWidth - PANEL_MIN_EDITOR);
+                        else setPanelHeight(area.clientHeight - PANEL_MIN_EDITOR);
                         setIsPanelMaximized(true);
                       }
                     }}
@@ -828,6 +975,8 @@ export function App() {
                         sessionId={ptySessionId}
                         workspacePath={workspacePath}
                         onEnsureSession={ensurePtySession}
+                        onSessionReplaced={setPtySessionId}
+                        stacked={panelRight}
                       />
                     )}
                   </Suspense>
@@ -858,6 +1007,13 @@ export function App() {
               </div>
             </div>
           </>
+            {/* While the panel header is dragged: where the panel will dock */}
+            {panelDrop && (
+              <div className="panel-drop-overlay" data-target={panelDrop}>
+                {panelDrop !== "none" && <div className={`panel-drop-zone ${panelDrop}`} />}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

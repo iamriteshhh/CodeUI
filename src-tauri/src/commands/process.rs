@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::process::{Child, ChildStdin, Command, Stdio};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -20,8 +20,7 @@ use crate::proc::{
 };
 use crate::runners::{runner_for_path, CommandSpec, RunContext, RunnerError};
 
-#[derive(Debug, thiserror::Error, Serialize)]
-#[serde(tag = "kind", content = "message")]
+#[derive(Debug, thiserror::Error)]
 pub enum RunError {
     #[error("{0}")]
     Runner(#[from] RunnerError),
@@ -31,10 +30,36 @@ pub enum RunError {
     Io(String),
 }
 
+/// `{ kind, message }` with `message` the readable text. Derived serialization nested the
+/// runner error as an object, so the UI showed raw JSON and lost texts such as
+/// "`javac` is needed to run this file".
+impl Serialize for RunError {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let kind = match self {
+            RunError::Runner(_) => "Runner",
+            RunError::UnknownRun(_) => "UnknownRun",
+            RunError::Io(_) => "Io",
+        };
+        let mut out = serializer.serialize_struct("RunError", 2)?;
+        out.serialize_field("kind", kind)?;
+        out.serialize_field("message", &self.to_string())?;
+        out.end()
+    }
+}
+
 /// Output is batched on this cadence. A tight `while(1) printf(...)` loop would
 /// otherwise emit thousands of IPC messages a second and stall the UI.
 const FLUSH_INTERVAL: Duration = Duration::from_millis(30);
 const FLUSH_BYTES: usize = 8192;
+
+/// Locale for compilers: untranslated messages (the diagnostics parser reads them), and UTF-8
+/// on Unix so non-ASCII file names in the folder do not break them. Plain "C" made javac
+/// fail on any such name ("Malformed input or input contains unmappable characters").
+#[cfg(unix)]
+const COMPILER_LOCALE: &str = "C.UTF-8";
+#[cfg(not(unix))]
+const COMPILER_LOCALE: &str = "C";
 
 /// How long to wait for output pumps to drain once the program has exited.
 const DRAIN_GRACE: Duration = Duration::from_millis(250);
@@ -116,11 +141,27 @@ struct ActiveRun {
 #[derive(Default)]
 pub struct RunRegistry {
     runs: Mutex<HashMap<String, ActiveRun>>,
+    /// Bumped by `shutdown_all` (app exit, folder switch). A run started before it may not
+    /// register its process afterwards.
+    generation: AtomicU64,
 }
 
 impl RunRegistry {
-    fn insert(&self, id: String, run: ActiveRun) {
-        self.runs.lock().expect("run registry").insert(id, run);
+    /// Current generation, taken when a run starts.
+    fn generation(&self) -> u64 {
+        self.generation.load(Ordering::SeqCst)
+    }
+
+    /// Registers a run started in `generation`. False if `shutdown_all` ran since: the
+    /// caller must end the process itself, as nothing else will.
+    #[must_use]
+    fn insert(&self, id: String, run: ActiveRun, generation: u64) -> bool {
+        let mut runs = self.runs.lock().expect("run registry");
+        if self.generation.load(Ordering::SeqCst) != generation {
+            return false;
+        }
+        runs.insert(id, run);
+        true
     }
 
     fn remove(&self, id: &str) {
@@ -256,6 +297,7 @@ impl RunRegistry {
     pub fn shutdown_all(&self) {
         let runs: Vec<ActiveRun> = {
             let mut runs = self.runs.lock().expect("run registry");
+            self.generation.fetch_add(1, Ordering::SeqCst);
             runs.drain().map(|(_, run)| run).collect()
         };
         for run in runs {
@@ -296,6 +338,8 @@ struct Outcome {
     timed_out: bool,
     /// Why the run ended early, when the supervisor or the OS ended it.
     reason: Option<StopReason>,
+    /// Time from spawn to exit, excluding compile and output drain.
+    elapsed: Duration,
 }
 
 fn status_event(run_id: &str) -> String {
@@ -392,6 +436,8 @@ pub fn run_file(
     let app_bg = app.clone();
     let id_bg = run_id.clone();
 
+    // Folder switch or exit after this point cancels the run (see RunRegistry::insert).
+    let generation = app.state::<RunRegistry>().generation();
     std::thread::spawn(move || {
         let started = Instant::now();
         let budget = Arc::new(OutputBudget::default());
@@ -399,6 +445,7 @@ pub fn run_file(
         let status = status_event(&id_bg);
 
         let finish = |status: RunStatus| {
+            app_bg.state::<RunRegistry>().remove(&id_bg);
             let _ = app_bg.emit(&status_event(&id_bg), status);
             let _ = std::fs::remove_dir_all(&scratch);
         };
@@ -418,6 +465,7 @@ pub fn run_file(
                 Duration::from_secs(COMPILE_TIMEOUT_SECS),
                 &budget,
                 &stopped_by_user,
+                generation,
                 false,
                 |_| {},
             );
@@ -453,6 +501,18 @@ pub fn run_file(
                     exit_code: outcome.exit_code,
                 });
             }
+
+            // The compiler stays registered until the program replaces it, so a
+            // stop pressed in between lands here instead of on an unknown run.
+            if stopped_by_user.load(Ordering::SeqCst) {
+                return finish(RunStatus::Finished {
+                    exit_code: None,
+                    timed_out: false,
+                    stopped_by_user: true,
+                    duration_ms: 0,
+                    hint: None,
+                });
+            }
         }
 
         let announce = |pid: u32| {
@@ -474,6 +534,7 @@ pub fn run_file(
             idle,
             &budget,
             &stopped_by_user,
+            generation,
             announce,
         );
 
@@ -493,7 +554,7 @@ pub fn run_file(
                     exit_code: outcome.exit_code,
                     timed_out: outcome.timed_out,
                     stopped_by_user: stopped,
-                    duration_ms: started.elapsed().as_millis() as u64,
+                    duration_ms: outcome.elapsed.as_millis() as u64,
                     hint,
                 })
             }
@@ -525,11 +586,21 @@ fn supervise_pty(
     idle: Duration,
     budget: &Arc<OutputBudget>,
     stopped_by_user: &Arc<AtomicBool>,
+    generation: u64,
     on_spawn: impl FnOnce(u32),
 ) -> Result<Outcome, String> {
     let pair = native_pty_system()
         .openpty(size)
         .map_err(|e| format!("could not open pseudo-terminal: {e}"))?;
+    // Taken before the program starts: failing after it would leave it running unwatched.
+    let reader = pair
+        .master
+        .try_clone_reader()
+        .map_err(|e| format!("could not read from pty: {e}"))?;
+    let writer = pair
+        .master
+        .take_writer()
+        .map_err(|e| format!("could not take pty writer: {e}"))?;
 
     let command = |program: &str, args: &[String]| {
         let mut builder = CommandBuilder::new(program);
@@ -537,6 +608,11 @@ fn supervise_pty(
         builder.cwd(&spec.cwd);
         builder.env("TERM", "xterm-256color");
         builder.env("PATH", crate::proc::augmented_path());
+        // Programs print UTF-8 for the terminal even where no UTF-8 locale is set.
+        if let Some(lang) = crate::proc::utf8_locale_override() {
+            builder.env("LANG", lang);
+            builder.env("LC_ALL", lang);
+        }
         builder
     };
 
@@ -577,20 +653,6 @@ fn supervise_pty(
             None
         }
     };
-    on_spawn(pid);
-    for notice in notices {
-        emit_chunk(app, run_id, "stderr", format!("[CodeUI] {notice}\r\n"));
-    }
-
-    let reader = pair
-        .master
-        .try_clone_reader()
-        .map_err(|e| format!("could not read from pty: {e}"))?;
-    let writer = pair
-        .master
-        .take_writer()
-        .map_err(|e| format!("could not take pty writer: {e}"))?;
-
     #[cfg(windows)]
     let _slave_holder = Some(pair.slave);
     #[cfg(not(windows))]
@@ -603,7 +665,7 @@ fn supervise_pty(
     let child = Arc::new(Mutex::new(child));
     let writer = Arc::new(Mutex::new(Some(writer)));
 
-    app.state::<RunRegistry>().insert(
+    let registered = app.state::<RunRegistry>().insert(
         run_id.to_string(),
         ActiveRun {
             child: ActiveChild::Pty {
@@ -616,7 +678,18 @@ fn supervise_pty(
             last_input: Arc::clone(&last_input),
             pty_master: Some(Arc::new(Mutex::new(pair.master))),
         },
+        generation,
     );
+    if !registered {
+        kill_pty_run(&child, pid, guard.as_deref());
+        return Err("The run was cancelled: the folder was closed.".into());
+    }
+    // Announced only once registered, so input typed after "Running" appears
+    // reaches this program and not the compiler entry it replaces.
+    on_spawn(pid);
+    for notice in notices {
+        emit_chunk(app, run_id, "stderr", format!("[CodeUI] {notice}\r\n"));
+    }
 
     let (done_tx, done_rx) = std::sync::mpsc::channel();
     spawn_pump(
@@ -631,6 +704,10 @@ fn supervise_pty(
     let started = Instant::now();
     let max_runtime = Duration::from_secs(MAX_RUNTIME_SECS);
     let mut reason = None;
+    // Output counts as activity too: only a program that neither prints nor
+    // gets input for `idle` is treated as stuck.
+    let mut output_seen = budget.used.load(Ordering::Relaxed);
+    let mut last_output = started;
 
     let poll = || -> Result<Option<i32>, String> {
         let mut guard = child.lock().map_err(|e| e.to_string())?;
@@ -659,8 +736,13 @@ fn supervise_pty(
         }
 
         let now = Instant::now();
-        let since_input = now.duration_since(*last_input.lock().unwrap());
-        let early = if since_input >= idle {
+        let output_now = budget.used.load(Ordering::Relaxed);
+        if output_now != output_seen {
+            output_seen = output_now;
+            last_output = now;
+        }
+        let last_activity = (*last_input.lock().unwrap()).max(last_output);
+        let early = if now.duration_since(last_activity) >= idle {
             Some(StopReason::IdleTimeout)
         } else if now.duration_since(started) >= max_runtime {
             Some(StopReason::MaxRuntime)
@@ -675,9 +757,15 @@ fn supervise_pty(
 
         std::thread::sleep(Duration::from_millis(15));
     };
+    let elapsed = started.elapsed();
 
-    let _ = done_rx.recv_timeout(DRAIN_GRACE);
+    // Close the terminal before draining: the reader only sees EOF once both
+    // ends are gone (on Windows, ConPTY), so draining with them open always
+    // waits out DRAIN_GRACE and late output lands after the exit line.
     app.state::<RunRegistry>().remove(run_id);
+    #[cfg(windows)]
+    drop(_slave_holder);
+    let _ = done_rx.recv_timeout(DRAIN_GRACE);
 
     // An OS limit (Windows Job) explains a crash better than its exit code.
     if reason.is_none() && !stopped_by_user.load(Ordering::SeqCst) {
@@ -691,6 +779,7 @@ fn supervise_pty(
             Some(StopReason::IdleTimeout | StopReason::MaxRuntime)
         ),
         reason,
+        elapsed,
     })
 }
 
@@ -725,6 +814,7 @@ fn supervise(
     timeout: Duration,
     budget: &Arc<OutputBudget>,
     stopped_by_user: &Arc<AtomicBool>,
+    generation: u64,
     interactive: bool,
     on_spawn: impl FnOnce(u32),
 ) -> Result<Outcome, String> {
@@ -732,8 +822,8 @@ fn supervise(
     cmd.args(&spec.args)
         .current_dir(&spec.cwd)
         .env("PATH", crate::proc::augmented_path())
-        .env("LC_ALL", "C")
-        .env("LANG", "C")
+        .env("LC_ALL", COMPILER_LOCALE)
+        .env("LANG", COMPILER_LOCALE)
         .stdin(if interactive {
             Stdio::piped()
         } else {
@@ -749,7 +839,8 @@ fn supervise(
 
     // The clock starts here, not when the request arrived: a slow compile must
     // not eat into the student's execution budget.
-    let deadline = Instant::now() + timeout;
+    let started = Instant::now();
+    let deadline = started + timeout;
 
     let pid = child.id();
     let stdin = child.stdin.take();
@@ -757,7 +848,7 @@ fn supervise(
     let stderr = child.stderr.take();
 
     let child = Arc::new(Mutex::new(child));
-    app.state::<RunRegistry>().insert(
+    let registered = app.state::<RunRegistry>().insert(
         run_id.to_string(),
         ActiveRun {
             child: ActiveChild::Piped(Arc::clone(&child)),
@@ -766,7 +857,12 @@ fn supervise(
             last_input: Arc::new(Mutex::new(Instant::now())),
             pty_master: None,
         },
+        generation,
     );
+    if !registered {
+        let _ = kill_tree(&mut child.lock().expect("child"));
+        return Err("The run was cancelled: the folder was closed.".into());
+    }
 
     on_spawn(pid);
 
@@ -827,6 +923,7 @@ fn supervise(
 
         std::thread::sleep(Duration::from_millis(15));
     };
+    let elapsed = started.elapsed();
 
     // Let the pumps flush what is left. This must stay bounded: a grandchild
     // that escaped the process group can hold the pipes open indefinitely, and
@@ -837,12 +934,13 @@ fn supervise(
         }
     }
 
-    app.state::<RunRegistry>().remove(run_id);
-
+    // Still registered: the caller's `finish` unregisters it, or the program
+    // run replaces the entry (see `run_file`).
     Ok(Outcome {
         exit_code,
         timed_out,
         reason: None,
+        elapsed,
     })
 }
 
@@ -985,10 +1083,6 @@ pub fn write_run_stdin(
     registry.write_stdin(&run_id, &data)
 }
 
-/// Signals end-of-input.
-///
-/// Programs that loop until EOF (`while (scanf(...) != EOF)`, `sys.stdin.read()`)
-/// never terminate otherwise, because the pipe stays open for the whole run.
 /// Resizes the running program's terminal to match the Run panel.
 #[tauri::command]
 pub fn resize_run(
@@ -1000,6 +1094,10 @@ pub fn resize_run(
     registry.resize(&run_id, cols, rows)
 }
 
+/// Signals end-of-input.
+///
+/// Programs that loop until EOF (`while (scanf(...) != EOF)`, `sys.stdin.read()`)
+/// never terminate otherwise, because the pipe stays open for the whole run.
 #[tauri::command]
 pub fn close_run_stdin(registry: State<'_, RunRegistry>, run_id: String) -> Result<(), RunError> {
     registry.close_stdin(&run_id)
@@ -1008,6 +1106,56 @@ pub fn close_run_stdin(registry: State<'_, RunRegistry>, run_id: String) -> Resu
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn piped_run(child: Child) -> ActiveRun {
+        ActiveRun {
+            child: ActiveChild::Piped(Arc::new(Mutex::new(child))),
+            stdin: ActiveStdin::Piped(Arc::new(Mutex::new(None))),
+            stopped_by_user: Arc::new(AtomicBool::new(false)),
+            last_input: Arc::new(Mutex::new(Instant::now())),
+            pty_master: None,
+        }
+    }
+
+    fn quick_child() -> Child {
+        #[cfg(windows)]
+        let mut cmd = Command::new("cmd");
+        #[cfg(windows)]
+        cmd.args(["/C", "exit"]);
+        #[cfg(not(windows))]
+        let cmd = &mut Command::new("true");
+        cmd.spawn().expect("spawn")
+    }
+
+    #[test]
+    fn run_started_before_shutdown_cannot_register() {
+        // A program starting while the folder switches or the window closes must not slip
+        // past shutdown_all.
+        let registry = RunRegistry::default();
+        let before = registry.generation();
+        assert!(registry.insert("a".into(), piped_run(quick_child()), before));
+        registry.shutdown_all();
+        // Started before the shutdown (folder switch / exit): refused.
+        assert!(!registry.insert("b".into(), piped_run(quick_child()), before));
+        assert!(registry.runs.lock().unwrap().is_empty());
+        // A run started afterwards works as usual.
+        let after = registry.generation();
+        assert!(registry.insert("c".into(), piped_run(quick_child()), after));
+    }
+
+    #[test]
+    fn run_errors_reach_the_ui_as_readable_text() {
+        let v = serde_json::to_value(RunError::Runner(RunnerError::ToolMissing("javac".into())))
+            .unwrap();
+        assert_eq!(v["kind"], "Runner");
+        let msg = v["message"].as_str().expect("message is text");
+        assert!(msg.contains("`javac` is needed"), "{msg}");
+        let v = serde_json::to_value(RunError::from(RunnerError::UnsupportedLanguage)).unwrap();
+        assert!(v["message"]
+            .as_str()
+            .unwrap()
+            .contains("cannot run this file type"));
+    }
 
     #[test]
     fn budget_stops_admitting_past_the_cap() {

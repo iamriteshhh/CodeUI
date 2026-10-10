@@ -46,6 +46,7 @@ export const ExtensionsPanel: React.FC<ExtensionsPanelProps> = ({
   const [marketplaceOpen, setMarketplaceOpen] = useState(true);
   const [marketplaceResults, setMarketplaceResults] = useState<ExtensionItem[]>([]);
   const [isSearchingMarketplace, setIsSearchingMarketplace] = useState(false);
+  const [marketplaceError, setMarketplaceError] = useState<string | null>(null);
 
   const handleCopyHint = (name: string, hint: string) => {
     navigator.clipboard?.writeText(hint);
@@ -65,6 +66,7 @@ export const ExtensionsPanel: React.FC<ExtensionsPanelProps> = ({
   // Live marketplace search debounced
   useEffect(() => {
     const trimmed = query.trim();
+    setMarketplaceError(null);
     if (!trimmed || trimmed.length < 2) {
       setMarketplaceResults([]);
       setIsSearchingMarketplace(false);
@@ -77,8 +79,9 @@ export const ExtensionsPanel: React.FC<ExtensionsPanelProps> = ({
         .then((results) => {
           setMarketplaceResults(results);
         })
-        .catch(() => {
+        .catch((err) => {
           setMarketplaceResults([]);
+          setMarketplaceError(err instanceof Error ? err.message : String(err));
         })
         .finally(() => {
           setIsSearchingMarketplace(false);
@@ -512,11 +515,23 @@ export const ExtensionsPanel: React.FC<ExtensionsPanelProps> = ({
                     );
                   })}
 
-                {!isSearchingMarketplace && marketplaceResults.length === 0 && query.trim().length >= 2 && (
-                  <div style={{ padding: "10px 16px", color: "var(--text-muted)", fontSize: 12 }}>
-                    No matching marketplace extensions found on Open VSX.
+                {!isSearchingMarketplace && marketplaceError && (
+                  <div
+                    data-testid="marketplace-error"
+                    style={{ padding: "10px 16px", color: "var(--accent-red)", fontSize: 12, lineHeight: 1.4 }}
+                  >
+                    {marketplaceError}. Check the internet connection; on a network with a proxy, set it
+                    in the system settings (or http_proxy / https_proxy) and restart CodeUI.
                   </div>
                 )}
+                {!isSearchingMarketplace &&
+                  !marketplaceError &&
+                  marketplaceResults.length === 0 &&
+                  query.trim().length >= 2 && (
+                    <div style={{ padding: "10px 16px", color: "var(--text-muted)", fontSize: 12 }}>
+                      No matching marketplace extensions found on Open VSX.
+                    </div>
+                  )}
               </div>
             )}
           </div>

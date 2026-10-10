@@ -94,6 +94,7 @@ pub fn run() {
             commands::diagnostics::get_diagnostics,
             commands::extensions::list_extensions,
             commands::extensions::install_extension,
+            commands::extensions::open_vsx_get,
             commands::extensions::uninstall_extension,
             commands::extensions::set_extension_enabled,
             commands::extensions::read_extension_file,

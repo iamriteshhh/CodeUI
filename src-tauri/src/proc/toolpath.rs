@@ -14,6 +14,32 @@ pub fn set_bundled_bin(dir: PathBuf) {
     let _ = BUNDLED_BIN.set(dir);
 }
 
+/// `LANG` for programs started in a terminal, when the environment has no UTF-8 locale.
+///
+/// The terminal decodes UTF-8, but under `LANG=C` (or no locale at all, as on some lab
+/// machines and minimal installs) Java and other programs print non-ASCII as `?`. Unix only:
+/// on Windows the console code page decides, and forcing UTF-8 there would garble output.
+pub fn utf8_locale_override() -> Option<&'static str> {
+    #[cfg(unix)]
+    {
+        let is_utf8 = |key: &str| {
+            std::env::var(key).is_ok_and(|v| {
+                let v = v.to_ascii_lowercase();
+                v.contains("utf-8") || v.contains("utf8")
+            })
+        };
+        // LC_ALL wins over LANG; a set, non-UTF-8 LC_ALL would override our LANG anyway.
+        if is_utf8("LC_ALL") || (std::env::var_os("LC_ALL").is_none() && is_utf8("LANG")) {
+            return None;
+        }
+        Some("C.UTF-8")
+    }
+    #[cfg(not(unix))]
+    {
+        None
+    }
+}
+
 /// Constructs an augmented PATH combining current PATH with standard toolchain locations.
 pub fn augmented_path() -> OsString {
     let mut paths: Vec<PathBuf> = std::env::var_os("PATH")

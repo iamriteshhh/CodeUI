@@ -11,8 +11,7 @@ use tauri::{AppHandle, Manager, State};
 
 use crate::commands::workspace::WorkspaceState;
 
-#[derive(Debug, thiserror::Error, Serialize)]
-#[serde(tag = "kind", content = "message")]
+#[derive(Debug, thiserror::Error)]
 pub enum FsError {
     #[error("no such file or directory: {0}")]
     NotFound(String),
@@ -28,6 +27,27 @@ pub enum FsError {
     InvalidPath,
     #[error("{0}")]
     Io(String),
+}
+
+/// `{ kind, message }` with `message` the readable text (the derived form sent only the
+/// path, or nothing for unit variants).
+impl Serialize for FsError {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let kind = match self {
+            FsError::NotFound(_) => "NotFound",
+            FsError::PermissionDenied(_) => "PermissionDenied",
+            FsError::AlreadyExists(_) => "AlreadyExists",
+            FsError::NotADirectory(_) => "NotADirectory",
+            FsError::NotUtf8(_) => "NotUtf8",
+            FsError::InvalidPath => "InvalidPath",
+            FsError::Io(_) => "Io",
+        };
+        let mut out = serializer.serialize_struct("FsError", 2)?;
+        out.serialize_field("kind", kind)?;
+        out.serialize_field("message", &self.to_string())?;
+        out.end()
+    }
 }
 
 impl FsError {
@@ -157,7 +177,10 @@ pub fn write_file_sync(ws: &WorkspaceState, path: &str, contents: &str) -> Resul
             .map_err(|e| FsError::from_io(e, &p))?;
     }
 
-    let tmp = parent.join(format!(".{name}.codeui-tmp"));
+    // Unique per save: two saves of one file in flight must not share (and steal) a temp file.
+    static SAVE_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let seq = SAVE_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let tmp = parent.join(format!(".{name}.{}-{seq}.codeui-tmp", std::process::id()));
     std::fs::write(&tmp, contents).map_err(|e| FsError::from_io(e, &tmp))?;
 
     // The temp file is created fresh, so carry the original's mode across.
@@ -298,8 +321,9 @@ pub fn rename_file_sync(
     if std::fs::symlink_metadata(&from).is_err() {
         return Err(FsError::NotFound(from.display().to_string()));
     }
-    // rename() would silently clobber an existing target.
-    if std::fs::symlink_metadata(&to).is_ok() {
+    // rename() would silently clobber an existing target. On a case-insensitive filesystem
+    // (Windows, macOS) `main.java` -> `Main.java` finds the file itself; that is not a clash.
+    if std::fs::symlink_metadata(&to).is_ok() && !same_file(&from, &to) {
         return Err(FsError::AlreadyExists(to.display().to_string()));
     }
     std::fs::rename(&from, &to).map_err(|e| FsError::from_io(e, &from))
@@ -312,6 +336,14 @@ pub async fn rename_file(
     new_path: String,
 ) -> Result<(), FsError> {
     blocking(app, move |ws| rename_file_sync(ws, &old_path, &new_path)).await
+}
+
+/// Both paths name the same file (case-insensitive filesystems, or the same link target).
+fn same_file(a: &Path, b: &Path) -> bool {
+    match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => false,
+    }
 }
 
 pub fn delete_file_sync(ws: &WorkspaceState, path: &str) -> Result<(), FsError> {
@@ -701,6 +733,69 @@ mod tests {
             .filter(|n| n.contains("codeui-tmp"))
             .collect();
         assert!(leftovers.is_empty(), "stray temp files: {leftovers:?}");
+    }
+
+    #[test]
+    fn case_only_rename_works() {
+        // main.java -> Main.java: on Windows and macOS the target "exists" (it is the file itself).
+        let dir = tmp();
+        let from = dir.path().join("main.java");
+        std::fs::write(&from, "class Main {}").unwrap();
+        let to = dir.path().join("Main.java");
+        rename_file(
+            from.to_string_lossy().into_owned(),
+            to.to_string_lossy().into_owned(),
+        )
+        .unwrap();
+        let names: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, vec!["Main.java".to_string()]);
+    }
+
+    #[test]
+    fn rename_onto_a_different_file_is_still_refused() {
+        let dir = tmp();
+        let a = dir.path().join("a.c");
+        let b = dir.path().join("b.c");
+        std::fs::write(&a, "a").unwrap();
+        std::fs::write(&b, "b").unwrap();
+        assert!(matches!(
+            rename_file(
+                a.to_string_lossy().into_owned(),
+                b.to_string_lossy().into_owned()
+            ),
+            Err(FsError::AlreadyExists(_))
+        ));
+        assert_eq!(std::fs::read_to_string(&b).unwrap(), "b");
+    }
+
+    #[test]
+    fn concurrent_saves_of_one_file_all_succeed() {
+        let dir = tmp();
+        let path = dir.path().join("race.c").to_string_lossy().into_owned();
+        let handles: Vec<_> = (0..8)
+            .map(|i| {
+                let path = path.clone();
+                std::thread::spawn(move || write_file(path, format!("version {i}")))
+            })
+            .collect();
+        for h in handles {
+            h.join().unwrap().expect("every save succeeds");
+        }
+        assert!(read_file(path).unwrap().starts_with("version "));
+        let leftovers = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter(|e| {
+                e.as_ref()
+                    .unwrap()
+                    .file_name()
+                    .to_string_lossy()
+                    .contains("codeui-tmp")
+            })
+            .count();
+        assert_eq!(leftovers, 0);
     }
 
     #[test]

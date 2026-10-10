@@ -2373,3 +2373,88 @@ textarea,
 
 /* Explorer indent guides (positioned per level by FileTree) */
 .tree-indent-guide { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--border-subtle); pointer-events: none; }
+
+/* Editor + docked panel (below or beside the editor) */
+.editor-panel-area {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+  min-height: 0;
+}
+
+/* A size saved on a bigger window must not push the editor off screen. */
+.editor-panel-area > .bottom-panel {
+  max-height: calc(100% - 60px);
+}
+
+.bottom-panel.right {
+  border-top: none;
+  border-left: 1px solid var(--border-color);
+  flex-shrink: 0;
+  max-height: none;
+  max-width: calc(100% - 60px);
+}
+
+.panel-header {
+  cursor: grab;
+}
+
+.panel-drop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  cursor: grabbing;
+}
+
+.panel-drop-zone {
+  position: absolute;
+  background-color: rgba(0, 122, 204, 0.18);
+  border: 2px solid var(--accent-blue);
+  pointer-events: none;
+}
+
+.panel-drop-zone.right {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 40%;
+}
+
+.panel-drop-zone.bottom {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 40%;
+}
+
+/* Terminal panes side by side: main shell, split shell, Run */
+.terminal-row {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.terminal-row > .terminal-xterm-viewport {
+  height: 100%;
+  min-width: 0;
+}
+
+.terminal-split-pane {
+  border-left: 1px solid var(--border-color);
+}
+
+/* Panel beside the editor: panes stack top to bottom */
+.terminal-row.stacked {
+  flex-direction: column;
+}
+
+.terminal-row.stacked > .terminal-xterm-viewport {
+  height: auto;
+  min-height: 0;
+}
+
+.terminal-row.stacked > .terminal-split-pane {
+  border-left: none;
+  border-top: 1px solid var(--border-color);
+}

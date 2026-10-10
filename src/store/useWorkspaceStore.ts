@@ -169,6 +169,8 @@ export function useWorkspace() {
   const switchingRef = useRef(false);
   // Listener cleanups of runs started by runActiveFile, dropped on workspace reset.
   const runCleanupsRef = useRef(new Set<() => void>());
+  /** The last run started; stopped when the next one starts. */
+  const lastRunIdRef = useRef<string | null>(null);
 
   // Merge a patch into the settings and persist it (keeps lastFolder/recentFolders in sync with the Settings modal).
   const persistSettings = useCallback((patch: Partial<UserSettings>) => {
@@ -282,6 +284,7 @@ export function useWorkspace() {
   );
 
   // Open file into tabs
+  const openingRef = useRef(new Map<string, Promise<void>>());
   const openFileByPath = useCallback(
     async (path: string, name?: string) => {
       const existing = openFilesRef.current.find((f) => f.path === path);
@@ -290,34 +293,43 @@ export function useWorkspace() {
         editorService.focusActive();
         return;
       }
-
-      try {
-        const fileName = name || basename(path) || "untitled";
-        const content = await fsService.readFile(path);
-        const language = detectLanguage(fileName);
-        const newFile: OpenFile = {
-          path,
-          name: fileName,
-          content,
-          isDirty: false,
-          language,
-        };
-
-        setOpenFiles((prev) => [...prev, newFile]);
-        setActiveFilePath(path);
-        editorService.focusActive();
-      } catch (err) {
-        if ((err as { kind?: string })?.kind === "NotUtf8") {
-          // Compiled programs (.exe, .o, .class) sit next to sources; clicking one is not an error.
-          notify.warning("Binary File", `${name || basename(path)} is not a text file and cannot be opened in the editor.`);
-          return;
-        }
-        console.error("Failed to open file:", err);
-        notify.error("File Open Error", formatError(err));
-      }
+      // A double click opens twice before the first read returns: join it instead of adding a
+      // second tab for the same file.
+      const pending = openingRef.current.get(path);
+      if (pending) return pending;
+      const opening = openFile(path, name).finally(() => openingRef.current.delete(path));
+      openingRef.current.set(path, opening);
+      return opening;
     },
     []
   );
+
+  const openFile = async (path: string, name?: string) => {
+    try {
+      const fileName = name || basename(path) || "untitled";
+      const content = await fsService.readFile(path);
+      const language = detectLanguage(fileName);
+      const newFile: OpenFile = {
+        path,
+        name: fileName,
+        content,
+        isDirty: false,
+        language,
+      };
+
+      setOpenFiles((prev) => [...prev, newFile]);
+      setActiveFilePath(path);
+      editorService.focusActive();
+    } catch (err) {
+      if ((err as { kind?: string })?.kind === "NotUtf8") {
+        // Compiled programs (.exe, .o, .class) sit next to sources; clicking one is not an error.
+        notify.warning("Binary File", `${name || basename(path)} is not a text file and cannot be opened in the editor.`);
+        return;
+      }
+      console.error("Failed to open file:", err);
+      notify.error("File Open Error", formatError(err));
+    }
+  };
 
   // Save file to disk reading from model-as-truth. Resolves false if the write failed.
   const saveFile = useCallback(
@@ -814,8 +826,11 @@ export function useWorkspace() {
     setPanelVisible(true);
     setActivePanelTab("terminal");
 
-    // 5. Generate run ID
+    // 5. Generate run ID. A run still going from the last click is stopped first:
+    // the Run tab rebinds to the new run, so the old one would keep running unseen.
+    if (lastRunIdRef.current) processService.stopRun(lastRunIdRef.current).catch(() => {});
     const runId = "run-" + Math.random().toString(36).substring(2, 10);
+    lastRunIdRef.current = runId;
     let compileStderr = "";
 
     // Stream listeners: capture stderr for Monaco squiggles and handle global notifications
@@ -856,18 +871,31 @@ export function useWorkspace() {
     // 6. Notify TerminalPanel to bind to this run in the dedicated Run tab
     await terminalReady;
     // TerminalPanel fills in `size` (the Run terminal's cols/rows) while handling the event.
-    const runStart: { runId: string; name: string; language: string; path: string; size?: { cols: number; rows: number } } = {
+    const runStart: {
+      runId: string;
+      name: string;
+      language: string;
+      path: string;
+      size?: { cols: number; rows: number };
+      ready?: Promise<void>;
+      fail?: (message: string) => void;
+    } = {
       runId,
       name: active.name,
       language: active.language,
       path: active.path,
     };
     window.dispatchEvent(new CustomEvent("codeui-run-start", { detail: runStart }));
+    // Start the run only once the Run tab listens, or its first output can be lost.
+    // A failed listen only costs early output; the run itself must still start.
+    await runStart.ready?.catch(() => {});
 
     // 7. Invoke Rust supervised runner (executes in its own dedicated PTY, completely separate from shell)
     try {
       await processService.runFile(active.path, runId, settings.runTimeoutSecs, runStart.size);
     } catch (err) {
+      // The Run pane shows "Compiling..." already: say there why nothing will run.
+      runStart.fail?.(formatError(err));
       notify.error("Run Error", formatError(err));
       cleanup();
     }
@@ -903,6 +931,7 @@ export function useWorkspace() {
     switchToNextTab,
     switchToPrevTab,
     ptySessionId,
+    setPtySessionId,
     setSidebarTab,
     setSidebarVisible,
     setSidebarWidth,

@@ -23,7 +23,9 @@ which = "6"
 dirs = "5"
 rfd = "0.17.2"
 walkdir = "2"
-ureq = { version = "2", features = ["json"] }
+# proxy-from-env: honour http(s)_proxy. native-certs: trust the OS certificate store, so a
+# network whose firewall inspects HTTPS (with its CA installed on the machine) still works.
+ureq = { version = "2", features = ["json", "proxy-from-env", "native-certs"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [target.'cfg(unix)'.dependencies]

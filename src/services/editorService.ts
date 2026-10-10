@@ -8,6 +8,16 @@ let monacoInstance: typeof Monaco | null = null;
 type CursorCallback = (line: number, col: number) => void;
 const cursorCallbacks: CursorCallback[] = [];
 
+/** The editor model of an open file, if Monaco has created it. */
+function modelFor(path: string): Monaco.editor.ITextModel | null {
+  if (!monacoInstance) return null;
+  try {
+    return monacoInstance.editor.getModel(monacoInstance.Uri.parse(getNormalizedUri(path)));
+  } catch {
+    return null;
+  }
+}
+
 export const editorService = {
   setActiveEditor(editor: AnyEditor | null) {
     activeEditorInstance = editor;
@@ -49,6 +59,20 @@ export const editorService = {
 
   getActiveEditor(): AnyEditor | null {
     return activeEditorInstance;
+  },
+
+  /** End-of-line sequence of the file's editor model, or null if it has no model yet. */
+  getEol(path: string): "CRLF" | "LF" | null {
+    const model = modelFor(path);
+    return model ? (model.getEOL() === "\r\n" ? "CRLF" : "LF") : null;
+  },
+
+  /** Converts the file's line endings (an edit: the tab turns dirty until saved). */
+  setEol(path: string, eol: "CRLF" | "LF") {
+    const model = modelFor(path);
+    if (!model || !monacoInstance) return;
+    const { EndOfLineSequence } = monacoInstance.editor;
+    model.pushEOL(eol === "CRLF" ? EndOfLineSequence.CRLF : EndOfLineSequence.LF);
   },
 
   getText(path: string): string | null {
@@ -105,7 +129,8 @@ export const editorService = {
       if (navigator.clipboard && navigator.clipboard.readText) {
         const text = await navigator.clipboard.readText();
         if (text) {
-          activeEditorInstance.trigger("keyboard", "type", { text });
+          // "paste", not "type": keeps format-on-paste and multi-cursor distribution.
+          activeEditorInstance.trigger("keyboard", "paste", { text });
         }
       }
     } catch {

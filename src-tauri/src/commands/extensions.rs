@@ -405,14 +405,37 @@ fn list_blocking(app: &AppHandle) -> Vec<InstalledExtension> {
 // ---------------------------------------------------------------------------
 
 fn http_get(url: &str) -> Result<ureq::Response, ExtError> {
+    http_get_within(url, std::time::Duration::from_secs(60))
+}
+
+fn http_get_within(url: &str, timeout: std::time::Duration) -> Result<ureq::Response, ExtError> {
     if !url.starts_with("https://open-vsx.org/") {
         return Err(ExtError::Invalid(format!("refusing download from {url}")));
     }
     ureq::get(url)
         .set("User-Agent", "CodeUI")
-        .timeout(std::time::Duration::from_secs(60))
+        .timeout(timeout)
         .call()
         .map_err(|e| ExtError::Network(e.to_string()))
+}
+
+/// Ceiling on an Open VSX API answer read for the Extensions view (search, details, README).
+const MAX_API_BYTES: u64 = 4 * 1024 * 1024;
+
+/// Reads an Open VSX API URL for the Extensions view (search, details, README).
+///
+/// Goes through the same client as downloads, which honours http(s)_proxy and the OS
+/// certificate store. The Linux webview (WebKitGTK) drops HTTPS tunnels through some
+/// proxies, so the UI cannot fetch Open VSX itself on such networks.
+#[tauri::command]
+pub async fn open_vsx_get(url: String) -> Result<String, ExtError> {
+    blocking(move || {
+        let resp = http_get_within(&url, std::time::Duration::from_secs(15))?;
+        let body = read_capped(resp.into_reader(), MAX_API_BYTES, "Open VSX response")?;
+        String::from_utf8(body)
+            .map_err(|e| ExtError::Invalid(format!("Open VSX response is not text: {e}")))
+    })
+    .await
 }
 
 /// Reads at most `cap` bytes; one byte more means the source is too large. Counts what is

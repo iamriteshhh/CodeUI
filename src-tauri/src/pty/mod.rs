@@ -10,8 +10,7 @@ use std::sync::{Arc, Mutex};
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize, SlavePty};
 use serde::Serialize;
 
-#[derive(Debug, thiserror::Error, Serialize)]
-#[serde(tag = "kind", content = "message")]
+#[derive(Debug, thiserror::Error)]
 pub enum PtyError {
     #[error("terminal session with id {0} already exists")]
     AlreadyExists(String),
@@ -23,6 +22,25 @@ pub enum PtyError {
     SpawnFailed { shell: String, message: String },
     #[error("{0}")]
     Io(String),
+}
+
+/// `{ kind, message }` with `message` the readable text (the derived form sent only the
+/// path, or nothing for unit variants).
+impl Serialize for PtyError {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let kind = match self {
+            PtyError::AlreadyExists(_) => "AlreadyExists",
+            PtyError::UnknownSession(_) => "UnknownSession",
+            PtyError::OpenFailed(_) => "OpenFailed",
+            PtyError::SpawnFailed { .. } => "SpawnFailed",
+            PtyError::Io(_) => "Io",
+        };
+        let mut out = serializer.serialize_struct("PtyError", 2)?;
+        out.serialize_field("kind", kind)?;
+        out.serialize_field("message", &self.to_string())?;
+        out.end()
+    }
 }
 
 /// A terminal's writer, held separately so a blocked write never pins the
@@ -121,6 +139,10 @@ impl PtyManager {
         builder.env("TERM", "xterm-256color");
         // Same PATH the Run button uses, so `sf`, gcc, etc. resolve identically in the terminal.
         builder.env("PATH", crate::proc::augmented_path());
+        if let Some(lang) = crate::proc::utf8_locale_override() {
+            builder.env("LANG", lang);
+            builder.env("LC_ALL", lang);
+        }
 
         let mut child = pair
             .slave

@@ -2,6 +2,7 @@
 
 pub mod c;
 pub mod cpp;
+pub mod generic;
 pub mod java;
 pub mod python;
 pub mod runner_trait;
@@ -24,7 +25,10 @@ pub fn runner_for_path(path: &Path) -> Result<Box<dyn LanguageRunner>, RunnerErr
         "java" => Ok(Box::new(java::JavaRunner)),
         "py" => Ok(Box::new(python::PythonRunner)),
         "sal" => Ok(Box::new(salivo::SalivoRunner)),
-        _ => Err(RunnerError::UnsupportedLanguage),
+        // Every other language with an entry in the table (JavaScript, Rust, Go, ...).
+        other => generic::runner_for_ext(other)
+            .map(|r| Box::new(r) as Box<dyn LanguageRunner>)
+            .ok_or(RunnerError::UnsupportedLanguage),
     }
 }
 
