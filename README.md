@@ -2,7 +2,7 @@
 
 A lightweight, assistance-free desktop Integrated Development Environment (IDE) built for college computer laboratories and practical programming examinations.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
+[![License: BSL 1.1](https://img.shields.io/badge/License-BSL_1.1-orange.svg)](./LICENSE)
 [![Release](https://img.shields.io/github/v/release/iamriteshhh/CodeUI?color=blue)](https://github.com/iamriteshhh/CodeUI/releases)
 
 ---
