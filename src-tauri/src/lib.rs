@@ -39,18 +39,10 @@ pub fn run() {
                 let sdk = dir.join("resources").join("salivo-sdk");
                 if sdk.join("bin").is_dir() {
                     proc::set_bundled_bin(sdk.join("bin"));
-                }
-                // Linux: the bundled sf links the libLLVM shipped next to it.
-                // Children (Run, terminal) inherit this.
-                #[cfg(target_os = "linux")]
-                if sdk.join("lib").is_dir() {
-                    let mut paths = vec![sdk.join("lib")];
-                    if let Some(old) = std::env::var_os("LD_LIBRARY_PATH") {
-                        paths.extend(std::env::split_paths(&old));
-                    }
-                    if let Ok(joined) = std::env::join_paths(paths) {
-                        std::env::set_var("LD_LIBRARY_PATH", joined);
-                    }
+                    // sf prefers SALIVO_STD_PATH over its own std; one left over from
+                    // a separate Salivo install would pair the bundled compiler with
+                    // another version's std. Children (Run, terminal) inherit this.
+                    std::env::set_var("SALIVO_STD_PATH", sdk.join("std"));
                 }
             }
             Ok(())

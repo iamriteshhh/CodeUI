@@ -1,8 +1,26 @@
-# Salivo for Visual Studio Code (v1.0.20)
+# Salivo for Visual Studio Code (v1.0.22)
 
 The official Visual Studio Code and Antigravity IDE extension for the **Salivo Programming Language** (`.sal`, `.sf`) — a high-performance, expressive systems language combining zero-boilerplate syntax with native LLVM speed, instant binary execution caching (~20ms), deterministic RAII memory safety, and native Language Server Protocol (LSP) intelligence.
 
 ---
+
+## What's New in 1.0.22
+
+- Strings are owned by the structs, collections, `Option`/`Result` values and globals that hold them, and functions returning strings hand callers their own copy: programs that store text no longer leak or read freed memory.
+- New `salivo.std.compress` (DEFLATE, zlib, gzip); `std.web` `useCompression` and RS256 JWTs (`jwtAddRsaKey`, `jwtAddJwk`).
+- `std.fs`: temp files, rename, chmod, symlinks, directory watching, memory-mapped files; `std.process`: child processes with pipes.
+- Sorting, searching and functional helpers in `std.collections` / `std.iter`; checked and saturating arithmetic in `std.math`.
+- Linux support for the toolchain, runtime, `std.sys` and the desktop layer.
+- Extension 1.0.22.
+
+## What's New in 1.0.21
+
+- Stage 3 frees a struct stored inside another struct, inside a `Vec`, `Deque` or `HashMap`, or inside an `Option` or `Result`. Plain structs are copied by value in and out of containers, so no struct leaks any more.
+- Raw-memory structs (`readval`, `writeval`, `Slice`) can hold owning fields: `String`, `Option`, `Result`, `HashMap`, `HashSet`, `Deque` and a `Vec` of owning elements. These programs no longer fall back to the Rust compiler.
+- Stage 3 frees an owning temporary passed straight to a function, such as `count(makePlan())`. It also frees the values in `v = addTwo(v)` and `let w = addTwo(fresh())`.
+- `Option` and `Result` have the same size and alignment on both compilers.
+- The Rust compiler frees local collections of scalars when they go out of scope.
+- Extension 1.0.21.
 
 ## What's New in 1.0.20
 

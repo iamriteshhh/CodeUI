@@ -152,7 +152,8 @@ const TOOLS: &[ToolSpec] = &[
         name: "sf",
         candidates: &["sf"],
         purpose: "Compiles and runs Salivo programs",
-        install_hint: "Install the Salivo toolchain, then add ~/.salivo/bin to your PATH",
+        install_hint:
+            "Install Salivo with its installer (setup .exe on Windows, .deb or .rpm on Linux)",
     },
 ];
 

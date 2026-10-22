@@ -51,7 +51,7 @@ const mockTools: ToolStatus[] = [
     path: null,
     available: false,
     purpose: "Compiles and runs Salivo programs",
-    installHint: "Install the Salivo toolchain, then add ~/.salivo/bin to your PATH",
+    installHint: "Install Salivo with its installer (setup .exe on Windows, .deb or .rpm on Linux)",
   },
 ];
 
