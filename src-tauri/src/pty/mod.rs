@@ -498,34 +498,26 @@ mod tests {
         assert!(matches!(mgr.kill("life"), Err(PtyError::UnknownSession(_))));
     }
 
+    #[cfg(unix)]
     fn alive(pid: u32) -> bool {
-        #[cfg(unix)]
-        {
-            // A zombie is dead; in a container nothing may reap it.
-            std::fs::read_to_string(format!("/proc/{pid}/stat")).is_ok_and(|s| {
-                s.rsplit_once(')')
-                    .is_some_and(|(_, r)| !r.trim_start().starts_with('Z'))
-            })
-        }
-        #[cfg(windows)]
-        {
-            let out = std::process::Command::new("tasklist")
-                .args(["/FI", &format!("PID eq {pid}"), "/NH"])
-                .output()
-                .unwrap();
-            String::from_utf8_lossy(&out.stdout).contains(&format!(" {pid} "))
-        }
+        // A zombie is dead; in a container nothing may reap it.
+        #[cfg(target_os = "linux")]
+        return std::fs::read_to_string(format!("/proc/{pid}/stat")).is_ok_and(|s| {
+            s.rsplit_once(')')
+                .is_some_and(|(_, r)| !r.trim_start().starts_with('Z'))
+        });
+        // SAFETY: signal 0 only checks that the process exists.
+        #[cfg(not(target_os = "linux"))]
+        return unsafe { libc::kill(pid as libc::pid_t, 0) } == 0;
     }
 
+    /// Unix only: on Windows, closing the pseudoconsole already ends its programs.
+    #[cfg(unix)]
     #[test]
     fn killing_a_terminal_ends_its_background_jobs() {
         let mgr = PtyManager::default();
         let (out, _) = spawn_capturing(&mgr, "bg");
-        let cmd = if cfg!(windows) {
-            "$p = Start-Process -NoNewWindow -PassThru ping -ArgumentList '-n','300','127.0.0.1'; \"BGPID=$($p.Id)=\"\r\n"
-        } else {
-            "sleep 300 & echo \"BGPID=$!=\"\n"
-        };
+        let cmd = "sleep 300 & echo \"BGPID=$!=\"\n";
         let pid_re = |s: &str| -> Option<u32> {
             s.split("BGPID=")
                 .skip(1)
