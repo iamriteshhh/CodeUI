@@ -438,30 +438,49 @@ pub fn open_in_file_manager(path: String) -> Result<(), String> {
         return Err("Path does not exist".into());
     }
 
+    // A file is revealed, never handed to the file manager itself: `explorer a.exe`
+    // or `xdg-open run.sh` would launch it, outside the Run sandbox.
     #[cfg(target_os = "windows")]
-    {
-        std::process::Command::new("explorer")
-            .arg(p)
-            .spawn()
-            .map_err(|e| format!("Failed to open explorer: {e}"))?;
-    }
+    let mut cmd = {
+        use std::os::windows::process::CommandExt;
+        let mut cmd = std::process::Command::new("explorer");
+        if p.is_file() {
+            // explorer parses its own command line; the path must be quoted after the comma.
+            cmd.raw_arg(format!("/select,\"{}\"", p.display()));
+        } else {
+            cmd.arg(p);
+        }
+        cmd
+    };
 
     #[cfg(target_os = "macos")]
-    {
-        std::process::Command::new("open")
-            .arg(p)
-            .spawn()
-            .map_err(|e| format!("Failed to open Finder: {e}"))?;
-    }
+    let mut cmd = {
+        let mut cmd = std::process::Command::new("open");
+        if p.is_file() {
+            cmd.arg("-R");
+        }
+        cmd.arg(p);
+        cmd
+    };
 
+    // ponytail: opens the containing folder without selecting the file; the
+    // FileManager1 D-Bus ShowItems call would select it.
     #[cfg(all(unix, not(target_os = "macos")))]
-    {
-        std::process::Command::new("xdg-open")
-            .arg(p)
-            .spawn()
-            .map_err(|e| format!("Failed to open file manager: {e}"))?;
-    }
+    let mut cmd = {
+        let mut cmd = std::process::Command::new("xdg-open");
+        cmd.arg(if p.is_file() {
+            p.parent().unwrap_or(p)
+        } else {
+            p
+        });
+        cmd
+    };
 
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| format!("Failed to open file manager: {e}"))?;
+    // Reaped in the background so no zombie is left behind on Unix.
+    std::thread::spawn(move || child.wait());
     Ok(())
 }
 

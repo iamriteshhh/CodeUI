@@ -68,8 +68,49 @@ impl PtySession {
     }
 
     fn kill(&mut self) {
+        // SIGHUP first, as when a terminal window closes, so background jobs
+        // (`./a.out &`) end too; killing the shell outright would orphan them.
+        #[cfg(unix)]
+        if let Some(pid) = self.child.process_id() {
+            hang_up_session(pid);
+            let deadline = std::time::Instant::now() + std::time::Duration::from_millis(500);
+            while matches!(self.child.try_wait(), Ok(None)) && std::time::Instant::now() < deadline
+            {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        }
         let _ = self.child.kill();
         let _ = self.child.wait();
+    }
+}
+
+/// Sends SIGHUP to the shell `sid` and, on Linux, every process in its session
+/// (the shell leads its own session). bash passes the hangup on to its jobs,
+/// but dash, the `/bin/sh` of plain `useradd` accounts, does not.
+#[cfg(unix)]
+fn hang_up_session(sid: u32) {
+    // SAFETY: plain kill(2) calls.
+    unsafe { libc::kill(sid as libc::pid_t, libc::SIGHUP) };
+    #[cfg(target_os = "linux")]
+    for entry in std::fs::read_dir("/proc").into_iter().flatten().flatten() {
+        let Some(pid) = entry.file_name().to_str().and_then(|n| n.parse().ok()) else {
+            continue;
+        };
+        // Field 6 of /proc/<pid>/stat is the session; count from the last ')'
+        // because the command name before it may contain spaces.
+        let session = std::fs::read_to_string(entry.path().join("stat"))
+            .ok()
+            .and_then(|s| {
+                s.rsplit_once(')')?
+                    .1
+                    .split_whitespace()
+                    .nth(3)?
+                    .parse()
+                    .ok()
+            });
+        if session == Some(sid) {
+            unsafe { libc::kill(pid, libc::SIGHUP) };
+        }
     }
 }
 
@@ -455,6 +496,63 @@ mod tests {
             Err(PtyError::UnknownSession(_))
         ));
         assert!(matches!(mgr.kill("life"), Err(PtyError::UnknownSession(_))));
+    }
+
+    fn alive(pid: u32) -> bool {
+        #[cfg(unix)]
+        {
+            // A zombie is dead; in a container nothing may reap it.
+            std::fs::read_to_string(format!("/proc/{pid}/stat")).is_ok_and(|s| {
+                s.rsplit_once(')')
+                    .is_some_and(|(_, r)| !r.trim_start().starts_with('Z'))
+            })
+        }
+        #[cfg(windows)]
+        {
+            let out = std::process::Command::new("tasklist")
+                .args(["/FI", &format!("PID eq {pid}"), "/NH"])
+                .output()
+                .unwrap();
+            String::from_utf8_lossy(&out.stdout).contains(&format!(" {pid} "))
+        }
+    }
+
+    #[test]
+    fn killing_a_terminal_ends_its_background_jobs() {
+        let mgr = PtyManager::default();
+        let (out, _) = spawn_capturing(&mgr, "bg");
+        let cmd = if cfg!(windows) {
+            "$p = Start-Process -NoNewWindow -PassThru ping -ArgumentList '-n','300','127.0.0.1'; \"BGPID=$($p.Id)=\"\r\n"
+        } else {
+            "sleep 300 & echo \"BGPID=$!=\"\n"
+        };
+        let pid_re = |s: &str| -> Option<u32> {
+            s.split("BGPID=")
+                .skip(1)
+                .find_map(|t| t.split('=').next()?.trim().parse().ok())
+        };
+        assert!(echo_round_trip(&mgr, "bg", &out, "CODEUI_BG_READY"));
+        mgr.write("bg", cmd).unwrap();
+        let start = std::time::Instant::now();
+        let mut pid = None;
+        while pid.is_none() && start.elapsed() < std::time::Duration::from_secs(10) {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            pid = pid_re(&out.lock().unwrap());
+        }
+        let pid = pid.expect("background job started");
+        assert!(alive(pid));
+
+        mgr.kill("bg").unwrap();
+
+        let start = std::time::Instant::now();
+        while alive(pid) && start.elapsed() < std::time::Duration::from_secs(5) {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        let survived = alive(pid);
+        if survived {
+            crate::proc::kill_tree_by_pid(pid);
+        }
+        assert!(!survived, "background job {pid} outlived its terminal");
     }
 
     #[test]
